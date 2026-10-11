@@ -47,16 +47,29 @@ export function preview(value: unknown, max = 40): string {
 export function describeChanges(changes: DiffEntry[], nameOf: (path: string) => string = (p) => p): string {
   if (changes.length === 0) return "无改动";
   if (changes.every((c) => c.path.endsWith(ORDER))) return `调整顺序：${changes.map((c) => nameOf(c.path.slice(0, -ORDER.length - 1)) || "列表").join("、")}`;
-  const added = changes.filter((c) => c.kind === "added");
-  const removed = changes.filter((c) => c.kind === "removed");
-  const changed = changes.filter((c) => c.kind === "changed");
-  if (changes.length === 1) {
-    const c = changes[0];
-    if (c.kind === "added") return `新增「${preview(c.after)}」`;
-    if (c.kind === "removed") return `删除「${preview(c.before)}」`;
+  const isRow = (v: unknown) => !!v && typeof v === "object";
+  // Rows / nodes added or removed are structure; an empty cell getting a value is just “填写”.
+  const rowsAdded = changes.filter((c) => c.kind === "added" && isRow(c.after));
+  const rowsRemoved = changes.filter((c) => c.kind === "removed" && isRow(c.before));
+  const cells = changes.filter((c) => !rowsAdded.includes(c) && !rowsRemoved.includes(c) && !c.path.endsWith(ORDER) && !c.path.endsWith(".amount"));
+  if (changes.length === 1 || (cells.length === 1 && !rowsAdded.length && !rowsRemoved.length)) {
+    const c = cells[0] ?? changes[0];
+    if (c.kind === "added" && isRow(c.after)) return `新增「${preview(c.after)}」`;
+    if (c.kind === "removed" && isRow(c.before)) return `删除「${preview(c.before)}」`;
+    if (c.kind === "added") return `填写「${nameOf(c.path)}」：${preview(c.after, 24)}`;
+    if (c.kind === "removed") return `清空「${nameOf(c.path)}」（原为 ${preview(c.before, 24)}）`;
     return `「${nameOf(c.path)}」${preview(c.before, 24)} → ${preview(c.after, 24)}`;
   }
-  return [added.length && `新增 ${added.length} 项`, removed.length && `删除 ${removed.length} 项`, changed.length && `改 ${changed.length} 处`].filter(Boolean).join("，");
+  const filled = cells.filter((c) => c.kind === "added").length;
+  const edited = cells.length - filled;
+  return [
+    rowsAdded.length && `新增 ${rowsAdded.length} 项`,
+    rowsRemoved.length && `删除 ${rowsRemoved.length} 项`,
+    filled && `填写 ${filled} 格`,
+    edited && `改 ${edited} 处`,
+  ]
+    .filter(Boolean)
+    .join("，");
 }
 
 export const ORDER = "#order";

@@ -68,8 +68,9 @@ function rollUp(node: Node, nodes: Node[]): { sum: number; ok: boolean } | null 
   const kids = nodes.filter((n) => n.parentId === node.id);
   if (kids.length === 0 || typeof node.amount !== "number") return null;
   if (!kids.every((k) => typeof k.amount === "number" && k.metric.trim() === node.metric.trim() && (k.unit ?? "") === (node.unit ?? ""))) return null;
-  const sum = kids.reduce((acc, k) => acc + (k.amount as number), 0);
-  return { sum, ok: Math.abs(sum - node.amount) < 1e-9 };
+  // Round away float noise (0.8 + 0.4 = 1.2000000000000002).
+  const sum = Number(kids.reduce((acc, k) => acc + (k.amount as number), 0).toFixed(6));
+  return { sum, ok: Math.abs(sum - node.amount) < 1e-6 };
 }
 
 const amountOf = (n: Node) => (typeof n.amount === "number" ? n.amount : parseAmount(n.value));
@@ -423,7 +424,7 @@ function PathWideTable({
   const cellCls = "border px-1 py-1 align-top";
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
-      <table role="treegrid" aria-label="表 3-10 按层面" className="w-full border-collapse text-sm" style={{ minWidth: `${8 + levels * 26}rem` }}>
+      <table role="treegrid" aria-label="表 3-10 按层面" className="w-full border-collapse text-sm" style={{ minWidth: `${6 + levels * 34}rem` }}>
         <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
           <tr>
             <th className="w-24 border px-2 py-2 text-left font-semibold">层面</th>
@@ -464,14 +465,10 @@ function PathWideTable({
                       const label = n.path || LEVEL_LABELS[n.level];
                       const roll = rollUp(n, nodes);
                       return [
-                        <td key={`${n.id}-p`} rowSpan={cell.span} data-anchor={n.id} className={cn(cellCls, "min-w-48", invalid.has(n.id) && "bg-destructive/5")}>
+                        <td key={`${n.id}-p`} rowSpan={cell.span} data-anchor={n.id} className={cn(cellCls, "min-w-56", invalid.has(n.id) && "bg-destructive/5")}>
                           {n.groupTag ? <div className="px-1 text-[10px] text-muted-foreground">{n.groupTag}</div> : null}
-                          <div className="flex items-start gap-0.5">
-                            <div className="min-w-0 flex-1">
-                              <TextCell label={LEVEL_LABELS[n.level]} anchor={`${n.id}.path`} value={n.path} onChange={(path) => patch(n.id, { path })} readOnly={readOnly} />
-                            </div>
-                            {rowTools(n)}
-                          </div>
+                          <TextCell label={LEVEL_LABELS[n.level]} anchor={`${n.id}.path`} value={n.path} onChange={(path) => patch(n.id, { path })} readOnly={readOnly} />
+                          {rowTools(n)}
                           {n.level === 1 && !readOnly ? (
                             <NativeSelect size="sm" aria-label={`${label} 层面`} value={n.perspective ?? ""} onChange={(e) => patch(n.id, { perspective: (e.target.value || undefined) as Perspective | undefined })}>
                               <NativeSelectOption value="">层面…</NativeSelectOption>
