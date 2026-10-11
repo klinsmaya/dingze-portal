@@ -4,66 +4,88 @@ import { anchorCandidates } from "@/lib/dingze/locate";
 
 // Canvas layer for the edit session: marks rows and cells by `data-anchor` — 本版改过 / 修订
 // (teal bar), comments (purple bar + numbered drop), AI card preview (amber dashed), 圈选
-// (purple outline) — without the editors knowing about it.
+// (purple outline) — without the editors knowing about it. A change path such as
+// `battlefields.b1.mustWin` marks the closest element on the page (field, then row).
 
-type Marks = {
+export type Marks = {
   changed: string[];
   added: string[];
   comments: string[];
   preview: string[];
   selection: string[];
-  /** Old values shown on hover while 修订 is on. */
+  /** Old values shown on hover while 修订 is on, keyed by change path. */
   before?: Record<string, string>;
 };
 
 const esc = (a: string) => a.replace(/["\\\\]/g, "");
-const sel = (anchors: string[]) => anchors.map((a) => `[data-dingze-main] [data-anchor="${esc(a)}"]`).join(",\n");
 
-export function EditMarkers({ changed, added, comments, preview, selection, before }: Marks) {
-  // Hover text with the original value (修订).
-  useEffect(() => {
-    if (!before) return;
-    const touched: HTMLElement[] = [];
-    for (const [anchor, text] of Object.entries(before)) {
-      const el = document.querySelector<HTMLElement>(`[data-dingze-main] [data-anchor="${esc(anchor)}"]`);
-      if (!el) continue;
-      el.dataset.dzTitle = el.title;
-      el.title = `原值：${text}`;
-      touched.push(el);
-    }
-    return () => {
-      for (const el of touched) {
-        el.title = el.dataset.dzTitle ?? "";
-        delete el.dataset.dzTitle;
-      }
-    };
-  }, [before]);
-
-  const all = [...new Set([...changed, ...added, ...comments, ...preview, ...selection])];
-  if (!all.length) return null;
-  const rules = [
-    `${sel(all)} { }`,
-    changed.length && `${sel(changed)} { --dz-mk-changed: inset 3px 0 0 var(--dz-changed); }`,
-    added.length && `${sel(added)} { --dz-mk-changed: inset 3px 0 0 var(--dz-added); background-color: color-mix(in oklab, var(--dz-added) 8%, transparent); }`,
-    comments.length && `${sel(comments)} { --dz-mk-comment: inset -3px 0 0 var(--dz-comment); }`,
-    preview.length && `${sel(preview)} { --dz-mk-outline: 2px dashed var(--dz-ai); }`,
-    selection.length && `${sel(selection)} { --dz-mk-outline: 2px solid var(--dz-comment); }`,
-  ].filter(Boolean);
-  return (
-    <>
-      <style>{rules.join("\n")}</style>
-      <MarkClasses anchors={all} />
-    </>
-  );
+/** The element a path points at: the most specific `data-anchor` present on the page. */
+export function anchorElement(main: ParentNode, path: string): HTMLElement | null {
+  for (const c of anchorCandidates(path)) {
+    const el = main.querySelector<HTMLElement>(`[data-anchor="${esc(c)}"]`);
+    if (el) return el;
+  }
+  return null;
 }
 
-/** Adds the class that composes the marker variables to the marked elements. */
-function MarkClasses({ anchors }: { anchors: string[] }) {
+export function EditMarkers(marks: Marks) {
+  const key = JSON.stringify(marks);
   useEffect(() => {
-    const els = anchors.flatMap((a) => [...document.querySelectorAll<HTMLElement>(`[data-dingze-main] [data-anchor="${esc(a)}"]`)]);
-    els.forEach((el) => el.classList.add("dz-marked"));
-    return () => els.forEach((el) => el.classList.remove("dz-marked"));
-  });
+    const main = document.querySelector<HTMLElement>("[data-dingze-main]");
+    if (!main) return;
+    const { before = {} } = marks;
+    let touched: HTMLElement[] = [];
+    const clear = () => {
+      for (const el of touched) {
+        el.removeAttribute("data-dz-mark");
+        if (el.dataset.dzTitle !== undefined) {
+          el.title = el.dataset.dzTitle;
+          delete el.dataset.dzTitle;
+        }
+      }
+      touched = [];
+    };
+    const apply = () => {
+      clear();
+      const tags = new Map<HTMLElement, Set<string>>();
+      const tag = (paths: string[], name: string) => {
+        for (const p of paths) {
+          const el = anchorElement(main, p);
+          if (!el) continue;
+          if (!tags.has(el)) tags.set(el, new Set());
+          tags.get(el)!.add(name);
+          if (name !== "comment" && before[p] !== undefined && el.dataset.dzTitle === undefined) {
+            el.dataset.dzTitle = el.title;
+            el.title = `原值：${before[p]}`;
+          }
+        }
+      };
+      tag(marks.changed, "changed");
+      tag(marks.added, "added");
+      tag(marks.comments, "comment");
+      tag(marks.preview, "preview");
+      tag(marks.selection, "selected");
+      for (const [el, names] of tags) {
+        el.setAttribute("data-dz-mark", [...names].join(" "));
+        touched.push(el);
+      }
+    };
+    apply();
+    // Editors switch tabs and expand rows on their own; re-mark when the canvas changes.
+    let frame = 0;
+    const observer = new MutationObserver((records) => {
+      if (records.every((r) => r.type === "attributes")) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    });
+    observer.observe(main, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      clear();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   return null;
 }
 

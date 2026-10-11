@@ -366,10 +366,29 @@ body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
 }
 
 /* Edit-session markers on the canvas (design 10 §5–6): one composed shadow so several can show. */
-.dz-marked {
+[data-dz-mark] {
   box-shadow:
     var(--dz-mk-changed, 0 0 transparent),
     var(--dz-mk-comment, 0 0 transparent);
   outline: var(--dz-mk-outline, 0 solid transparent);
   outline-offset: 1px;
+}
+[data-dz-mark~="changed"] {
+  --dz-mk-changed: inset 3px 0 0 var(--dz-changed);
+}
+[data-dz-mark~="added"] {
+  --dz-mk-changed: inset 3px 0 0 var(--dz-added);
+  background-color: color-mix(in oklab, var(--dz-added) 7%, transparent);
+}
+[data-dz-mark~="comment"] {
+  --dz-mk-comment: inset -3px 0 0 var(--dz-comment);
+}
+[data-dz-mark~="preview"] {
+  --dz-mk-outline: 2px dashed var(--dz-ai);
+}
+[data-dz-mark~="selected"] {
+  --dz-mk-outline: 2px solid var(--dz-comment);
+}
+[data-dz-selecting] [data-anchor] {
+  cursor: crosshair;
 }

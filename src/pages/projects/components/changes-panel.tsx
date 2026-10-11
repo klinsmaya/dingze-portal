@@ -12,7 +12,7 @@ import type { ProjectSummary } from "@/lib/dingze/api";
 import { type Command, VIA_LABELS, type Via, anchorsOf, laterConflicts, preview, revertCommand } from "@/lib/dingze/edit-log";
 import { locateAnchor } from "@/lib/dingze/locate";
 import { formatTime } from "@/lib/dingze/records";
-import { type SavedCommand, getVersionPayload } from "@/lib/dingze/records-api";
+import type { SavedCommand } from "@/lib/dingze/records-api";
 import { useArtifactHistory } from "@/lib/dingze/records-queries";
 
 import { useEditSession } from "./edit-session";
@@ -64,7 +64,7 @@ export function ChangesPanel({ project, code, commentNo }: { project: ProjectSum
 
   return (
     <div className="flex flex-col gap-3">
-      <RevisionControl project={project} code={code} versions={versions.map((v) => ({ rev: v.rev, by: v.by, at: v.at, kind: v.kind }))} />
+      <RevisionControl />
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <NativeSelect size="sm" aria-label="按人筛选" value={byPerson} onChange={(e) => setByPerson(e.target.value)}>
           <NativeSelectOption value="">全部人</NativeSelectOption>
@@ -138,22 +138,16 @@ export function ChangesPanel({ project, code, commentNo }: { project: ProjectSum
 }
 
 /** 修订 switch: compare the draft with any saved version; marks changed rows on the canvas. */
-export function RevisionControl({ project, code, versions }: { project: ProjectSummary; code: string; versions: { rev: number; by: string; at: string; kind: string }[] }) {
+export function RevisionControl() {
   const session = useEditSession();
   const [pending, setPending] = useState(false);
   if (!session) return null;
-  const { revision } = session;
+  const { revision, versions } = session;
   const fallback = versions[1]?.rev ?? versions[0]?.rev ?? null;
-
   const load = async (rev: number | null, on: boolean) => {
-    if (!on || !rev) {
-      session.setRevision({ ...revision, on, baseRev: rev ?? revision.baseRev });
-      return;
-    }
     setPending(true);
     try {
-      const v = await getVersionPayload(project.id, project.spaceName, code, rev);
-      session.setRevision({ on: true, baseRev: rev, basePayload: v.payload, baseLabel: `v${rev} · ${v.by || "—"} ${formatTime(v.at)}` });
+      await session.compareWith(rev, on);
     } catch {
       toast.error("读取对比版本失败");
     } finally {
@@ -168,23 +162,13 @@ export function RevisionControl({ project, code, versions }: { project: ProjectS
       <div className="flex flex-wrap items-center gap-2">
         <GitCompareArrows className="size-4 text-muted-foreground" />
         <span className="font-semibold">修订</span>
-        <Switch
-          checked={revision.on}
-          disabled={pending || versions.length === 0}
-          onCheckedChange={(on) => load(revision.baseRev ?? fallback, on)}
-          aria-label="修订开关"
-        />
+        <Switch checked={revision.on} disabled={pending || versions.length === 0} onCheckedChange={(on) => load(revision.baseRev ?? fallback, on)} aria-label="修订开关" />
         <span className="text-xs text-muted-foreground">Ctrl+Shift+E</span>
       </div>
       {versions.length ? (
         <label className="flex items-center gap-2 text-xs">
           对比
-          <NativeSelect
-            size="sm"
-            aria-label="对比的版本"
-            value={String(revision.baseRev ?? fallback ?? "")}
-            onChange={(e) => load(Number(e.target.value), true)}
-          >
+          <NativeSelect size="sm" aria-label="对比的版本" value={String(revision.baseRev ?? fallback ?? "")} onChange={(e) => load(Number(e.target.value), true)}>
             {versions.map((v) => (
               <NativeSelectOption key={v.rev} value={String(v.rev)}>
                 v{v.rev} · {v.by || "—"} · {formatTime(v.at)}
@@ -198,11 +182,28 @@ export function RevisionControl({ project, code, versions }: { project: ProjectS
       )}
       {summary ? (
         <p className="text-xs text-muted-foreground">
-          对比 {revision.baseLabel}：改 {summary.changed} 处 · 增 {summary.added} 项 · 删 {summary.removed} 项。表里青色竖线是改过的，绿色是新增的，悬停看原值。
+          对比 {revision.baseLabel}：改 {summary.changed} 处 · 增 {summary.added} 项 · 删 {summary.removed} 项。表里青色竖线是改过的，绿色是新增的，悬停看原值；删掉的项列在下面。
         </p>
       ) : (
-        <p className="text-xs text-muted-foreground">关着时，只用青色竖线标出“上次保存之后改过的”格子。</p>
+        <p className="text-xs text-muted-foreground">关着时，只用青色竖线标出“上次保存之后改过的”地方。</p>
       )}
+      {revision.on && revision.basePayload !== undefined ? <RemovedList /> : null}
     </div>
+  );
+}
+
+/** Rows deleted since the compared version: they are no longer on the canvas, so list them. */
+function RemovedList() {
+  const session = useEditSession()!;
+  const removed = diffPayloads(session.revision.basePayload, session.draft).filter((d) => d.kind === "removed");
+  if (!removed.length) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 text-xs" aria-label="已删除的内容">
+      {removed.slice(0, 12).map((d) => (
+        <li key={d.path} className="line-through" style={{ color: "var(--dz-removed)" }}>
+          {session.nameOf(d.path)}：{preview(d.before)}
+        </li>
+      ))}
+    </ul>
   );
 }

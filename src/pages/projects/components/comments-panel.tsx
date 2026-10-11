@@ -1,5 +1,5 @@
-import { AtSign, Check, CornerDownRight, LocateFixed, MessageSquarePlus, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AtSign, Bot, Check, CornerDownRight, LassoSelect, LocateFixed, MessageSquarePlus, PencilLine, RotateCcw, X } from "lucide-react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,9 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { anchorCandidates, locateAnchor } from "@/lib/dingze/locate";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
+
+import { askCoach } from "./coach-panel";
+import { useEditSession } from "./edit-session";
 
 const WHOLE = "__whole__";
 
@@ -51,8 +54,18 @@ function MentionPicker({ team, value, onChange }: { team: ProjectTeamMember[]; v
   );
 }
 
+/** ① ② ③ … for the numbered drops; plain digits past 20. */
+export function circled(no: number): string {
+  return no >= 1 && no <= 20 ? String.fromCharCode(0x2460 + no - 1) : String(no);
+}
+
+const locateAll = (anchors: string[]) => {
+  if (!anchors.some((a) => locateAnchor(a))) toast.info("这一处已删除，或当前没有展开");
+};
+
 function Thread({
   thread,
+  no,
   team,
   canComment,
   canResolve,
@@ -61,6 +74,7 @@ function Thread({
   onResolve,
 }: {
   thread: CommentThread;
+  no: number | null;
   team: ProjectTeamMember[];
   canComment: boolean;
   canResolve: boolean;
@@ -71,6 +85,10 @@ function Thread({
   const [replying, setReplying] = useState(false);
   const [text, setText] = useState("");
   const [mentions, setMentions] = useState<number[]>([]);
+  const session = useEditSession();
+  const anchors = thread.anchors?.length ? thread.anchors : thread.anchor ? [thread.anchor] : [];
+  const working = session?.activeComment === thread.id;
+  const canFix = !!session && !session.readOnly && !thread.resolved;
   const name = (id: number) => team.find((m) => m.userId === id)?.nickname ?? "";
   const body = (c: { content: string; mentions: number[] }) => (
     <p className="whitespace-pre-wrap">
@@ -79,19 +97,27 @@ function Thread({
     </p>
   );
   return (
-    <li id={`comment-${thread.id}`} className={cn("rounded-lg border bg-card p-3 text-sm", thread.resolved && "opacity-70", highlighted && "ring-2 ring-gold")}>
+    <li
+      id={`comment-${thread.id}`}
+      className={cn("rounded-lg border bg-card p-3 text-sm", thread.resolved && "opacity-70", (highlighted || working) && "ring-2")}
+      style={highlighted || working ? ({ "--tw-ring-color": "var(--dz-comment)" } as CSSProperties) : undefined}
+    >
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {thread.anchor ? (
+        {no ? (
+          <span className="flex size-5 items-center justify-center rounded-full rounded-br-none text-[11px] font-bold text-white" style={{ background: thread.resolved ? "var(--muted-foreground)" : "var(--dz-comment)" }}>
+            {no}
+          </span>
+        ) : null}
+        {anchors.length ? (
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-foreground hover:bg-accent"
-            title="定位到这一行"
-            onClick={() => {
-              if (!locateAnchor(thread.anchor!)) toast.info("这一行已删除，或当前没有展开");
-            }}
+            title={anchors.length > 1 ? "定位到圈选的位置" : "定位到这一处"}
+            onClick={() => locateAll(anchors)}
           >
             <LocateFixed className="size-3" />
-            {thread.anchorLabel || thread.anchor}
+            {anchors.length > 1 ? <span className="font-semibold">圈选 {anchors.length} 处 ·</span> : null}
+            <span className="max-w-48 truncate">{thread.anchorLabel || thread.anchor}</span>
           </button>
         ) : (
           <span className="rounded bg-muted px-1.5 py-0.5">整张表</span>
@@ -114,7 +140,46 @@ function Thread({
           ))}
         </ul>
       ) : null}
+      {working ? (
+        <p className="mt-2 rounded-md px-2 py-1 text-xs" style={{ background: "color-mix(in oklab, var(--dz-comment) 12%, transparent)" }}>
+          正在按这条批注修改：在表里直接改，改动会关联到批注 {no ? circled(no) : ""}，保存后自动回复“已按批注修改”。
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-1">
+        {canFix ? (
+          working ? (
+            <Button variant="secondary" size="sm" onClick={() => session!.setActiveComment(null)}>
+              <Check /> 改完了
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                title="按批注修改：就地改，改动关联到这条批注"
+                onClick={() => {
+                  session!.setActiveComment(thread.id);
+                  if (anchors.length) locateAll(anchors);
+                }}
+              >
+                <PencilLine /> 就地改
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                title="按批注修改：让数字咨询师出修改卡，你确认后才写入"
+                onClick={() => {
+                  session!.setActiveComment(thread.id);
+                  session!.openPanel("coach");
+                  const where = thread.anchorLabel || (anchors.length ? anchors.join("、") : "整张表");
+                  askCoach(`请按批注${no ? circled(no) : ""}修改（位置：${where}）。批注内容：${thread.content}${thread.replies.length ? `\n后续回复：${thread.replies.map((r) => r.content).join("；")}` : ""}\n请先说明你打算怎么改，再给出修改卡让我确认。`);
+                }}
+              >
+                <Bot /> 让数字咨询师改
+              </Button>
+            </>
+          )
+        ) : null}
         {canComment ? (
           <Button variant="ghost" size="sm" onClick={() => setReplying((v) => !v)}>
             <CornerDownRight /> 回复
@@ -168,6 +233,8 @@ export function CommentsPanel({
   currentUserId,
   focusAnchor,
   highlightId,
+  numberOf,
+  composeSignal,
 }: {
   project: ProjectSummary;
   code: string;
@@ -179,7 +246,12 @@ export function CommentsPanel({
   /** The row the user last clicked into; the new comment defaults to it. */
   focusAnchor: string | null;
   highlightId: number | null;
+  numberOf: (id: number) => number | null;
+  /** Bumped by Ctrl+Alt+M: focus the composer. */
+  composeSignal: number;
 }) {
+  const session = useEditSession();
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const comments = useComments(project, code);
   const add = useAddComment(project, code);
   const resolve = useResolveComment(project, code);
@@ -202,6 +274,12 @@ export function CommentsPanel({
     if (thread?.anchor) window.setTimeout(() => locateAnchor(thread.anchor!), 300);
   }, [highlightId, comments.data]);
 
+  useEffect(() => {
+    if (composeSignal) textRef.current?.focus();
+  }, [composeSignal]);
+
+  const selection = session?.selection ?? [];
+  const selecting = session?.selecting ?? false;
   const threads = (comments.data ?? []).filter((t) => filter === "all" || !t.resolved || t.id === highlightId);
   const open = (comments.data ?? []).filter((t) => !t.resolved).length;
   const fail = (error: unknown) => toast.error(errorMessage(error));
@@ -215,12 +293,18 @@ export function CommentsPanel({
             e.preventDefault();
             if (!text.trim()) return;
             const option = options.find((o) => o.id === anchor);
+            const group = selection.length > 0;
+            const values = group
+              ? { anchor: selection[0], anchors: selection, anchorLabel: selection.map((a) => session!.nameOf(a)).join("、").slice(0, 200) }
+              : { anchor: anchor === WHOLE ? null : anchor, anchorLabel: option?.label ?? "" };
             add.mutate(
-              { anchor: anchor === WHOLE ? null : anchor, anchorLabel: option?.label ?? "", content: text.trim(), mentions },
+              { ...values, content: text.trim(), mentions },
               {
                 onSuccess: () => {
                   setText("");
                   setMentions([]);
+                  session?.clearSelection();
+                  session?.setSelecting(false);
                   toast.success("批注已发出");
                 },
                 onError: fail,
@@ -230,16 +314,39 @@ export function CommentsPanel({
         >
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MessageSquarePlus className="size-4" /> 批注到
-            <NativeSelect size="sm" aria-label="批注到" value={anchor} onChange={(e) => setAnchor(e.target.value)} className="min-w-0 flex-1">
-              <NativeSelectOption value={WHOLE}>整张表</NativeSelectOption>
-              {options.map((o) => (
-                <NativeSelectOption key={o.id} value={o.id}>
-                  {o.group} · {o.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            {selection.length ? (
+              <span className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 py-1 text-foreground" style={{ background: "color-mix(in oklab, var(--dz-comment) 12%, transparent)" }}>
+                <span className="truncate">圈选 {selection.length} 处：{selection.map((a) => session!.nameOf(a)).join("、")}</span>
+                <button type="button" aria-label="清除圈选" className="ml-auto shrink-0" onClick={() => session!.clearSelection()}>
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            ) : (
+              <NativeSelect size="sm" aria-label="批注到" value={anchor} onChange={(e) => setAnchor(e.target.value)} className="min-w-0 flex-1">
+                <NativeSelectOption value={WHOLE}>整张表</NativeSelectOption>
+                {options.map((o) => (
+                  <NativeSelectOption key={o.id} value={o.id}>
+                    {o.group} · {o.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            )}
+            {session ? (
+              <Button
+                type="button"
+                size="xs"
+                variant={selecting ? "default" : "outline"}
+                style={selecting ? { background: "var(--dz-comment)" } : undefined}
+                aria-pressed={selecting}
+                title="圈选：在表里点选多行 / 多个格子，一起批注"
+                onClick={() => session.setSelecting(!selecting)}
+              >
+                <LassoSelect /> {selecting ? "圈选中…" : "圈选"}
+              </Button>
+            ) : null}
           </div>
-          <Textarea aria-label="批注内容" value={text} onChange={(e) => setText(e.target.value)} placeholder="写下意见或问题；先点一下表格里的行，可直接批注到那一行" className="min-h-20" />
+          {selecting ? <p className="text-xs" style={{ color: "var(--dz-comment)" }}>在左边表里点要圈的行或格子（再点一次取消），选好后写批注。</p> : null}
+          <Textarea ref={textRef} aria-label="批注内容" value={text} onChange={(e) => setText(e.target.value)} placeholder="写下意见或问题；先点一下表格里的行，可直接批注到那一行" className="min-h-20" />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <MentionPicker team={team} value={mentions} onChange={setMentions} />
             <Button type="submit" size="sm" disabled={!text.trim() || add.isPending}>
@@ -268,6 +375,7 @@ export function CommentsPanel({
             <Thread
               key={t.id}
               thread={t}
+              no={numberOf(t.id)}
               team={team}
               canComment={canComment}
               canResolve={canResolveAny || t.authorId === currentUserId}
@@ -280,13 +388,4 @@ export function CommentsPanel({
       )}
     </div>
   );
-}
-
-/** Marks rows that carry unresolved comments, without touching every editor. */
-export function CommentMarkers({ anchors }: { anchors: string[] }) {
-  if (!anchors.length) return null;
-  const css = anchors
-    .map((a) => `[data-dingze-main] [data-anchor="${a.replace(/["\\\\]/g, "")}"]`)
-    .join(",\n");
-  return <style>{`${css} { box-shadow: inset 3px 0 0 var(--gold); }`}</style>;
 }

@@ -8,6 +8,8 @@ export type CommentItem = {
   id: number;
   parentId: number | null;
   anchor: string | null;
+  /** 圈选: several rows / cells commented on together (the first is `anchor`). */
+  anchors?: string[];
   anchorLabel: string;
   content: string;
   mentions: number[];
@@ -21,7 +23,7 @@ export type CommentItem = {
 
 export type CommentThread = CommentItem & { replies: CommentItem[] };
 
-export type NewComment = { anchor?: string | null; anchorLabel?: string; content: string; parentId?: number; mentions?: number[] };
+export type NewComment = { anchor?: string | null; anchors?: string[]; anchorLabel?: string; content: string; parentId?: number; mentions?: number[] };
 
 const commentKey = (projectId: number, code: string) => ["dingze", "comments", projectId, code] as const;
 

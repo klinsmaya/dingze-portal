@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import {
   type Actor,
+  collaborationStatus,
+  diffPayloads,
   getArtifactDef,
   isArtifactCode,
   validateArtifact,
@@ -28,9 +30,12 @@ import { useArtifactDetail, useSaveArtifact, useUpstreamPayloads } from "@/lib/d
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { useProfile } from "@/lib/dingze/materials-api";
-import { initHistory, recordDraft, redoDraft, undoDraft } from "@/lib/dingze/draft-history";
+import { useAddComment } from "@/lib/dingze/comments-api";
+import { type Command, type CommandMeta, anchorsOf, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
+import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
-import { useRecordExport } from "@/lib/dingze/records-queries";
+import { useArtifactHistory, useRecordExport } from "@/lib/dingze/records-queries";
+import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
 import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
@@ -46,10 +51,26 @@ import { PlanBookExportButton } from "./components/plan-book-export";
 import { StepBar } from "./components/step-bar";
 import { ValidationBar } from "./components/validation-bar";
 import { BookMethod } from "./components/book-method";
-import { CommentMarkers, CommentsPanel } from "./components/comments-panel";
+import { ChangesPanel } from "./components/changes-panel";
+import { CommentsPanel, circled } from "./components/comments-panel";
+import { CommentPins, EditMarkers } from "./components/edit-markers";
+import { type EditSession, EditSessionContext, type RevisionState, pathNamer } from "./components/edit-session";
+import { ShortcutsDialog, StatusBar } from "./components/status-bar";
 import { GuidanceGapButton } from "./components/guidance-gap-dialog";
 import { ArtifactEditor } from "./editors/artifact-editor";
 import { useProjectContext } from "./project-context";
+
+type AsideTab = "coach" | "comments" | "changes";
+type EditState = { payload: unknown; log: Command[]; redo: Command[]; saved: Command[] };
+const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: [], saved: [] });
+
+const TONE_CLASS: Record<string, string> = {
+  act: "border-gold bg-gold/15 text-foreground",
+  wait: "border-border bg-muted text-muted-foreground",
+  done: "border-brand/30 bg-brand/10 text-brand",
+  warn: "border-destructive/30 bg-status-stale text-status-stale-foreground",
+  neutral: "border-border text-muted-foreground",
+};
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
 const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
@@ -94,18 +115,73 @@ function Workspace({ code }: { code: string }) {
   const serverPayload =
     artifact?.currentVersion?.payload ?? emptyPayload(code, project);
   const serverRev = artifact?.currentRev ?? 0;
-  const [history, setHistory] = useState(() => initHistory<unknown>(serverPayload));
-  const draft = history.present;
-  const setDraft = useCallback((next: unknown) => setHistory((h) => recordDraft(h, next, Date.now())), []);
-  const resetDraft = useCallback((value: unknown) => setHistory(initHistory(value)), []);
-  const undo = useCallback(() => setHistory((h) => undoDraft(h)), []);
-  const redo = useCallback(() => setHistory((h) => redoDraft(h)), []);
+  // The draft and its change log (design 10 §7): every edit is a command; undo / redo walk the
+  // commands, and commands saved in this visit can still be undone (as a new 撤销 command).
+  const [edit, setEdit] = useState<EditState>(() => freshEdit(serverPayload));
+  const draft = edit.payload;
   const [baseRev, setBaseRev] = useState(serverRev);
   const dirty = JSON.stringify(draft) !== JSON.stringify(serverPayload);
+  const [activeComment, setActiveComment] = useState<number | null>(null);
+  const activeCommentRef = useRef(activeComment);
+  activeCommentRef.current = activeComment;
+  const nameOf = useMemo(() => pathNamer(draft), [draft]);
+  const nameOfRef = useRef(nameOf);
+  nameOfRef.current = nameOf;
+  const commit = useCallback((next: unknown, meta: CommandMeta = {}) => {
+    setEdit((e) => {
+      if (Object.is(next, e.payload)) return e;
+      const log = appendCommand(e.log, e.payload, next, { commentId: activeCommentRef.current, ...meta }, nameOfRef.current);
+      return { ...e, payload: next, log, redo: [] };
+    });
+  }, []);
+  // Plain fields (outside table rows) carry no data-anchor; the field being typed into learns its
+  // path from the edit, so markers, comments and 定位 can find it afterwards.
+  const editRef = useRef(edit);
+  editRef.current = edit;
+  const lastField = useRef<HTMLElement | null>(null);
+  const setDraft = useCallback(
+    (next: unknown) => {
+      const field = lastField.current;
+      if (field?.isConnected && !field.hasAttribute("data-anchor")) {
+        const changes = diffPayloads(editRef.current.payload, next);
+        if (changes.length === 1 && changes[0].kind !== "removed") field.setAttribute("data-anchor", changes[0].path);
+      }
+      commit(next);
+    },
+    [commit],
+  );
+  const undo = useCallback(() => {
+    setEdit((e) => {
+      const last = e.log[e.log.length - 1];
+      if (last) return { ...e, payload: revertCommand(e.payload, last), log: e.log.slice(0, -1), redo: [last, ...e.redo] };
+      // Nothing unsaved: undo the latest command saved in this visit, as a new edit.
+      const saved = e.saved[e.saved.length - 1];
+      if (!saved) return e;
+      const payload = revertCommand(e.payload, { ...saved, prev: undefined, next: undefined });
+      const cmd = buildCommand(e.payload, payload, { via: "undo", label: `撤销：${saved.label}` });
+      return cmd ? { ...e, payload, log: [cmd], saved: e.saved.slice(0, -1) } : { ...e, saved: e.saved.slice(0, -1) };
+    });
+  }, []);
+  const redo = useCallback(() => {
+    setEdit((e) => {
+      const [first, ...rest] = e.redo;
+      if (!first) return e;
+      return { ...e, payload: reapplyCommand(e.payload, first), log: [...e.log, first], redo: rest };
+    });
+  }, []);
+  const undoCommand = useCallback((command: Command) => {
+    setEdit((e) => {
+      const index = e.log.findIndex((c) => c.id === command.id);
+      if (index < 0) return e;
+      const isLast = index === e.log.length - 1;
+      const payload = revertCommand(e.payload, isLast ? command : { ...command, prev: undefined, next: undefined });
+      return { ...e, payload, log: e.log.filter((c) => c.id !== command.id), redo: isLast ? [command, ...e.redo] : [] };
+    });
+  }, []);
   const recordExport = useRecordExport(project);
   const [searchParams] = useSearchParams();
   const highlightComment = Number(searchParams.get("comment")) || null;
-  const [asideTab, setAsideTab] = useState<"coach" | "comments">(highlightComment ? "comments" : "coach");
+  const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
   const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
   const identity = useGetIdentity<{ id: number }>();
   const comments = useComments(project, code);
@@ -114,7 +190,8 @@ function Workspace({ code }: { code: string }) {
   // Adopt the server version when it changes and nothing local is pending.
   useEffect(() => {
     if (!dirty || serverRev !== baseRev) {
-      resetDraft(serverPayload);
+      // Our own save keeps the commands saved in this visit undoable; anyone else's resets them.
+      setEdit((e) => ({ ...freshEdit(serverPayload), saved: serverRev === baseRev ? e.saved : [] }));
       setBaseRev(serverRev);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,31 +244,63 @@ function Workspace({ code }: { code: string }) {
     status === "archived" ||
     (status === "in_review" && !consultantInReview);
 
-  const onSave = () =>
+  const addComment = useAddComment(project, code);
+  const onSave = () => {
+    const log = edit.log;
     save.mutate(
-      { payload: draft, baseRev },
+      { payload: draft, baseRev, changes: log.map(toSaved), aiSuggested: log.some((c) => c.via === "chat") || undefined },
       {
         onSuccess: (result) => {
           setBaseRev(result.rev);
+          setEdit((e) => ({ ...e, log: [], redo: [], saved: [...e.saved, ...log].slice(-50) }));
           toast.success(`已保存 v${result.rev}`);
+          // Edits made 按批注 answer their comment thread.
+          const byComment = new Map<number, string[]>();
+          for (const c of log) if (c.commentId) byComment.set(c.commentId, [...(byComment.get(c.commentId) ?? []), c.label]);
+          for (const [id, labels] of byComment) {
+            addComment.mutate({ parentId: id, content: `已按批注修改（v${result.rev}）：${labels.slice(0, 5).join("；")}${labels.length > 5 ? ` 等 ${labels.length} 处` : ""}`, mentions: [] });
+          }
+          if (byComment.size) setActiveComment(null);
         },
         onError: (error) => toast.error(errorMessage(error)),
       },
     );
+  };
   const canSave = !readOnly && EDITABLE_CODES.has(code);
   const saveShortcut = useRef(onSave);
   saveShortcut.current = onSave;
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [composeSignal, setComposeSignal] = useState(0);
+  const revisionToggle = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target?.closest?.("input, textarea, select, [contenteditable=true]");
+      if (event.key === "?" && !typing && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
       if (!(event.metaKey || event.ctrlKey)) return;
       const key = event.key.toLowerCase();
+      if (event.shiftKey && key === "e") {
+        event.preventDefault();
+        revisionToggle.current();
+        return;
+      }
+      if (event.altKey && (key === "m" || event.code === "KeyM")) {
+        event.preventDefault();
+        setAsideTab("comments");
+        setComposeSignal((n) => n + 1);
+        return;
+      }
       if (key === "s") {
         event.preventDefault();
         if (canSave && dirty && !save.isPending) saveShortcut.current();
         return;
       }
       // Undo / redo of the table; the chat box keeps its own text undo.
-      if (!canSave || (event.target as HTMLElement | null)?.closest?.("[data-dingze-coach]")) return;
+      if (!canSave || target?.closest?.("[data-dingze-coach]")) return;
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         undo();
@@ -205,6 +314,105 @@ function Workspace({ code }: { code: string }) {
   }, [canSave, dirty, save.isPending, undo, redo]);
   const next = useMemo(() => nextArtifact(code, overview.artifacts), [code, overview.artifacts]);
 
+  // ── Edit session shared with the right panel, the change cards and the canvas markers ──
+  const historyQuery = useArtifactHistory(project, code);
+  const versions = useMemo(
+    () => (historyQuery.data?.versions ?? []).map((v) => ({ rev: v.rev, by: v.by, at: v.at, kind: v.kind })),
+    [historyQuery.data],
+  );
+  const [revision, setRevision] = useState<RevisionState>({ on: false, baseRev: null, basePayload: undefined, baseLabel: "" });
+  const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
+  const [selecting, setSelecting] = useState(false);
+  const [selection, setSelection] = useState<string[]>([]);
+  const compareWith = useCallback(
+    async (rev: number | null, on: boolean) => {
+      const target = rev ?? versions[1]?.rev ?? versions[0]?.rev ?? null;
+      if (!on || !target) {
+        setRevision((r) => ({ ...r, on: false }));
+        return;
+      }
+      const v = await getVersionPayload(project.id, project.spaceName, code, target);
+      setRevision({ on: true, baseRev: target, basePayload: v.payload, baseLabel: `v${target} · ${v.by || "—"} ${formatTime(v.at)}` });
+    },
+    [code, project.id, project.spaceName, versions],
+  );
+  revisionToggle.current = () => {
+    if (!versions.length) return void toast.info("还没有保存过的版本可以对比");
+    setAsideTab("changes");
+    compareWith(revision.baseRev, !revision.on).catch(() => toast.error("读取对比版本失败"));
+  };
+  const validate = useCallback((payload: unknown) => (payload ? validateArtifact(code, payload, upstream) : []), [code, upstream]);
+  const session: EditSession = useMemo(
+    () => ({
+      code,
+      draft,
+      readOnly: readOnly || !EDITABLE_CODES.has(code),
+      issues,
+      commit,
+      log: edit.log,
+      undoCommand,
+      activeComment,
+      setActiveComment,
+      preview: previewAnchors,
+      setPreview: setPreviewAnchors,
+      selecting,
+      setSelecting: (on: boolean) => {
+        setSelecting(on);
+        if (on) setAsideTab("comments");
+      },
+      selection,
+      toggleSelection: (anchor: string) => setSelection((sel) => (sel.includes(anchor) ? sel.filter((a) => a !== anchor) : [...sel, anchor])),
+      clearSelection: () => setSelection([]),
+      focusAnchor,
+      revision,
+      compareWith,
+      versions,
+      validate,
+      nameOf,
+      openPanel: setAsideTab,
+    }),
+    [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
+  );
+
+  // Canvas markers: 修订 against a chosen version, or just what changed since the last save.
+  const marks = useMemo(() => {
+    const entries = revision.on && revision.basePayload !== undefined ? diffPayloads(revision.basePayload, draft) : edit.log.flatMap((c) => c.changes);
+    const before: Record<string, string> = {};
+    if (revision.on) for (const d of entries) if (d.kind === "changed") before[d.path] = preview(d.before, 60);
+    return {
+      changed: entries.filter((d) => d.kind === "changed" && !d.path.endsWith("#order")).map((d) => d.path),
+      added: entries.filter((d) => d.kind === "added").map((d) => d.path),
+      before,
+    };
+  }, [revision, draft, edit.log]);
+  const allThreads = useMemo(() => [...(comments.data ?? [])].sort((a, b) => a.id - b.id), [comments.data]);
+  const numberOf = useCallback((id: number) => {
+    const i = allThreads.findIndex((t) => t.id === id);
+    return i < 0 ? null : i + 1;
+  }, [allThreads]);
+  const threadAnchors = (t: { anchor: string | null; anchors?: string[] }) => (t.anchors?.length ? t.anchors : t.anchor ? [t.anchor] : []);
+  const pins = useMemo(
+    () => allThreads.map((t, i) => ({ id: t.id, no: i + 1, anchors: threadAnchors(t), resolved: t.resolved, label: `${t.author}：${t.content.slice(0, 40)}` })).filter((p) => p.anchors.length),
+    [allThreads],
+  );
+
+  // Deleting a row or node: offer an 8-second undo right where the user is looking.
+  const toasted = useRef<string | null>(null);
+  useEffect(() => {
+    const last = edit.log[edit.log.length - 1];
+    if (!last || toasted.current === last.id || last.via !== "structure") return;
+    const removed = last.changes.filter((c) => c.kind === "removed" && c.before && typeof c.before === "object");
+    if (!removed.length) return;
+    toasted.current = last.id;
+    toast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+      duration: 8000,
+      action: { label: "撤销", onClick: () => undoCommand(last) },
+    });
+  }, [edit.log, undoCommand]);
+
+  const progress = overview.artifacts.find((a) => a.code === code);
+  const collab = progress ? collaborationStatus({ ...progress, unlocked }, role) : null;
+
   // The digital consultant reads the live draft and proposes changes through a frontend
   // tool; the change is written (as an AI-suggested version) only after the user approves.
   const latest = useRef({
@@ -212,23 +420,23 @@ function Workspace({ code }: { code: string }) {
     baseRev,
     readOnly,
     editable: EDITABLE_CODES.has(code),
+    commit,
   });
   latest.current = {
     draft,
     baseRev,
     readOnly,
     editable: EDITABLE_CODES.has(code),
+    commit,
   };
   const profile = useProfile(project);
-  const saveRef = useRef(save.mutateAsync);
-  saveRef.current = save.mutateAsync;
   const tools = useMemo(
     () => [
       defineAIFrontendTool({
         name: PROPOSE_TOOL,
         title: "建议写入成果表",
         description:
-          "把与用户在对话中达成一致的内容写入当前成果表。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、battlefields.+）；label 是给用户看的格子名称。用户确认后才会写入。",
+          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、battlefields.+）；label 是给用户看的格子名称。卡片会给用户看原值→新值→影响，用户确认后才写入草稿，用户保存后生效。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -256,9 +464,9 @@ function Workspace({ code }: { code: string }) {
         execute: async (args: unknown) => {
           const {
             draft: current,
-            baseRev: rev,
             readOnly: locked,
             editable,
+            commit: write,
           } = latest.current;
           if (!editable)
             return {
@@ -275,17 +483,12 @@ function Workspace({ code }: { code: string }) {
             return { status: "error", content: "没有要写入的内容。" };
           try {
             const next = applyChanges(current, changes);
-            const result = await saveRef.current({
-              payload: next,
-              baseRev: rev,
-              aiSuggested: true,
-            });
-            setDraft(next);
-            setBaseRev(result.rev);
-            toast.success(`已按建议写入 v${result.rev}`);
+            const summary = (args as { summary?: string })?.summary;
+            write(next, { via: "chat", label: summary ? `数字咨询师：${summary}` : undefined });
+            toast.success("已写入草稿，记得保存", { description: "在右侧“修改”里可以看到并撤销这条修改" });
             return {
               status: "success",
-              content: `已写入成果表，当前版本 v${result.rev}。`,
+              content: "用户已确认，内容已写入草稿（尚未保存，用户保存后生效）。",
             };
           } catch (error) {
             return { status: "error", content: errorMessage(error) };
@@ -327,6 +530,7 @@ function Workspace({ code }: { code: string }) {
   });
 
   return (
+    <EditSessionContext.Provider value={session}>
     <AIPageContextScope context={page.context}>
       <div className="flex flex-1 flex-wrap items-stretch">
         <aside className="w-full border-b bg-card md:w-[300px] md:border-r md:border-b-0">
@@ -348,25 +552,56 @@ function Workspace({ code }: { code: string }) {
         <main
           ref={page.ref}
           data-dingze-main
+          data-dz-selecting={selecting || undefined}
           onFocusCapture={(event) => {
-            const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
+            const target = event.target as HTMLElement;
+            if (target.matches?.("input, textarea, select")) lastField.current = target;
+            const anchor = target.closest?.("[data-anchor]")?.getAttribute("data-anchor");
             if (anchor) setFocusAnchor(anchor);
           }}
-          className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 p-4 md:p-6"
+          onClickCapture={(event) => {
+            if (!selecting) return;
+            const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
+            if (!anchor) return;
+            event.preventDefault();
+            event.stopPropagation();
+            session.toggleSelection(anchor);
+          }}
+          className="relative flex min-w-0 flex-[999_1_560px] flex-col gap-4 p-4 md:p-6"
         >
+          <EditMarkers
+            changed={marks.changed}
+            added={marks.added}
+            before={marks.before}
+            comments={openThreads.flatMap(threadAnchors)}
+            preview={previewAnchors}
+            selection={selection}
+          />
+          <CommentPins
+            pins={pins}
+            activeId={activeComment ?? highlightComment}
+            onOpen={(id) => {
+              setAsideTab("comments");
+              window.setTimeout(() => document.getElementById(`comment-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 50);
+            }}
+          />
           <div className="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-1 border-b bg-background/95 px-4 pt-3 pb-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6 md:pt-4">
           <div className="text-xs text-muted-foreground">
             {def.task} › {def.step}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="font-heading text-2xl font-bold text-brand">
-              《{def.name}》
-            </h1>
-            <span className="rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+            <h1 className="font-heading text-2xl font-bold text-brand">{def.plain}</h1>
+            <span className="text-xs text-muted-foreground" title={`书中名称《${def.name}》，出处 ${def.bookRef}`}>
+              {def.plain !== def.name ? `《${def.name}》 · ` : ""}
               {def.specId} · {def.bookRef}
             </span>
             {artifact ? (
               <StatusBadge status={status} stale={artifact.stale} />
+            ) : null}
+            {collab ? (
+              <span role="status" className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", TONE_CLASS[collab.tone])}>
+                {collab.text}
+              </span>
             ) : null}
             {artifact?.currentRev ? (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -412,10 +647,10 @@ function Workspace({ code }: { code: string }) {
               />
               {canSave ? (
                 <div className="flex">
-                  <Button variant="ghost" size="icon" aria-label="撤销" title="撤销（Ctrl / ⌘ + Z）" disabled={!history.past.length} onClick={undo}>
+                  <Button variant="ghost" size="icon" aria-label="撤销" title={edit.log.length ? `撤销：${edit.log[edit.log.length - 1].label}（Ctrl / ⌘ + Z）` : "撤销（Ctrl / ⌘ + Z）"} disabled={!edit.log.length && !edit.saved.length} onClick={undo}>
                     <Undo2 />
                   </Button>
-                  <Button variant="ghost" size="icon" aria-label="重做" title="重做（Ctrl / ⌘ + Shift + Z）" disabled={!history.future.length} onClick={redo}>
+                  <Button variant="ghost" size="icon" aria-label="重做" title="重做（Ctrl / ⌘ + Shift + Z）" disabled={!edit.redo.length} onClick={redo}>
                     <Redo2 />
                   </Button>
                 </div>
@@ -562,10 +797,35 @@ function Workspace({ code }: { code: string }) {
               ) : null}
             </>
           )}
+          {activeComment ? (
+            <div className="sticky bottom-10 z-20 flex flex-wrap items-center gap-2 self-start rounded-full border px-3 py-1 text-xs shadow-sm" style={{ borderColor: "var(--dz-comment)", background: "color-mix(in oklab, var(--dz-comment) 10%, var(--background))" }}>
+              正在按批注 {circled(numberOf(activeComment) ?? 0)} 修改：改动会关联到这条批注，保存后自动回复
+              <Button size="xs" variant="ghost" onClick={() => setActiveComment(null)}>
+                结束
+              </Button>
+            </div>
+          ) : null}
+          {EDITABLE_CODES.has(code) && unlocked ? (
+            <StatusBar
+              errors={blocking}
+              warnings={issues.length - blocking}
+              openComments={openThreads.length}
+              saving={save.isPending}
+              dirty={dirty}
+              savedLabel={artifact?.currentRev ? `已保存 v${artifact.currentRev}` : "还没保存过"}
+              revisionOn={revision.on}
+              selected={focusAnchor ? nameOf(focusAnchor) : null}
+              onIssues={() => document.querySelector("[data-dingze-validation]")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              onComments={() => setAsideTab("comments")}
+              onRevision={() => revisionToggle.current()}
+              onShortcuts={() => setShortcutsOpen(true)}
+            />
+          ) : null}
+          <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
         </main>
 
         <aside
-          aria-label="数字咨询师"
+          aria-label="数字咨询师、批注与修改"
           data-dingze-coach
           className="flex w-full flex-col gap-3 border-t bg-card p-4 lg:w-[400px] lg:border-t-0 lg:border-l"
         >
@@ -580,6 +840,7 @@ function Workspace({ code }: { code: string }) {
               [
                 ["coach", "数字咨询师"],
                 ["comments", `批注${openThreads.length ? ` · ${openThreads.length}` : ""}`],
+                ["changes", `修改${edit.log.length ? ` · ${edit.log.length}` : ""}`],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -609,16 +870,21 @@ function Workspace({ code }: { code: string }) {
               code={code}
               payload={draft}
               team={overview.team ?? []}
-              canComment={overview.isConsultAdmin || (!!role && role !== "readonly")}
+              canComment={overview.isConsultAdmin || !!role}
               canResolveAny={overview.isConsultAdmin || role === "ent_lead" || role === "lead_consultant"}
               currentUserId={identity.data?.id ?? null}
               focusAnchor={focusAnchor}
               highlightId={highlightComment}
+              numberOf={numberOf}
+              composeSignal={composeSignal}
             />
           </div>
-          <CommentMarkers anchors={openThreads.map((t) => t.anchor).filter((a): a is string => !!a)} />
+          <div className={cn(asideTab !== "changes" && "hidden")}>
+            <ChangesPanel project={project} code={code} commentNo={numberOf} />
+          </div>
         </aside>
       </div>
     </AIPageContextScope>
+    </EditSessionContext.Provider>
   );
 }

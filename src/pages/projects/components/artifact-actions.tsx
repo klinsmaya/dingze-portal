@@ -71,6 +71,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
   const transition = useTransitionArtifact(project, code);
   const [reasonFor, setReasonFor] = useState<ActionSpec | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [introFor, setIntroFor] = useState<ActionSpec | null>(null);
 
   const visible = ACTIONS.filter((a) => a.from.includes(status) && canPerform(a.action, actor));
   if (visible.length === 0) return null;
@@ -107,6 +108,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
             onClick={() => {
               if (spec.reason) setReasonFor(spec);
               else if (spec.action === "confirm") setConfirming(true);
+              else if (spec.action === "stepDone" && !flowIntroSeen()) setIntroFor(spec);
               else run(spec);
             }}
           >
@@ -115,6 +117,16 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         );
       })}
 
+      <FlowIntroDialog
+        open={!!introFor}
+        pending={transition.isPending}
+        onClose={() => setIntroFor(null)}
+        onContinue={() => {
+          markFlowIntroSeen();
+          if (introFor) run(introFor);
+          setIntroFor(null);
+        }}
+      />
       <ReasonDialog spec={reasonFor} pending={transition.isPending} onClose={() => setReasonFor(null)} onSubmit={run} />
       <ConfirmDialog
         open={confirming}
@@ -127,6 +139,64 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         onConfirm={() => run(ACTIONS.find((a) => a.action === "confirm")!)}
       />
     </div>
+  );
+}
+
+const INTRO_KEY = "dingze:flow-intro-seen";
+
+function flowIntroSeen(): boolean {
+  try {
+    return window.localStorage.getItem(INTRO_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markFlowIntroSeen() {
+  try {
+    window.localStorage.setItem(INTRO_KEY, "1");
+  } catch {
+    // Private mode: the explanation simply shows again next time.
+  }
+}
+
+const FLOW = [
+  ["本步完成", "你这边填完了。表格仍可修改，下一步把它提交给顾问。"],
+  ["顾问复核", "顾问看过后，要么通过，要么写明原因退回给你改。"],
+  ["企业定版", "顾问通过后，由企业项目负责人确认定版。"],
+  ["锁定", "定版后只读，作为后面各表的依据；要改只能请主咨询师解锁重开。"],
+] as const;
+
+/** First “本步完成”: explain what happens after it, once per browser (usability #7). */
+function FlowIntroDialog({ open, pending, onClose, onContinue }: { open: boolean; pending: boolean; onClose: () => void; onContinue: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>点了“本步完成”之后会怎样？</DialogTitle>
+          <DialogDescription>每张表都走这四步，你随时能在表头看到它走到哪了。</DialogDescription>
+        </DialogHeader>
+        <ol className="flex flex-col gap-2.5">
+          {FLOW.map(([name, text], i) => (
+            <li key={name} className="flex gap-3 text-sm">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">{i + 1}</span>
+              <span>
+                <span className="font-semibold">{name}</span>
+                <span className="text-muted-foreground"> — {text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            再改改
+          </Button>
+          <Button disabled={pending} onClick={onContinue}>
+            知道了，本步完成
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

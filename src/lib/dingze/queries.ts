@@ -82,7 +82,7 @@ function useInvalidateProject(project: ProjectSummary | undefined) {
 export function useSaveArtifact(project: ProjectSummary | undefined, code: string) {
   const invalidate = useInvalidateProject(project);
   return useMutation({
-    mutationFn: (values: { payload: unknown; baseRev: number; note?: string; fromProposalId?: number; aiSuggested?: boolean }) =>
+    mutationFn: (values: { payload: unknown; baseRev: number; note?: string; fromProposalId?: number; aiSuggested?: boolean; changes?: unknown[] }) =>
       saveArtifact(project!.spaceName, { projectId: project!.id, code, ...values }),
     onSuccess: () => invalidate(code),
   });

@@ -35,7 +35,7 @@ export function ValidationBar({ issues, hasRules }: { issues: Issue[]; hasRules:
   const shownWarnings = showAllWarnings ? warnings : warnings.slice(0, 3);
 
   return (
-    <section
+    <section data-dingze-validation
       role="status"
       aria-label="校验结果"
       className={cn(

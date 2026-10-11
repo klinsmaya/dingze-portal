@@ -34,7 +34,11 @@ export type EditSession = {
   clearSelection: () => void;
   focusAnchor: string | null;
   revision: RevisionState;
-  setRevision: (r: RevisionState) => void;
+  /** Turn 修订 on against a saved version (null: the previous one), or off. */
+  compareWith: (rev: number | null, on: boolean) => Promise<void>;
+  versions: { rev: number; by: string; at: string; kind: string }[];
+  /** Checks a payload the way the editor does (for a change card's 影响). */
+  validate: (payload: unknown) => Issue[];
   /** Human name of a payload path, e.g. “开拓点供新业务 · 指标值”. */
   nameOf: (path: string) => string;
   openPanel: (tab: "coach" | "comments" | "changes") => void;
@@ -80,6 +84,7 @@ const FIELD_NAMES: Record<string, string> = {
   goalId: "挂到的目标",
   perspective: "层面",
   status: "状态",
+  "#order": "顺序",
   time: "时间",
   phase: "阶段",
 };
