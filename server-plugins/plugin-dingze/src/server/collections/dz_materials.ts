@@ -16,6 +16,9 @@ export default defineCollection({
     { type: 'integer', name: 'size' },
     { type: 'text', name: 'text' },
     { type: 'integer', name: 'chars' },
+    // The original upload (dz_material_files), when one was kept.
+    { type: 'bigInt', name: 'fileId' },
+    { type: 'string', name: 'mimetype' },
     spaceField,
   ],
 });

@@ -18,7 +18,7 @@ import { opsBoard } from './services/usage';
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
-import { addMaterial, deleteMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
+import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
 import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
 import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff } from './services/registry';
@@ -173,6 +173,10 @@ export class PluginDingzeServer extends Plugin {
           const p = ctx.action.params;
           return getMaterial(ctx, await loadProjectContext(ctx, p.projectId), p.id, p.offset);
         }),
+        downloadMaterial: action(async (ctx) => {
+          const p = ctx.action.params;
+          return downloadMaterial(ctx, await loadProjectContext(ctx, p.projectId), p.id);
+        }),
         addMaterial: action(async (ctx) => {
           const v = values(ctx);
           return addMaterial(ctx, await loadProjectContext(ctx, v.projectId), v);
@@ -221,6 +225,9 @@ export class PluginDingzeServer extends Plugin {
     });
     // Every handler checks space membership, project role and artifact status itself.
     this.app.acl.allow('dingze', '*', 'loggedIn');
+    // Originals are uploaded with the standard multipart create; nothing else on the
+    // collection is open, reads go through dingze:downloadMaterial.
+    this.app.acl.allow('dz_material_files', 'create', 'loggedIn');
 
     // One-off data alignment after an upgrade; each step is a no-op once done.
     this.app.on('afterStart', async () => {

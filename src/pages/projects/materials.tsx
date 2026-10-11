@@ -1,4 +1,4 @@
-import { CheckCheck, ClipboardPaste, Eye, FileUp, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCheck, ClipboardPaste, Download, Eye, FileUp, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -26,9 +26,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
-import { MATERIAL_ACCEPT, SPREADSHEET_EXTENSIONS, extractText } from "@/lib/dingze/extract-text";
+import { MATERIAL_ACCEPT, SPREADSHEET_EXTENSIONS, UnsupportedFileError, extractText } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { type MaterialSummary, useAddMaterial, useDeleteMaterial, useMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
+import { type MaterialSummary, downloadOriginal, uploadOriginal, useAddMaterial, useDeleteMaterial, useMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +92,11 @@ function MaterialViewer({ id, onClose }: { id: number | null; onClose: () => voi
   );
 }
 
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { materials: MaterialSummary[]; canEdit: boolean; canDeleteAny: boolean; currentUserId: number | null }) {
   const { project } = useProjectContext();
   const add = useAddMaterial(project);
@@ -106,17 +111,22 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
     setBusy(true);
     for (const file of Array.from(files)) {
       try {
-        const text = await extractText(file);
-        if (!text.trim()) {
-          toast.error(
+        // Text is read in the browser for the digital consultants; the original is stored as well.
+        const text = await extractText(file).catch((error) => {
+          if (error instanceof UnsupportedFileError) throw error;
+          return "";
+        });
+        const original = await uploadOriginal(file);
+        const result = await add.mutateAsync({ title: file.name.replace(/\.[^.]+$/, ""), kind: "file", fileName: file.name, size: file.size, text, fileId: original.id });
+        if (!result.searchable) {
+          toast.warning(
             SPREADSHEET_EXTENSIONS.some((e) => file.name.toLowerCase().endsWith(`.${e}`))
-              ? `《${file.name}》的表格里没有内容`
-              : `《${file.name}》没有读到文字，可能是扫描件；请粘贴文字或上传可复制文字的版本`
+              ? `已上传《${file.name}》原件，但表格里没有内容可供检索`
+              : `已上传《${file.name}》原件，但没有读到文字（可能是扫描件）：数字咨询师检索不到它，可以再“粘贴文字”补一份`
           );
-          continue;
+        } else {
+          toast.success(`已上传《${file.name}》原件并提取文字${result.truncated ? "（文字过长，检索只用前 15 万字）" : ""}`);
         }
-        const result = await add.mutateAsync({ title: file.name.replace(/\.[^.]+$/, ""), kind: "file", fileName: file.name, size: file.size, text });
-        toast.success(`已收录《${file.name}》${result.truncated ? "（内容过长，只保存了前 15 万字）" : ""}`);
       } catch (error) {
         toast.error(`《${file.name}》：${errorMessage(error)}`);
       }
@@ -131,12 +141,12 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         <h2 id="library" className="font-heading text-lg font-bold text-brand">
           资料库
         </h2>
-        <span className="text-xs text-muted-foreground">只保存文字内容，原文件不上传；数字咨询师起草时会查阅并注明出处</span>
+        <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载</span>
         {canEdit ? (
           <div className="ml-auto flex gap-2">
             <input ref={fileRef} type="file" multiple accept={MATERIAL_ACCEPT} className="hidden" onChange={(e) => upload(e.target.files)} />
             <Button variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-              <FileUp /> {busy ? "读取中…" : "上传文件"}
+              <FileUp /> {busy ? "上传中…" : "上传原件"}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setPasting(true)}>
               <ClipboardPaste /> 粘贴文字
@@ -146,7 +156,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
       </div>
       {materials.length === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          还没有资料。可上传 Word（docx）、PDF、Excel（xlsx、xls、xlsm、xlsb、ods）、txt、md、csv（不超过 20 MB），或直接粘贴文字。
+          还没有资料。可上传原件：Word（docx）、PDF、Excel（xlsx、xls、xlsm、xlsb、ods）、txt、md、csv（不超过 20 MB）；也可以直接粘贴文字。
         </p>
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">
@@ -156,11 +166,17 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{m.title}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {m.kind === "note" ? "文字资料" : m.fileName} · {m.chars} 字 · {m.by} · {formatTime(m.at)}
+                  {m.kind === "note" ? "粘贴的文字" : m.fileName}
+                  {m.hasFile ? ` · 原件 ${formatSize(m.size)}` : ""} · {m.chars ? `可检索 ${m.chars} 字` : "无可检索文字"} · {m.by} · {formatTime(m.at)}
                 </span>
               </span>
-              <Button variant="ghost" size="sm" onClick={() => setViewing(m.id)}>
-                <Eye /> 查看
+              {m.hasFile ? (
+                <Button variant="ghost" size="sm" onClick={() => downloadOriginal(project, m).catch((e) => toast.error(errorMessage(e)))}>
+                  <Download /> 原件
+                </Button>
+              ) : null}
+              <Button variant="ghost" size="sm" disabled={!m.chars} onClick={() => setViewing(m.id)}>
+                <Eye /> 文字
               </Button>
               {canEdit && (canDeleteAny || m.byId === currentUserId) ? (
                 <Button
