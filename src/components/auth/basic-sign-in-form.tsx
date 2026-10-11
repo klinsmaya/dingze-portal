@@ -61,8 +61,8 @@ export function BasicSignInForm({
       </Button>
 
       {/* Accounts are provisioned by 运营管理; self sign-up stays closed in this Portal. */}
-      {enableResetPassword && (
-        <div className="text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground">
+        {enableResetPassword ? (
           <Link
             to={`/forgot-password?name=${encodeURIComponent(
               authenticator.name
@@ -71,8 +71,17 @@ export function BasicSignInForm({
           >
             忘记密码？
           </Link>
-        </div>
-      )}
+        ) : (
+          <details>
+            <summary className="cursor-pointer transition-colors hover:text-foreground">
+              忘记密码？
+            </summary>
+            <p className="mt-2 rounded-md bg-muted px-3 py-2 leading-relaxed">
+              账号由平台统一开通，不能自助注册。企业成员请联系本企业管理员；企业管理员和咨询团队请联系平台运营，在“运营管理”里重置密码，新密码会当面或通过安全渠道转交给你。
+            </p>
+          </details>
+        )}
+      </div>
     </form>
   );
 }
