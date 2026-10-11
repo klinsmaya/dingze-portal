@@ -39,18 +39,19 @@
 |---|---|
 | `dz_enterprises` | 企业档案（空间名、简称、规模、状态） |
 | `dz_org_units` | 组织部门 |
-| `dz_projects` | 项目（年度、场景、主表达方式、立项层级、时间刻度） |
+| `dz_projects` | 项目（年度、场景、立项层级、时间刻度；S1-01 一律以六分法为必做表达） |
 | `dz_project_members` | 项目成员与项目角色 |
 | `dz_artifacts` | 成果：状态、当前 / 本步完成 / 定版版本、上游已变更、例外 |
-| `dz_artifact_versions` | 版本快照：rev、kind（ai_draft / enterprise_edit / consultant_revision）、payload、upstreamRefs |
+| `dz_artifact_versions` | 版本快照：rev、kind（ai_draft / enterprise_edit / consultant_revision）、payload、upstreamRefs、changes（本次保存包含的修改命令：来源、标签、关联批注、逐路径原值 / 新值） |
 | `dz_proposals` | 数字咨询师建议 |
 | `dz_dissents` | 团队异议 |
 | `dz_step_exceptions` | 跳步例外 |
 | `dz_audit_events` | 审计：动作、原因、前后状态、版本 |
 | `dz_exports` | 导出记录 |
 | `dz_notifications` | 站内通知 |
-| `dz_comments` | 批注：锚点（行 id / 字段路径）、内容、@ 提及、回复（parentId）、解决状态、所在版本 |
-| `dz_materials` | 企业资料：标题、类型、文件名、提取后的文字（≤ 15 万字） |
+| `dz_comments` | 批注：锚点（行 id / 字段路径）、anchors（圈选的一组锚点）、内容、@ 提及、回复（parentId）、解决状态、所在版本 |
+| `dz_materials` | 企业资料：标题、类型、文件名、原件（fileId，存于 `dz_material_files`，本地存储）、提取后的文字（≤ 15 万字） |
+| `dz_material_files` | 资料原件（NocoBase 文件表，只允许登录用户上传，下载经 `downloadMaterial` 校验项目权限） |
 | `dz_profiles` | 企业画像：条目（类别、主题、内容、来源、草稿 / 已复核 / 已确认）、rev（并发保护） |
 | `dz_expert_requests` | 专家咨询：议题、问题、引用的定版版本（code / versionId / rev）、状态、专家、预约、纪要、意见 |
 | `dz_guidance_gaps` | 引导缺口（**平台共享，无空间字段**）：项目、成果、类别、描述、期望、摘录、规则包版本、评审状态与意见、发布版本 |
@@ -62,12 +63,12 @@
 
 | 分组 | 动作 |
 |---|---|
-| 项目 | `myProjects`（含阶段进度）、`projectOverview`、`consultantBoard` |
+| 项目 | `myProjects`（含阶段进度与按角色算出的下一步 `next`）、`projectOverview`（含每张表最近一次流转事件）、`consultantBoard` |
 | 成果 | `artifactDetail`、`saveArtifact`、`transition`（stepDone / submitReview / approve / returnToEdit / confirm / reopen / forceLock / forceReturn）、`recordDissent`、`grantException` |
-| 成果管理与交付 | `artifactRegistry`、`artifactHistory`、`versionDiff`、`deliveryBundle`、`recordExport` |
+| 成果管理与交付 | `artifactRegistry`、`artifactHistory`（含每版修改记录）、`versionPayload`（修订对比取任意一版）、`versionDiff`、`deliveryBundle`、`recordExport` |
 | 通知 | `myNotifications`、`markNotificationsRead` |
 | 批注 | `listComments`、`addComment`、`resolveComment` |
-| 资料与画像 | `listMaterials`、`getMaterial`、`addMaterial`、`deleteMaterial`、`searchMaterials`、`getProfile`、`saveProfile` |
+| 资料与画像 | `listMaterials`、`getMaterial`、`addMaterial`（可认领已上传的原件）、`downloadMaterial`、`deleteMaterial`、`searchMaterials`、`getProfile`、`saveProfile` |
 | 专家咨询 | `listExpertRequests`、`expertRequestDetail`、`createExpertRequest`、`actOnExpertRequest`（assign / schedule / answer / close / cancel） |
 | 运营看板与引导缺口 | `opsBoard`、`addGuidanceGap`、`listGuidanceGaps`、`reviewGuidanceGap` |
 | 运营 | `provisionEnterprise`、`listEnterprises`、`enterpriseDetail`、`updateEnterprise`、`addEnterpriseMembers`、`removeEnterpriseMember`、`saveOrgUnit`、`deleteOrgUnit`、`createProject`、`updateProject`、`setProjectMembers`、`removeProjectMember`、`listUsers`、`createUser`、`resetPassword` |
@@ -86,7 +87,7 @@
 ## 6. 数字咨询师
 
 - 三位 AI 员工按阶段挂在咨询工作区右侧，页面上下文自动附带当前成果（代码、状态、草稿、校验结果）。
-- 前端工具 `dingzeProposeChanges`（需用户确认）：按点号路径写入成果，数组条目按 `id` 定位，`数组名.+` 追加；写入后生成 `ai_draft` 版本。
+- 前端工具 `dingzeProposeChanges`（需用户确认）：按点号路径写入成果，数组条目按 `id` 定位，`数组名.+` 追加。界面上渲染为修改卡（原值 → 新值 → 影响），确认后作为一条“对话”来源的修改写入草稿，用户保存时生成版本（含对话修改时记为 `ai_draft`）。
 - Skill `dingze-workspace/SKILLS.md` 记录每张表的 payload 路径；阶段 Skill 来自书稿方法论包。
 - 书中方法（要点 / 坑 / 定版门禁）在 `shared/book-notes.ts`，前端面板与运营“方法与规则包”页共用。
 - 只读的服务端工具（`defineTools`，自动允许）：`dingzeGetArtifact`（读成果）、`dingzeSearchMaterials`（列资料 / 关键词检索片段 / 分页读全文）。只读工具放在服务端，是因为前端自动允许的工具并行调用时会卡住对话。
@@ -101,7 +102,15 @@
 - 专家咨询的专家须是该企业空间里的咨询师；非项目成员的专家只能通过咨询申请读取申请时引用的定版版本。
 - 引导缺口是平台共享表，只有运营 / 咨询管理员能列出；项目名只对其所在空间可见。
 
-## 8. 导出
+## 8. 编辑框架（设计稿 10）
+
+- **修改 = 命令**：`src/lib/dingze/edit-log.ts`。编辑器照旧通过 `onChange` 交出新草稿，工作区把前后差异（`shared/diff.ts`，数组按 `id` 匹配；行顺序变化单独记为 `#order`）记成一条命令：时间、来源（直接改 / 调结构 / 对话 / 撤销）、人话标签、关联批注、逐路径原值与新值，以及本机用于精确撤销的前后快照。连续敲同一格合并为一条。撤销 / 重做按命令走；保存时命令（去掉快照）随版本存进 `changes`。
+- **编辑会话**：`EditSessionContext`（`pages/projects/components/edit-session.tsx`）把草稿、修改记录、当前批注、修订状态、圈选、修改卡预览共享给右栏三页签、修改卡和画布标记，编辑器本身不需要知道。
+- **画布标记**：`edit-markers.tsx` 按 `data-anchor` 找到格子 / 行 / 节点，用 `data-dz-mark` 叠加青色（改过 / 修订）、绿色（新增）、紫色（批注）、琥珀虚线（修改卡预览）、紫框（圈选）；批注编号钉是主区上的绝对定位层。没有锚点的普通字段在第一次被编辑时由工作区补上锚点。
+- **调结构**：`src/lib/dingze/tree-ops.ts` 对“扁平树”（`id / parentId / level`，一级挂在目标上）做新增、升降级、上下移、移动到、拆分、合并、删除，纯函数、可单测；`editors/tree-editor.tsx` 提供节点工具条、行菜单、“移动到…”预览对话框和可编辑思维导图（`role=tree`，拖动有放置提示），路径（S2-03 / S2-06）、解码地图（S2-01，四个层面作为根）和 WBS（S3-02）共用。
+- **修订**：取任意历史版本（`versionPayload`）和当前草稿做差异，标在画布上，删除项列在开关下方。
+
+## 9. 导出
 
 - Excel：`src/lib/dingze/export/sheets.ts` 把成果转成表模型（表头、行、合并区），`xlsx.ts` 用 exceljs 生成；未定版文件带“草稿”标记。
 - Word：`plan-book.ts` 合成八章模型，`docx.ts` 用 docx 生成；公司级与部门级计划书共用。公司级第一章附战略屋（或六分法）与战略地图：SVG 原图内嵌，另附 PNG 兜底。

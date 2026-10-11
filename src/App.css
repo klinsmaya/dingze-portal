@@ -341,7 +341,9 @@
   }
 }
 
-/* The 定责 workspace embeds its stage consultant; the global floating entry would cover its composer. */
+/* Inside a 定责 project the stage consultant in the workspace is the one AI entry; the global
+   floating entry would be a second, different assistant (usability #6). */
+body:has([data-dingze-project]) [data-slot="ai-chat-drag-handle"],
 body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
   display: none;
 }

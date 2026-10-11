@@ -35,7 +35,7 @@ export default function ProjectLayout() {
   const overview = useProjectOverview(project);
 
   return (
-    <div className="flex min-h-svh flex-col">
+    <div data-dingze-project className="flex min-h-svh flex-col">
       <header
         className="flex min-h-15 flex-wrap items-center gap-x-6 gap-y-2 border-b-2 border-gold px-4 text-band-foreground md:px-6"
         style={{ background: "var(--band)" }}
