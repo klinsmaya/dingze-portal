@@ -13,7 +13,7 @@ import {
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, RowActions, TextCell } from "./kit";
@@ -88,7 +88,7 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
               <TextCell label="时间周期" placeholder="时间周期，如 2026 年度" value={sheet.period} onChange={(period) => setSheet(sheet.id, { period })} readOnly={readOnly} />
               <TextCell label="责任部门" placeholder="责任部门" value={sheet.ownerDept} onChange={(ownerDept) => setSheet(sheet.id, { ownerDept })} readOnly={readOnly} />
             </div>
-            <RowActions label={sheet.strategy || `主题 ${index + 1}`} readOnly={readOnly} onRemove={() => onChange({ sheets: removeById(sheets, sheet.id) })} />
+            <RowActions label={sheet.strategy || `主题 ${index + 1}`} readOnly={readOnly} onRemove={() => onChange({ sheets: removeById(sheets, sheet.id) })} onMove={(delta) => onChange({ sheets: moveById(sheets, sheet.id, delta) })} />
           </div>
 
           <div className="overflow-x-auto rounded-lg border">

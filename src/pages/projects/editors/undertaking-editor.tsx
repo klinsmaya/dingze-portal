@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { sourceLookup } from "@/lib/dingze/goal-sources";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -122,7 +122,7 @@ export function UndertakingEditor({ value, onChange, readOnly, issues, upstream 
                     </td>
                   ))}
                   <td className="px-1 py-1">
-                    <RowActions label={`${r.deptName} ${r.task}`} readOnly={readOnly} onRemove={() => set(removeById(rows, r.id))} />
+                    <RowActions label={`${r.deptName} ${r.task}`} readOnly={readOnly} onRemove={() => set(removeById(rows, r.id))} onMove={(delta) => set(moveById(rows, r.id, delta))} />
                   </td>
                 </tr>
               ))

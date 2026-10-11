@@ -1,5 +1,5 @@
-import { Columns3, CornerDownRight, LayoutPanelLeft, ListTree, Plus, Table2 } from "lucide-react";
-import { useState } from "react";
+import { Columns3, CornerDownRight, LayoutPanelLeft, Network, Plus, Table2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import {
   type GoalPathSystem,
@@ -18,11 +18,15 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { pathSystemSheets } from "@/lib/dingze/export/sheets";
+import { FIGURE_3_7, type Figure37Item, figureTag } from "@/lib/dingze/figure-3-7";
 import { errorAnchors } from "@/lib/dingze/rows";
+import { normalize } from "@/lib/dingze/tree-ops";
 import { SheetTable } from "@/pages/projects/components/sheet-table";
 import { cn } from "@/lib/utils";
 
-import { EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
+import { Figure37Card } from "./find-path";
+import { EditorToolbar, ImportButton, TextCell } from "./kit";
+import { MoveToDialog, type TreeConfig, TreeMindMap, TreeNodeMenu, useTreeActions } from "./tree-editor";
 
 type Node = PathNode & { goalId?: string | null };
 
@@ -39,27 +43,24 @@ type Props = {
   importFromMap?: { count: number; run: () => void };
   /** S2-03 also offers 表 3-10 (paths by perspective, as imported from the decode map). */
   decodeLayout?: boolean;
-  /** Spec ID of the graph view: S2-02 for the company system. */
+  /** Spec ID of the mind-map view: S2-02 for the company system. */
   graphSpecId?: string;
+  /** Key under which the person's last view is remembered. */
+  viewKey?: string;
+  defaultView?: "table" | "mind" | "t310";
 };
 
-type View = "fill" | "t39" | "t310" | "tree";
+type View = "table" | "mind" | "t39" | "t310";
 
 const LEVEL_LABELS = ["", "一级路径", "二级路径", "三级路径", "四级路径"];
 
-function descendants(nodes: Node[], id: string): Set<string> {
-  const out = new Set<string>([id]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const n of nodes) {
-      if (n.parentId && out.has(n.parentId) && !out.has(n.id)) {
-        out.add(n.id);
-        grew = true;
-      }
-    }
+function rememberedView(key: string | undefined, fallback: View): View {
+  try {
+    const v = key ? window.localStorage.getItem(`dingze:view:${key}`) : null;
+    return v === "table" || v === "mind" || v === "t39" || v === "t310" ? v : fallback;
+  } catch {
+    return fallback;
   }
-  return out;
 }
 
 /** “推得回来” at a glance: the children's sum when they share the parent's metric and unit. */
@@ -71,9 +72,19 @@ function rollUp(node: Node, nodes: Node[]): { sum: number; ok: boolean } | null 
   return { sum, ok: Math.abs(sum - node.amount) < 1e-9 };
 }
 
+const amountOf = (n: Node) => (typeof n.amount === "number" ? n.amount : parseAmount(n.value));
+
 /** S2-03 / S2-06: goal → 1st … 4th level paths, each with metric and value (分得下去、推得回来). */
-export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap, decodeLayout, graphSpecId }: Props) {
-  const [view, setView] = useState<View>("fill");
+export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap, decodeLayout, graphSpecId, viewKey, defaultView = "table" }: Props) {
+  const [view, setViewState] = useState<View>(() => rememberedView(viewKey, defaultView));
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      if (viewKey) window.localStorage.setItem(`dingze:view:${viewKey}`, v);
+    } catch {
+      // Not remembered in private mode.
+    }
+  };
   const invalid = errorAnchors(issues);
   const nodes = (value.nodes ?? []) as Node[];
   // Keep the other parts of the payload (the S2-03 target zone) when paths change.
@@ -82,13 +93,54 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
   const [t39, t310] = pathSystemSheets(value, layoutGoals, true);
   const patch = (id: string, p: Partial<Node>) =>
     set(nodes.map((n) => (n.id === id ? { ...n, ...p, ...(p.value !== undefined ? { amount: parseAmount(p.value) } : {}) } : n)));
-  const addChild = (parent: Node) =>
-    set([...nodes, pathNode({ parentId: parent.id, level: parent.level + 1, metric: parent.metric, unit: parent.unit, perspective: parent.perspective })]);
-  const addRoot = (goal: PathGoal) => set([...nodes, pathNode({ goalId: goal.id, level: 1 })]);
-  const remove = (id: string) => {
-    const gone = descendants(nodes, id);
-    set(nodes.filter((n) => !gone.has(n.id)));
+  const addRoot = (goal: PathGoal, extra: Partial<Node> = {}) => set(normalize([...nodes, pathNode({ goalId: goal.id, level: 1, ...extra })]));
+
+  const goalTotal = (goalId: string, list: Node[]) => {
+    const roots = list.filter((n) => !n.parentId && n.goalId === goalId);
+    const amounts = roots.map(amountOf);
+    return amounts.every((a) => typeof a === "number") && roots.length ? (amounts as number[]).reduce((a, b) => a + b, 0) : null;
   };
+  const cfg: TreeConfig<Node> = useMemo(
+    () => ({
+      nodes,
+      setNodes: set,
+      make: (p) => pathNode(p),
+      maxLevel: MAX_PATH_LEVEL,
+      title: (n) => n.path,
+      copyForSplit: (n) => ({ path: n.path ? `${n.path}（拆分）` : "", metric: n.metric, unit: n.unit, perspective: n.perspective }),
+      combine: (keep, gone) => {
+        const a = amountOf(keep);
+        const b = amountOf(gone);
+        const sameMetric = keep.metric.trim() === gone.metric.trim();
+        const total = sameMetric && typeof a === "number" && typeof b === "number" ? a + b : null;
+        return {
+          path: [keep.path, gone.path].filter(Boolean).join("、"),
+          ...(total !== null ? { value: `${total}`, amount: total } : {}),
+        };
+      },
+      roots: goals.map((g) => ({ id: g.id, label: g.label, sub: [g.metric, g.value].filter(Boolean).join(" ") })),
+      levelWord: (l) => LEVEL_LABELS[l] ?? `${l} 级路径`,
+      previewNote: (next, id) => {
+        const moved = next.find((n) => n.id === id);
+        if (!moved) return null;
+        if (moved.parentId) {
+          const parent = next.find((n) => n.id === moved.parentId);
+          const roll = parent ? rollUp(parent, next) : null;
+          return roll ? `移动后「${parent!.path}」下级合计 ${roll.sum}，本级 ${parent!.amount}${roll.ok ? "，推得回来" : "，推不回来（可以移动后再调）"}` : null;
+        }
+        const goal = goals.find((g) => g.id === moved.goalId);
+        const total = goalTotal(moved.goalId ?? "", next);
+        const target = goal ? parseAmount(goal.value) : null;
+        if (total === null || target === null) return null;
+        const d = total - target;
+        return `移动后一级合计 ${total}${d === 0 ? "，等于" : d > 0 ? `，比${goalWord}多 ${d}` : `，比${goalWord}少 ${-d}`}${d ? "（可以移动后再调）" : ""}`;
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, goals, goalWord, value],
+  );
+  const actions = useTreeActions(cfg);
+  const [moving, setMoving] = useState<string | null>(null);
   const ordered = orderedPaths(nodes, goals.map((g) => g.id));
   const byGoal = (goalId: string) => {
     const roots = new Set(nodes.filter((n) => n.level === 1 && n.goalId === goalId).map((n) => n.id));
@@ -104,24 +156,50 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
     return !cur || !goals.some((g) => g.id === cur!.goalId);
   });
 
+  // 图 3-7: which items already started a level-1 path, numbered like the design (第 N 条).
+  const figureUsed: Record<string, number[]> = {};
+  const firstGoal = goals[0];
+  if (decodeLayout && firstGoal) {
+    nodes
+      .filter((n) => !n.parentId && n.groupTag)
+      .forEach((n) => {
+        const no = nodes.filter((x) => !x.parentId && x.goalId === n.goalId).indexOf(n) + 1;
+        for (const key of Object.keys(FIGURE_KEYS)) if (FIGURE_KEYS[key] === n.groupTag) (figureUsed[key] ??= []).push(no);
+      });
+  }
+  const pickFigure = (item: Figure37Item) => {
+    if (!firstGoal) return;
+    addRoot(firstGoal, { groupTag: figureTag(item), perspective: "financial" });
+  };
+  const rowTools = (n: Node) => (
+    <div className="flex items-center justify-end gap-0.5">
+      {!readOnly && n.level < MAX_PATH_LEVEL ? (
+        <Button type="button" variant="ghost" size="sm" onClick={() => actions.child(n.id)} title="新增下级">
+          <Plus /> 下级
+        </Button>
+      ) : null}
+      <TreeNodeMenu id={n.id} actions={actions} readOnly={readOnly} onMoveTo={setMoving} label={n.path || LEVEL_LABELS[n.level]} />
+    </div>
+  );
+
   return (
     <section aria-label="路径系统" className="flex flex-col gap-4">
-      <EditorToolbar hint={`先 How 后 Who：每个${goalWord}拆出一级路径，再逐级分解到二、三级（标准图到四级）；每条路径都要有衡量指标和指标值，下级合计要推得回本级。`}>
+      <EditorToolbar hint={`先 How 后 Who：每个${goalWord}拆出一级路径，再逐级分解到二、三级（标准图到四级）；每条路径都要有衡量指标和指标值，下级合计要推得回本级。思维导图和表格是同一份数据。`}>
         {importFromMap ? <ImportButton label="子步骤 5 · 从解码地图导入" count={importFromMap.count} readOnly={readOnly} onClick={importFromMap.run} /> : null}
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as View)} variant="outline" size="sm" className="flex-wrap">
-          <ToggleGroupItem value="fill" title="逐条填写路径、指标和指标值">
-            <Table2 /> 填写
+        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as View)} variant="outline" size="sm" className="flex-wrap" aria-label="展示方式">
+          <ToggleGroupItem value="mind" title="思维导图：共创、发散、调整结构（拖动、下级 / 同级、升降级、移动到…）">
+            <Network /> 思维导图 {graphSpecId ? <span className="text-[10px] opacity-70">{graphSpecId}</span> : null}
           </ToggleGroupItem>
-          <ToggleGroupItem value="t39" title="书中表 3-9：目标在左，一、二、三、四级路径向右展开（Excel 表格式路径系统图）">
-            <Columns3 /> 横排表 <span className="text-[10px] opacity-70">表 3-9</span>
+          <ToggleGroupItem value="table" title="表格：逐格核数字、整理定稿">
+            <Table2 /> 表格
           </ToggleGroupItem>
           {decodeLayout ? (
-            <ToggleGroupItem value="t310" title="书中表 3-10：按财务、客户、内部流程、学习与成长四个层面排列（从解码地图导入的样子）">
+            <ToggleGroupItem value="t310" title="书中表 3-10：按财务、客户、内部流程、学习与成长四个层面排列；合并单元格按层级自动生成，可直接改">
               <LayoutPanelLeft /> 按层面 <span className="text-[10px] opacity-70">表 3-10</span>
             </ToggleGroupItem>
           ) : null}
-          <ToggleGroupItem value="tree" title="路径系统图：思维导图式的图形视图，和表格是同一份数据">
-            <ListTree /> 路径图 {graphSpecId ? <span className="text-[10px] opacity-70">{graphSpecId}</span> : null}
+          <ToggleGroupItem value="t39" title="书中表 3-9：目标在左，一、二、三、四级路径向右展开（导出 Excel 的样子）">
+            <Columns3 /> 横排表 <span className="text-[10px] opacity-70">表 3-9</span>
           </ToggleGroupItem>
         </ToggleGroup>
       </EditorToolbar>
@@ -130,17 +208,42 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
         <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
           还没有{goalWord}：请先完成上游表格。
         </p>
-      ) : view === "tree" ? (
-        <PathTree goals={goals} nodes={nodes} />
-      ) : view === "t39" || view === "t310" ? (
+      ) : view === "mind" ? (
+        <TreeMindMap
+          cfg={cfg}
+          readOnly={readOnly}
+          invalid={invalid}
+          fields={[
+            { key: "path", label: "路径", placeholder: "动词＋宾语" },
+            { key: "metric", label: "衡量指标" },
+            { key: "value", label: "指标值" },
+          ]}
+          patch={patch}
+          detail={(n) => [n.metric, n.value, n.unit && !n.value.includes(n.unit) ? n.unit : ""].filter(Boolean).join(" ") || "（未填指标）"}
+          tag={(n) => n.groupTag || (n.level === 1 && n.perspective ? PERSPECTIVES.find((p) => p.key === n.perspective)?.label : null)}
+          rollUp={(n) => {
+            const roll = rollUp(n, nodes);
+            return roll ? { ok: roll.ok, text: roll.ok ? `下级合计 ${roll.sum} ✓` : `下级合计 ${roll.sum} ≠ ${n.amount}` } : null;
+          }}
+          rootCards={goals.map((g) => {
+            const total = goalTotal(g.id, nodes);
+            return {
+              root: { id: g.id, label: g.label, sub: [g.metric, g.value].filter(Boolean).join(" ") },
+              badge: [g.group, total !== null ? `一级合计 ${total}` : null].filter(Boolean).join(" · ") || undefined,
+              nodes: nodes.filter((n) => !n.parentId && n.goalId === g.id),
+              onAdd: () => addRoot(g),
+            };
+          })}
+          emptyHint={decodeLayout ? "＋ 一级路径 · 按图 3-7 两组想" : "还没有路径"}
+          side={decodeLayout && !readOnly ? <Figure37Card used={figureUsed} onPick={pickFigure} readOnly={readOnly} defaultOpen={!nodes.some((n) => !n.parentId)} /> : undefined}
+        />
+      ) : view === "t39" ? (
         <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">
-            {view === "t39"
-              ? "表 3-9 横排表：只读预览，与“导出 Excel”里的布局一致；修改请切回“填写”。"
-              : "表 3-10 按层面：解码地图四个层面导入后的样子；只读预览，修改请切回“填写”。"}
-          </p>
-          <SheetTable sheet={view === "t39" ? t39 : (t310 ?? t39)} />
+          <p className="text-xs text-muted-foreground">表 3-9 横排表：只读预览，与“导出 Excel”里的布局一致；在“表格”“按层面”或“思维导图”里修改。</p>
+          <SheetTable sheet={t39} />
         </div>
+      ) : view === "t310" && t310 ? (
+        <PathWideTable goals={goals} nodes={nodes} readOnly={readOnly} invalid={invalid} patch={patch} rowTools={rowTools} />
       ) : (
         <div className="flex flex-col gap-4">
           {goals.map((goal) => {
@@ -159,21 +262,26 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
                     </Button>
                   ) : null}
                 </div>
-                <PathRows rows={rows} nodes={nodes} readOnly={readOnly} invalid={invalid} patch={patch} addChild={addChild} remove={remove} />
+                <PathRows rows={rows} nodes={nodes} readOnly={readOnly} invalid={invalid} patch={patch} rowTools={rowTools} />
               </div>
             );
           })}
           {unattached.length ? (
             <div className="overflow-hidden rounded-xl border border-destructive/40 bg-card">
               <div className="bg-destructive/10 px-4 py-2 text-sm font-semibold text-destructive">没有挂到{goalWord}的路径</div>
-              <PathRows rows={unattached} nodes={nodes} readOnly={readOnly} invalid={invalid} patch={patch} addChild={addChild} remove={remove} goals={goals} />
+              <PathRows rows={unattached} nodes={nodes} readOnly={readOnly} invalid={invalid} patch={patch} rowTools={rowTools} goals={goals} />
             </div>
           ) : null}
         </div>
       )}
+      {view !== "mind" ? <MoveToDialog cfg={cfg} nodeId={moving} actions={actions} onClose={() => setMoving(null)} orderedNodes={ordered} /> : null}
     </section>
   );
 }
+
+const FIGURE_KEYS: Record<string, string> = Object.fromEntries(
+  FIGURE_3_7.flatMap((s) => s.groups.flatMap((g) => g.items.map((i) => [i.key, figureTag(i)]))),
+);
 
 function PathRows({
   rows,
@@ -181,8 +289,7 @@ function PathRows({
   readOnly,
   invalid,
   patch,
-  addChild,
-  remove,
+  rowTools,
   goals,
 }: {
   rows: Node[];
@@ -190,8 +297,7 @@ function PathRows({
   readOnly: boolean;
   invalid: Set<string>;
   patch: (id: string, p: Partial<Node>) => void;
-  addChild: (parent: Node) => void;
-  remove: (id: string) => void;
+  rowTools: (node: Node) => React.ReactNode;
   goals?: PathGoal[];
 }) {
   if (rows.length === 0) return <p className="px-4 py-4 text-sm text-muted-foreground">还没有路径</p>;
@@ -267,16 +373,7 @@ function PathRows({
                 <td className="px-1 py-1">
                   <TextCell label={`${label} 单位`} value={n.unit ?? ""} onChange={(unit) => patch(n.id, { unit })} readOnly={readOnly} />
                 </td>
-                <td className="px-1 py-1">
-                  <div className="flex items-center justify-end gap-1">
-                    {!readOnly && n.level < MAX_PATH_LEVEL ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => addChild(n)}>
-                        <Plus /> 下级
-                      </Button>
-                    ) : null}
-                    <RowActions label={label} readOnly={readOnly} onRemove={() => remove(n.id)} />
-                  </div>
-                </td>
+                <td className="px-1 py-1">{rowTools(n)}</td>
               </tr>
             );
           })}
@@ -286,34 +383,145 @@ function PathRows({
   );
 }
 
-/** S2-02 / 部门路径图: the same data as a tree. */
-function PathTree({ goals, nodes }: { goals: PathGoal[]; nodes: Node[] }) {
+/**
+ * 表 3-10 按层面: the same nodes as a wide table — 层面 | 一级路径 衡量指标 指标值 | 二级 … — with
+ * merged cells computed from the levels (never merged by hand). Every cell edits in place.
+ */
+function PathWideTable({
+  goals,
+  nodes,
+  readOnly,
+  invalid,
+  patch,
+  rowTools,
+}: {
+  goals: PathGoal[];
+  nodes: Node[];
+  readOnly: boolean;
+  invalid: Set<string>;
+  patch: (id: string, p: Partial<Node>) => void;
+  rowTools: (node: Node) => React.ReactNode;
+}) {
+  const levels = Math.max(2, ...nodes.map((n) => n.level));
   const childrenOf = (id: string) => nodes.filter((n) => n.parentId === id);
-  const renderNode = (n: Node) => (
-    <li key={n.id} className="relative pl-6 before:absolute before:top-0 before:left-2 before:h-full before:border-l before:border-border last:before:h-5">
-      <span className="absolute top-5 left-2 w-4 border-t border-border" />
-      <div className="my-1.5 inline-flex flex-col rounded-lg border bg-card px-3 py-1.5 text-sm shadow-xs">
-        <span className="font-medium">{n.path || "（未命名）"}</span>
-        <span className="text-xs text-muted-foreground">
-          {n.metric} {n.value}
-        </span>
-      </div>
-      {childrenOf(n.id).length ? <ul>{childrenOf(n.id).map(renderNode)}</ul> : null}
-    </li>
-  );
+  type Cell = { node: Node; span: number } | "covered" | undefined;
+  const groupsFor = (goalId: string) => {
+    const roots = nodes.filter((n) => !n.parentId && n.goalId === goalId);
+    const keys = [...PERSPECTIVES.map((p) => p.key as string), ""];
+    return keys
+      .map((key) => ({ key, label: PERSPECTIVES.find((p) => p.key === key)?.label ?? "未分层面", roots: roots.filter((r) => (r.perspective ?? "") === key) }))
+      .filter((g) => g.roots.length || g.key !== "");
+  };
+  const emit = (n: Node, rows: Cell[][]) => {
+    const start = rows.length;
+    const kids = childrenOf(n.id);
+    if (!kids.length) rows.push(Array.from({ length: levels }, () => undefined));
+    else kids.forEach((k) => emit(k, rows));
+    rows[start][n.level - 1] = { node: n, span: rows.length - start };
+    for (let i = start + 1; i < rows.length; i++) rows[i][n.level - 1] = "covered";
+  };
+  const cellCls = "border px-1 py-1 align-top";
   return (
-    <div className="flex flex-col gap-4 overflow-x-auto rounded-xl border bg-card p-4">
-      {goals.map((g) => (
-        <div key={g.id}>
-          <div className="inline-flex flex-col rounded-lg bg-brand px-3 py-2 text-brand-foreground">
-            <span className="font-heading font-bold">{g.label}</span>
-            <span className="text-xs opacity-85">
-              {g.metric} {g.value}
-            </span>
-          </div>
-          <ul>{nodes.filter((n) => n.level === 1 && n.goalId === g.id).map(renderNode)}</ul>
-        </div>
-      ))}
+    <div className="overflow-x-auto rounded-xl border bg-card">
+      <table role="treegrid" aria-label="表 3-10 按层面" className="w-full border-collapse text-sm" style={{ minWidth: `${8 + levels * 26}rem` }}>
+        <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+          <tr>
+            <th className="w-24 border px-2 py-2 text-left font-semibold">层面</th>
+            {Array.from({ length: levels }, (_, i) => (
+              <th key={i} colSpan={3} className="border px-2 py-2 text-left font-semibold">
+                {LEVEL_LABELS[i + 1]} · 衡量指标 · 指标值
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {goals.map((goal) => (
+            <PathWideGoal key={goal.id} goal={goal} levels={levels}>
+              {groupsFor(goal.id).map((group) => {
+                const rows: Cell[][] = [];
+                group.roots.forEach((r) => emit(r, rows));
+                if (!rows.length) {
+                  return (
+                    <tr key={group.key} className="text-muted-foreground">
+                      <td className={cn(cellCls, "font-semibold")}>{group.label}</td>
+                      <td className={cn(cellCls, "text-xs")} colSpan={levels * 3}>
+                        这个层面还没有路径
+                      </td>
+                    </tr>
+                  );
+                }
+                return rows.map((row, i) => (
+                  <tr key={`${group.key}-${i}`}>
+                    {i === 0 ? (
+                      <td rowSpan={rows.length} className={cn(cellCls, "bg-muted/40 font-semibold")}>
+                        {group.label}
+                      </td>
+                    ) : null}
+                    {row.flatMap((cell, level) => {
+                      if (cell === "covered") return [];
+                      if (!cell) return [<td key={`e${level}`} colSpan={3} className={cn(cellCls, "bg-muted/20")} />];
+                      const n = cell.node;
+                      const label = n.path || LEVEL_LABELS[n.level];
+                      const roll = rollUp(n, nodes);
+                      return [
+                        <td key={`${n.id}-p`} rowSpan={cell.span} data-anchor={n.id} className={cn(cellCls, "min-w-48", invalid.has(n.id) && "bg-destructive/5")}>
+                          {n.groupTag ? <div className="px-1 text-[10px] text-muted-foreground">{n.groupTag}</div> : null}
+                          <div className="flex items-start gap-0.5">
+                            <div className="min-w-0 flex-1">
+                              <TextCell label={LEVEL_LABELS[n.level]} anchor={`${n.id}.path`} value={n.path} onChange={(path) => patch(n.id, { path })} readOnly={readOnly} />
+                            </div>
+                            {rowTools(n)}
+                          </div>
+                          {n.level === 1 && !readOnly ? (
+                            <NativeSelect size="sm" aria-label={`${label} 层面`} value={n.perspective ?? ""} onChange={(e) => patch(n.id, { perspective: (e.target.value || undefined) as Perspective | undefined })}>
+                              <NativeSelectOption value="">层面…</NativeSelectOption>
+                              {PERSPECTIVES.map((p) => (
+                                <NativeSelectOption key={p.key} value={p.key}>
+                                  {p.label}
+                                </NativeSelectOption>
+                              ))}
+                            </NativeSelect>
+                          ) : null}
+                        </td>,
+                        <td key={`${n.id}-m`} rowSpan={cell.span} className={cn(cellCls, "w-32")}>
+                          <TextCell label={`${label} 衡量指标`} anchor={`${n.id}.metric`} value={n.metric} onChange={(metric) => patch(n.id, { metric })} readOnly={readOnly} />
+                        </td>,
+                        <td key={`${n.id}-v`} rowSpan={cell.span} className={cn(cellCls, "w-28")}>
+                          <TextCell label={`${label} 指标值`} anchor={`${n.id}.value`} value={n.value} onChange={(v) => patch(n.id, { value: v })} readOnly={readOnly} />
+                          {roll ? (
+                            <div className={cn("px-1 pt-0.5 text-[11px]", roll.ok ? "text-status-done-foreground" : "font-semibold text-[color:var(--dz-ai)]")}>
+                              下级合计 {roll.sum}
+                              {roll.ok ? " ✓" : ` ≠ ${n.amount}`}
+                            </div>
+                          ) : null}
+                        </td>,
+                      ];
+                    })}
+                  </tr>
+                ));
+              })}
+            </PathWideGoal>
+          ))}
+        </tbody>
+      </table>
+      <p className="px-3 py-2 text-[11px] text-muted-foreground">合并单元格按层级自动生成；行尾 ⋯ 里可以新增同级 / 下级、升降级、移动到…、拆分、合并、删除。</p>
     </div>
+  );
+}
+
+function PathWideGoal({ goal, levels, children }: { goal: PathGoal; levels: number; children: React.ReactNode }) {
+  return (
+    <>
+      <tr data-anchor={goal.id}>
+        <td colSpan={1 + levels * 3} className="border bg-brand px-3 py-2 text-brand-foreground">
+          {goal.group ? <Badge className="mr-2 bg-gold text-brand">{goal.group}</Badge> : null}
+          <span className="font-heading font-bold">{goal.label}</span>
+          <span className="ml-2 text-sm opacity-85">
+            {goal.metric} {goal.value}
+          </span>
+        </td>
+      </tr>
+      {children}
+    </>
   );
 }

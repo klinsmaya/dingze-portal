@@ -5,6 +5,7 @@ import { type DecodeMap, type GoalPathSystem, type GoalTargets, type Issue, type
 import { cn } from "@/lib/utils";
 
 import { GoalTargetsEditor } from "./goal-targets-editor";
+import { FindPathSteps } from "./find-path";
 import { PathSystemEditor } from "./path-system-editor";
 
 type Props = {
@@ -74,6 +75,8 @@ export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream,
             先在“第一步 定目标”里确定至少一个年度目标，再来找路径。
           </p>
         ) : (
+          <div className="flex flex-col gap-3">
+          <FindPathSteps active={5} map={map} paths={value} />
           <PathSystemEditor
             value={value}
             onChange={onChange}
@@ -84,7 +87,10 @@ export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream,
             importFromMap={{ count: imported.nodes.length - (value.nodes ?? []).length, run: () => onChange(imported) }}
             decodeLayout
             graphSpecId="S2-02"
+            viewKey="S2-03"
+            defaultView="t310"
           />
+          </div>
         )}
       </div>
     </div>

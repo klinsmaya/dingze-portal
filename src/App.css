@@ -392,3 +392,55 @@ body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
 [data-dz-selecting] [data-anchor] {
   cursor: crosshair;
 }
+
+/* 思维导图 (design 10): a left-to-right tree drawn with borders, positions computed by layout. */
+.dz-mm-children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  padding-left: 1.5rem;
+}
+.dz-mm-children::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.dz-mm-children > li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0 0.25rem 0.75rem;
+}
+.dz-mm-children > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(50% + 0.125rem);
+  width: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.dz-mm-children > li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+}
+.dz-mm-children > li:first-child::after {
+  top: calc(50% + 0.125rem);
+}
+.dz-mm-children > li:last-child::after {
+  bottom: calc(50% - 0.125rem);
+}
+.dz-mm-children > li:only-child::after {
+  display: none;
+}
+.dz-mm-children > li > ul {
+  align-self: stretch;
+}

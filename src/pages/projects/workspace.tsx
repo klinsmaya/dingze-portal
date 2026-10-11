@@ -31,7 +31,7 @@ import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { useProfile } from "@/lib/dingze/materials-api";
 import { useAddComment } from "@/lib/dingze/comments-api";
-import { type Command, type CommandMeta, anchorsOf, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
+import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
 import { useArtifactHistory, useRecordExport } from "@/lib/dingze/records-queries";
@@ -139,14 +139,17 @@ function Workspace({ code }: { code: string }) {
   const editRef = useRef(edit);
   editRef.current = edit;
   const lastField = useRef<HTMLElement | null>(null);
+  const pendingMeta = useRef<CommandMeta | null>(null);
   const setDraft = useCallback(
     (next: unknown) => {
+      const meta = pendingMeta.current ?? {};
+      pendingMeta.current = null;
       const field = lastField.current;
       if (field?.isConnected && !field.hasAttribute("data-anchor")) {
         const changes = diffPayloads(editRef.current.payload, next);
         if (changes.length === 1 && changes[0].kind !== "removed") field.setAttribute("data-anchor", changes[0].path);
       }
-      commit(next);
+      commit(next, meta);
     },
     [commit],
   );
@@ -370,6 +373,14 @@ function Workspace({ code }: { code: string }) {
       validate,
       nameOf,
       openPanel: setAsideTab,
+      nextMeta: (meta: CommandMeta) => {
+        pendingMeta.current = meta;
+      },
+      commentOn: (anchor: string) => {
+        setFocusAnchor(anchor);
+        setAsideTab("comments");
+        setComposeSignal((n) => n + 1);
+      },
     }),
     [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
   );

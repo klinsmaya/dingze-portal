@@ -120,6 +120,7 @@ export function ArtifactEditor({
           {...common}
           value={value as GoalPathSystem}
           goalWord="部门目标"
+          viewKey="S2-06"
           goals={rows.map((r) => ({ id: r.id, label: r.task, metric: r.metric, value: r.value, group: r.deptName }))}
         />
       );

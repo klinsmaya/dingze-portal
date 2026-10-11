@@ -195,7 +195,7 @@ export function BudgetWorksheetEditor({
                   </td>
                 ))}
                 <td className="px-1 py-1">
-                  <RowActions label={r.item || "科目"} readOnly={readOnly} onRemove={() => setRows(removeById(rows, r.id))} />
+                  <RowActions label={r.item || "科目"} readOnly={readOnly} onRemove={() => setRows(removeById(rows, r.id))} onMove={(delta) => setRows(moveById(rows, r.id, delta))} />
                 </td>
               </tr>
             ))}

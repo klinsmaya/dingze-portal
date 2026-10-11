@@ -1,4 +1,4 @@
-import { ChevronDown, CornerDownRight, FilePlus2, Plus, X } from "lucide-react";
+import { ChevronDown, CornerDownRight, FilePlus2, Network, Plus, Table2, X } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -29,10 +29,12 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
+import { MoveToDialog, type TreeConfig, TreeMindMap, TreeNodeMenu, useTreeActions } from "./tree-editor";
 
 type Props = {
   value: ProjectCharterSet;
@@ -138,7 +140,7 @@ export function CharterEditor({ value, onChange, readOnly, issues, upstream, pro
                         ) : null}
                       </td>
                       <td className="px-1 py-1">
-                        <RowActions label={s.name || "事项"} readOnly={readOnly} onRemove={() => setScreening(removeById(screening, s.id))} />
+                        <RowActions label={s.name || "事项"} readOnly={readOnly} onRemove={() => setScreening(removeById(screening, s.id))} onMove={(delta) => setScreening(moveById(screening, s.id, delta))} />
                       </td>
                     </tr>
                   );
@@ -332,7 +334,7 @@ function CharterCard({
                     readOnly={readOnly}
                   />
                 ))}
-                <RowActions label="风险" readOnly={readOnly} onRemove={() => onChange({ risks: removeById(c.risks, r.id) })} />
+                <RowActions label="风险" readOnly={readOnly} onRemove={() => onChange({ risks: removeById(c.risks, r.id) })} onMove={(delta) => onChange({ risks: moveById(c.risks, r.id, delta) })} />
               </div>
             ))}
             {!readOnly ? (
@@ -363,13 +365,14 @@ function CharterCard({
             ))}
           </div>
         </Field>
-        <WbsTable wbs={c.wbs ?? []} onChange={(wbs) => onChange({ wbs })} readOnly={readOnly} invalid={invalid} />
+        <WbsTable wbs={c.wbs ?? []} onChange={(wbs) => onChange({ wbs })} readOnly={readOnly} invalid={invalid} charterName={c.name} />
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-function WbsTable({ wbs, onChange, readOnly, invalid }: { wbs: WbsPackage[]; onChange: (next: WbsPackage[]) => void; readOnly: boolean; invalid: Set<string> }) {
+function WbsTable({ wbs, onChange, readOnly, invalid, charterName }: { wbs: WbsPackage[]; onChange: (next: WbsPackage[]) => void; readOnly: boolean; invalid: Set<string>; charterName: string }) {
+  const [view, setView] = useState<"table" | "mind">("table");
   const ordered: WbsPackage[] = [];
   const walk = (parentId: string | null) => {
     for (const w of wbs.filter((x) => x.parentId === parentId)) {
@@ -379,27 +382,61 @@ function WbsTable({ wbs, onChange, readOnly, invalid }: { wbs: WbsPackage[]; onC
   };
   walk(null);
   for (const w of wbs) if (!ordered.includes(w)) ordered.push(w);
-  const remove = (id: string) => {
-    const gone = new Set([id]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const w of wbs) {
-        if (w.parentId && gone.has(w.parentId) && !gone.has(w.id)) {
-          gone.add(w.id);
-          grew = true;
-        }
-      }
-    }
-    onChange(wbs.filter((w) => !gone.has(w.id)).map((w) => ({ ...w, dependsOn: (w.dependsOn ?? []).filter((d) => !gone.has(d)) })));
+  // Dependencies on packages that are gone are dropped with them.
+  const setNodes = (next: WbsPackage[]) => {
+    const ids = new Set(next.map((w) => w.id));
+    onChange(next.map((w) => ((w.dependsOn ?? []).every((d) => ids.has(d)) ? w : { ...w, dependsOn: w.dependsOn.filter((d) => ids.has(d)) })));
   };
+  const cfg: TreeConfig<WbsPackage> = {
+    nodes: wbs,
+    setNodes,
+    make: (p) => wbsPackage({ parentId: p.parentId ?? null, level: p.level ?? 1, ...p }),
+    maxLevel: MAX_WBS_LEVEL,
+    title: (w) => w.name,
+    copyForSplit: (w) => ({ name: w.name ? `${w.name}（拆分）` : "", owner: w.owner, dependsOn: [...(w.dependsOn ?? [])] }),
+    combine: (keep, gone) => ({
+      name: [keep.name, gone.name].filter(Boolean).join("、"),
+      deliverable: [keep.deliverable, gone.deliverable].filter(Boolean).join("；"),
+      dependsOn: [...new Set([...(keep.dependsOn ?? []), ...(gone.dependsOn ?? [])])].filter((d) => d !== keep.id && d !== gone.id),
+    }),
+    roots: [{ id: null, label: charterName || "本项目" }],
+    levelWord: (l) => `${["", "一", "二", "三"][l] ?? l}级工作包`,
+  };
+  const actions = useTreeActions(cfg);
+  const [moving, setMoving] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold text-muted-foreground">WBS（S3-03）：以交付物为中心拆到 2—3 层，写清完成定义、责任人和前后依赖</div>
-        {!readOnly ? <AddButton label="一级工作包" onClick={() => onChange([...wbs, wbsPackage()])} /> : null}
+        <div className="flex items-center gap-2">
+          <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "mind")} variant="outline" size="sm" aria-label="WBS 展示方式">
+            <ToggleGroupItem value="mind" title="思维导图：拆解、调整层级（拖动、下级 / 同级、移动到…）">
+              <Network /> 思维导图
+            </ToggleGroupItem>
+            <ToggleGroupItem value="table" title="表格：逐格填交付物、完成定义、责任人和依赖">
+              <Table2 /> 表格
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {!readOnly ? <AddButton label="一级工作包" onClick={() => onChange([...wbs, wbsPackage()])} /> : null}
+        </div>
       </div>
+      {view === "mind" ? (
+        <TreeMindMap
+          cfg={cfg}
+          readOnly={readOnly}
+          invalid={invalid}
+          fields={[
+            { key: "name", label: "工作包" },
+            { key: "deliverable", label: "交付物" },
+            { key: "owner", label: "责任人" },
+          ]}
+          patch={(id, p) => onChange(patchById(wbs, id, p))}
+          detail={(w) => [w.deliverable && `交付：${w.deliverable}`, w.owner && `责任人 ${w.owner}`].filter(Boolean).join(" · ") || "（未填交付物）"}
+          rootCards={[{ root: cfg.roots[0], nodes: wbs.filter((w) => !w.parentId), onAdd: () => onChange([...wbs, wbsPackage()]) }]}
+          emptyHint="还没有工作包"
+        />
+      ) : (
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full min-w-[900px] border-collapse text-sm">
           <thead className="bg-muted text-xs text-muted-foreground">
@@ -465,13 +502,13 @@ function WbsTable({ wbs, onChange, readOnly, invalid }: { wbs: WbsPackage[]; onC
                     </div>
                   </td>
                   <td className="px-1 py-1">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-0.5">
                       {!readOnly && w.level < MAX_WBS_LEVEL ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...wbs, wbsPackage({ parentId: w.id, level: w.level + 1, owner: w.owner })])}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => actions.child(w.id)}>
                           <Plus /> 下级
                         </Button>
                       ) : null}
-                      <RowActions label={w.name || "工作包"} readOnly={readOnly} onRemove={() => remove(w.id)} />
+                      <TreeNodeMenu id={w.id} actions={actions} readOnly={readOnly} onMoveTo={setMoving} label={w.name || "工作包"} />
                     </div>
                   </td>
                 </tr>
@@ -480,6 +517,8 @@ function WbsTable({ wbs, onChange, readOnly, invalid }: { wbs: WbsPackage[]; onC
           </tbody>
         </table>
       </div>
+      )}
+      {view === "table" ? <MoveToDialog cfg={cfg} nodeId={moving} actions={actions} onClose={() => setMoving(null)} orderedNodes={ordered} /> : null}
     </div>
   );
 }

@@ -18,7 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -111,7 +111,7 @@ export function ProgressPlanEditor({ value, onChange, readOnly, issues, upstream
               <span className="text-xs text-muted-foreground">{(row.nodes ?? []).length} 个节点</span>
               <div className="ml-auto flex items-center gap-1">
                 {!readOnly ? <AddButton label="节点" onClick={() => setNodes(row, [...(row.nodes ?? []), planNode()])} /> : null}
-                <RowActions label={row.name} readOnly={readOnly} onRemove={() => set(removeById(rows, row.id))} />
+                <RowActions label={row.name} readOnly={readOnly} onRemove={() => set(removeById(rows, row.id))} onMove={(delta) => set(moveById(rows, row.id, delta))} />
               </div>
             </div>
             <div className="overflow-x-auto">

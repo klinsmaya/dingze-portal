@@ -188,6 +188,8 @@ export interface PathNode {
   /** Numeric part when the value is additive; used for “推得回来”. */
   amount?: number | null;
   unit?: string;
+  /** 图 3-7 group a level-1 path was started from, e.g. “提高客户价值 › 开发新客户”. */
+  groupTag?: string;
 }
 
 export interface PathSystem {

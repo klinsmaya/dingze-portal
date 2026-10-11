@@ -15,7 +15,7 @@ import {
 
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -151,7 +151,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
                       ))}
                     </NativeSelect>
                     <ObjectiveSelect label="终点目标" objectives={objectives} value={link.to} disabled={readOnly} onChange={(to) => setLinks(patchById(links, link.id, { to }))} />
-                    <RowActions label="这条关系" readOnly={readOnly} onRemove={() => setLinks(removeById(links, link.id))} />
+                    <RowActions label="这条关系" readOnly={readOnly} onRemove={() => setLinks(removeById(links, link.id))} onMove={(delta) => setLinks(moveById(links, link.id, delta))} />
                   </li>
                 ))}
               </ul>

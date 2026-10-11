@@ -11,7 +11,7 @@ import {
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -94,7 +94,7 @@ export function ResourceMatchEditor({ value, onChange, readOnly, issues, upstrea
                         <Checkbox aria-label="重大缺口" checked={r.major} disabled={readOnly || r.none} onCheckedChange={(v) => set(patchById(rows, r.id, { major: v === true }))} />
                       </td>
                       <td className="px-1 py-1">
-                        <RowActions label="资源" readOnly={readOnly} onRemove={() => set(removeById(rows, r.id))} />
+                        <RowActions label="资源" readOnly={readOnly} onRemove={() => set(removeById(rows, r.id))} onMove={(delta) => set(moveById(rows, r.id, delta))} />
                       </td>
                     </tr>
                   ))}

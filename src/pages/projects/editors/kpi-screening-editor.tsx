@@ -16,7 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
+import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -127,7 +127,7 @@ export function KpiScreeningEditor({ value, onChange, readOnly, issues, upstream
                       <TextCell label="理由" value={c.reason} onChange={(reason) => set(patchById(candidates, c.id, { reason }))} readOnly={readOnly} />
                     </td>
                     <td className="px-1 py-1">
-                      <RowActions label={c.name || "候选指标"} readOnly={readOnly} onRemove={() => set(removeById(candidates, c.id))} />
+                      <RowActions label={c.name || "候选指标"} readOnly={readOnly} onRemove={() => set(removeById(candidates, c.id))} onMove={(delta) => set(moveById(candidates, c.id, delta))} />
                     </td>
                   </tr>
                 );

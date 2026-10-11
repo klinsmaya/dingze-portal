@@ -144,7 +144,8 @@ function setPath(payload: unknown, segments: string[], value: unknown, remove: b
   const record: Obj = isObj(payload) ? payload : {};
   if (!rest.length) {
     if (remove) {
-      const { [head]: _gone, ...others } = record;
+      const others = { ...record };
+      delete others[head];
       return others;
     }
     return { ...record, [head]: value };
@@ -216,7 +217,6 @@ export function anchorsOf(changes: DiffEntry[]): string[] {
 }
 
 /** What is sent with a save: the command without its local snapshots. */
-export function toSaved(command: Command) {
-  const { prev: _prev, next: _next, id: _id, ...rest } = command;
-  return rest;
+export function toSaved(command: Command): Omit<Command, "id" | "prev" | "next"> {
+  return { at: command.at, via: command.via, label: command.label, by: command.by, commentId: command.commentId, changes: command.changes };
 }
