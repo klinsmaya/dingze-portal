@@ -42,10 +42,10 @@ introduction:
 | S1-05 KPI 筛选（选做） | `candidates[{id,name,origin,scores.{relevance,measurability,controllability,motivation},keep,reason}]`，分数 1—5 的整数，keep 为 true / false / null | `candidates.k3.scores.relevance`、`candidates.k3.keep` |
 | S1-06 战略 KPI 表 | `kpis[{id,theme,name,definition,unit,source,period,owner}]` | `kpis.p1.definition` |
 | S1-07 年度分解 | `years`（年份数组，默认前三后一）`rows[{id,kpiId,theme,name,unit,values.{年份},baseline,benchmark,challenge}]` | `rows.y1.values.2027`、`rows.y1.challenge` |
-| S2-03-T 年度目标 | `year` `strategyReview` `lastPeriodIssues` `goals[{id,purpose,task,metric,value,unit,perspective,sourceRowId}]` | `goals.g1.purpose`、`goals.+` |
+| S2-03 第一步 定目标（目标区） | `targets.{year,strategyReview,lastPeriodIssues}` `targets.goals[{id,purpose,task,metric,value,unit,perspective,sourceRowId}]` | `targets.goals.g1.purpose`、`targets.goals.+` |
 | M-BUDGET 经营预算 | `unit` `rows[{id,item,lastYear,budget,note}]` | `rows.b1.budget` |
 | S2-01 解码地图 | `valueGap.{target,baseline,gap}` `themes[{id,perspective,category,title,metric,value,supports[上层主题 id],goalId}]`（财务主题用 goalId 挂年度目标，其余用 supports 指向更上一层主题） | `valueGap.gap`、`themes.+`、`themes.d3.supports` |
-| S2-03 / S2-06 路径系统 | `nodes[{id,parentId,goalId,level,perspective,path,metric,value,unit}]`：一级路径 parentId 为 null、goalId 指向年度目标（S2-06 指向 S2-05 的承接项 id）；二至四级用 parentId 指向上级；`value` 以数字开头时用于“推得回来”校验 | `nodes.+`、`nodes.n4.value` |
+| S2-03 第二步 找路径 / S2-06 路径系统 | `nodes[{id,parentId,goalId,level,perspective,path,metric,value,unit}]`：一级路径 parentId 为 null、goalId 指向 `targets.goals` 里的年度目标（S2-06 指向 S2-05 的承接项 id）；二至四级用 parentId 指向上级；`value` 以数字开头时用于“推得回来”校验 | `nodes.+`、`nodes.n4.value` |
 | S2-08 关键项目 | `projects[{id,code,name,theme,objective,start,end,milestones,owner,sourcePathIds}]`，起止时间用 `YYYY-MM` | `projects.kp1.objective` |
 | S2-04 RACI | `columns[{id,name}]`（部门 / 岗位）`rows[{id,name,cells.{列 id}:[R/A/C/I],sourceId,sourceKind}]`；每行 A 唯一、R 至少一个 | `rows.ra1.cells.org-3` |
 | S2-05 部门承接 | `rows[{id,deptId,deptName,role(A/R),purpose,task,metric,value,sourceRowId}]` | `rows.u2.value` |
@@ -56,7 +56,7 @@ introduction:
 | S3-07 公司计划书 | `text.{summary,lastYear,environment,risks,notDo,dictionaryNote}`；其余章节由定版成果自动汇总，不写入 | `text.summary` |
 | S3-08 部门计划书 | `depts[{id(=deptId),deptId,deptName,summary,lastYear,environment,risks,notDo,dictionaryNote}]`（按 deptId 定位） | `depts.org-2.summary` |
 
-指标值、分数这类数字，以用户说出的为准；用户没给的值写“待补”，不要替企业编数。年度目标（S2-03-T）的指标值只能来自 S1-07 本年度值、经营预算或用户明确给出的数，绝不自行补造。
+指标值、分数这类数字，以用户说出的为准；用户没给的值写“待补”，不要替企业编数。年度目标（S2-03 目标区）的指标值只能来自 S1-07 本年度值、经营预算或用户明确给出的数，绝不自行补造。
 
 
 ## 企业资料与画像

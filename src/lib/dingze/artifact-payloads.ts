@@ -7,7 +7,6 @@ import {
   emptyResourceMatch,
   emptyDecodeMap,
   emptyDeptUndertakingTable,
-  emptyGoalTargets,
   emptyKeyProjectList,
   emptyPathSystem,
   emptyRaciTable,
@@ -20,13 +19,14 @@ import {
   emptyStrategyKpiTable,
   emptyStrategyLogic,
   emptyStrategyMap,
+  emptyCompanyPathSystem,
   emptyVisionWorksheet,
 } from "@dingze/shared";
 
 /** Artifacts whose editor is available in this release. */
 export const EDITABLE_CODES = new Set([
   "S1-01", "M-MISSION", "M-VISION", "S1-02", "S1-03", "S1-04", "S1-05", "S1-06", "S1-07",
-  "S2-03-T", "M-BUDGET", "S2-01", "S2-03", "S2-08", "S2-04", "S2-05", "S2-06", "S2-07",
+  "M-BUDGET", "S2-01", "S2-03", "S2-08", "S2-04", "S2-05", "S2-06", "S2-07",
   "S3-02", "S3-05", "S3-06", "S3-07", "S3-08",
 ]);
 
@@ -51,13 +51,12 @@ export function emptyPayload(code: string, project: { primaryExpression: "house"
       return emptyStrategyKpiTable();
     case "S1-07":
       return emptyKpiBreakdown(project.year);
-    case "S2-03-T":
-      return emptyGoalTargets(project.year);
     case "M-BUDGET":
       return emptyBudgetWorksheet();
     case "S2-01":
       return emptyDecodeMap();
     case "S2-03":
+      return emptyCompanyPathSystem(project.year);
     case "S2-06":
       return emptyPathSystem();
     case "S2-08":

@@ -93,8 +93,12 @@ describe("unlocking", () => {
     expect(unlockInfo(getArtifactDef("S1-05"), states).unlocked).toBe(false);
   });
 
-  it("unlocks key projects and RACI together after the path system", () => {
-    const states: StateMap = { ...lockedStage("strategy"), "S2-03-T": { status: "locked" }, "S2-01": { status: "step_done" }, "S2-03": { status: "step_done" } };
+  it("opens S2-03 (定目标) and S2-01 with the stage, then key projects and RACI together after S2-03", () => {
+    const open: StateMap = lockedStage("strategy");
+    expect(unlockInfo(getArtifactDef("S2-03"), open).unlocked).toBe(true);
+    expect(unlockInfo(getArtifactDef("S2-01"), open).unlocked).toBe(true);
+    expect(unlockInfo(getArtifactDef("S2-08"), open).unlocked).toBe(false);
+    const states: StateMap = { ...lockedStage("strategy"), "S2-01": { status: "step_done" }, "S2-03": { status: "step_done" } };
     expect(unlockInfo(getArtifactDef("S2-08"), states).unlocked).toBe(true);
     expect(unlockInfo(getArtifactDef("S2-04"), states).unlocked).toBe(true);
     expect(unlockInfo(getArtifactDef("S2-05"), states).unlocked).toBe(false);
@@ -105,7 +109,7 @@ describe("unlocking", () => {
     expect(isStageOpen("goal", states)).toBe(true);
     states["S1-07"] = { status: "pending_confirm" };
     expect(isStageOpen("goal", states)).toBe(false);
-    expect(unlockInfo(getArtifactDef("S2-03-T"), states).waitingFor).toContain("上一阶段");
+    expect(unlockInfo(getArtifactDef("S2-03"), states).waitingFor).toContain("上一阶段");
   });
 
   it("keeps downstream tables open while a completed table is reopened", () => {
@@ -125,5 +129,20 @@ describe("unlocking", () => {
       "S1-03": { status: "not_started" },
     };
     expect(staleTargets("S1-01", states)).toEqual(["S1-02"]);
+  });
+});
+
+describe("附录 B numbering", () => {
+  it("lists 24 deliverables with unique numbers and no method worksheets", async () => {
+    const { SPEC_ITEMS, ARTIFACTS } = await import("@dingze/shared");
+    const ids = SPEC_ITEMS.map((i) => i.specId);
+    expect(ids).toHaveLength(24);
+    expect(new Set(ids).size).toBe(24);
+    expect(ids).toContain("S2-02");
+    expect(SPEC_ITEMS.find((i) => i.specId === "S2-02")).toMatchObject({ kind: "derived" });
+    expect(SPEC_ITEMS.find((i) => i.specId === "S3-09")).toMatchObject({ kind: "out" });
+    const tables = ARTIFACTS.filter((a) => a.priority !== "method");
+    expect(new Set(tables.map((a) => a.specId)).size).toBe(tables.length);
+    expect(tables.every((a) => a.code === a.specId)).toBe(true);
   });
 });

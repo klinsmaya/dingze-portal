@@ -23,7 +23,7 @@ export type EditorKind =
 export interface ArtifactDef {
   /** Stable code stored on records, e.g. `S1-01`. Method worksheets use `M-*`. */
   code: string;
-  /** Spec ID shown to users. Several internal artifacts can share a spec ID (S2-03 target and path zones). */
+  /** Spec ID (附录 B). Method worksheets carry the spec ID of the artifact they belong to. */
   specId: string;
   name: string;
   stage: StageKey;
@@ -39,6 +39,11 @@ export interface ArtifactDef {
   dependsOn: string[];
   /** Method worksheet attached to another artifact. */
   attachedTo?: string;
+  /**
+   * Artifacts whose current draft this one shows while editing, without “上游已变更”: S2-01 reads
+   * the target zone of S2-03, which in turn imports from S2-01.
+   */
+  reads?: string[];
 }
 
 /** Views and embedded tables that keep a spec ID but have no lifecycle of their own. */
@@ -106,25 +111,22 @@ export const ARTIFACTS: ArtifactDef[] = [
   },
 
   // ── 定目标责 ──
+  // S2-03 holds both 第一步 定目标 (target zone, 表 3-4/3-5) and 第二步 找路径 (paths, 表 3-9/3-10);
+  // S2-01 sits in between and reads the target zone (spec 二(七)1–2, 附录 B #10, 4.4).
   {
-    code: 'S2-03-T', specId: 'S2-03', name: '公司级年度目标（路径系统表目标区）', stage: 'goal',
-    task: '路径支撑，确保结果必赢', step: '第一步 定目标', bookRef: '表 3-4、表 3-5',
-    priority: 'P0', editor: 'goal-target', unlockAfter: [], dependsOn: ['S1-02', 'S1-07'],
+    code: 'S2-03', specId: 'S2-03', name: '公司级目标路径系统表', stage: 'goal',
+    task: '路径支撑，确保结果必赢', step: '第一步 定目标 → 第二步 找路径', bookRef: '表 3-4、表 3-5、表 3-9、表 3-10',
+    priority: 'P0', editor: 'path-system', unlockAfter: [], dependsOn: ['S1-02', 'S1-07', 'S2-01'],
   },
   {
     code: 'M-BUDGET', specId: 'S2-03', name: '年度经营预算', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第一步 定目标', bookRef: '表 3-5',
-    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S2-03-T',
+    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S2-03',
   },
   {
     code: 'S2-01', specId: 'S2-01', name: '年度战略解码地图', stage: 'goal',
-    task: '路径支撑，确保结果必赢', step: '第二步 找路径（战略地图）', bookRef: '图 3-3、图 3-7～3-10',
-    priority: 'P0', editor: 'decode-map', unlockAfter: ['S2-03-T'], dependsOn: ['S2-03-T'],
-  },
-  {
-    code: 'S2-03', specId: 'S2-03', name: '公司级目标路径系统表', stage: 'goal',
-    task: '路径支撑，确保结果必赢', step: '第二步 找路径（导入路径系统表并分解）', bookRef: '表 3-9、表 3-10',
-    priority: 'P0', editor: 'path-system', unlockAfter: ['S2-01'], dependsOn: ['S2-03-T', 'S2-01'],
+    task: '路径支撑，确保结果必赢', step: '第二步 找路径（解码地图子步骤 1–4）', bookRef: '图 3-3、图 3-7～3-10',
+    priority: 'P0', editor: 'decode-map', unlockAfter: [], dependsOn: [], reads: ['S2-03'],
   },
   {
     code: 'S2-08', specId: 'S2-08', name: '关键项目列表', stage: 'goal',
@@ -171,7 +173,7 @@ export const ARTIFACTS: ArtifactDef[] = [
   {
     code: 'S3-07', specId: 'S3-07', name: '公司级年度经营计划书', stage: 'action',
     task: '年度经营计划书', step: '公司计划', bookRef: '公司级计划书模板（8 章）',
-    priority: 'P0', editor: 'plan-book', unlockAfter: ['S3-06'], dependsOn: ['S1-01', 'S1-02', 'S1-06', 'S1-07', 'S2-03-T', 'S2-03', 'S2-04', 'S2-05', 'S2-07', 'S3-02', 'S3-05', 'S3-06'],
+    priority: 'P0', editor: 'plan-book', unlockAfter: ['S3-06'], dependsOn: ['S1-01', 'S1-02', 'S1-06', 'S1-07', 'S2-03', 'S2-04', 'S2-05', 'S2-07', 'S3-02', 'S3-05', 'S3-06'],
   },
   {
     code: 'S3-08', specId: 'S3-08', name: '部门年度经营计划书', stage: 'action',
@@ -186,6 +188,31 @@ export const DERIVED: DerivedDef[] = [
   { specId: 'S3-03', name: '项目 WBS', stage: 'action', sourceCode: 'S3-02', kind: 'embedded' },
   { specId: 'S3-04', name: '项目 / 任务节点表', stage: 'action', sourceCode: 'S3-05', kind: 'embedded' },
 ];
+
+/** 附录 B #24: kept in the catalog so the list stays complete, but moved out of V1 (Q7). */
+export const OUT_OF_SCOPE = [{ specId: 'S3-09', name: '经营目标责任书', stage: 'action' as StageKey, note: '移出 V1（P1）：交付页以各部门绩效计分卡取代' }];
+
+export type SpecItem =
+  | { kind: 'artifact'; specId: string; code: string }
+  | { kind: 'derived'; specId: string; derived: DerivedDef }
+  | { kind: 'out'; specId: string; name: string; stage: StageKey; note: string };
+
+/**
+ * The 24 deliverables of 附录 B in its order: tables with their own lifecycle, views and
+ * embedded tables that share their source's data and status, and S3-09 (out of V1). Method
+ * worksheets (使命五要素、愿景三法、经营预算) carry no number and are not counted.
+ */
+export const SPEC_ITEMS: SpecItem[] = (() => {
+  const order = ['S1-01', 'S1-02', 'S1-03', 'S1-04', 'S1-05', 'S1-06', 'S1-07', 'S2-01', 'S2-02', 'S2-03', 'S2-08', 'S2-04', 'S2-05', 'S2-06', 'S2-07', 'S3-01', 'S3-02', 'S3-03', 'S3-04', 'S3-05', 'S3-06', 'S3-07', 'S3-08', 'S3-09'];
+  return order.map((specId): SpecItem => {
+    const artifact = ARTIFACTS.find((a) => a.code === specId && a.priority !== 'method');
+    if (artifact) return { kind: 'artifact', specId, code: artifact.code };
+    const derived = DERIVED.find((d) => d.specId === specId);
+    if (derived) return { kind: 'derived', specId, derived };
+    const out = OUT_OF_SCOPE.find((o) => o.specId === specId)!;
+    return { kind: 'out', ...out };
+  });
+})();
 
 const byCode = new Map(ARTIFACTS.map((a) => [a.code, a]));
 

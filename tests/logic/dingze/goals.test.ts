@@ -28,7 +28,7 @@ import {
 
 const errors = (issues: { level: string; message: string }[]) => issues.filter((i) => i.level === "error").map((i) => i.message);
 
-describe("annual goals (S2-03-T)", () => {
+describe("annual goals (S2-03 第一步 定目标)", () => {
   it("takes this year's values from the S1-07 breakdown and never invents them", () => {
     const breakdown = {
       years: [2026, 2027],

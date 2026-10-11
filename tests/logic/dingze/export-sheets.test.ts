@@ -75,7 +75,8 @@ describe("path system export (表 3-9 / 表 3-10)", () => {
   };
 
   it("puts one row per leaf with goal and parent cells merged over their leaves", () => {
-    const [tree, decode] = artifactSheets("S2-03", system, { "S2-03-T": goals });
+    const [targetSheet, tree, decode] = artifactSheets("S2-03", { ...system, targets: goals });
+    expect(targetSheet.name).toContain("年度目标");
     expect(tree.columns.map((c) => c.header)).toEqual(["目标", "目标值", "一级路径", "衡量指标", "指标值", "二级路径", "衡量指标", "指标值"]);
     expect(tree.rows).toEqual([
       ["提升售气量", "售气量 1100 万方", "车用气增收", "销量", 800, "物流车队", "销量", 500],

@@ -527,7 +527,7 @@ export function breakdownRowsFromKpis(table: StrategyKpiTable | null | undefined
     .map((k) => breakdownRow(k));
 }
 
-/** This year's targets, for 定目标责 (S2-03-T reads them). */
+/** This year's targets, for 定目标责 (the S2-03 target zone reads them). */
 export function currentYearTargets(breakdown: KpiBreakdown | null | undefined, year?: number) {
   const target = year ?? breakdown?.years?.[0];
   if (!breakdown || target === undefined) return [];

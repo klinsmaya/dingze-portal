@@ -26,6 +26,7 @@ import {
   PERSPECTIVES,
   SCREEN_DIMENSIONS,
   SIXFOLD_FIELDS,
+  targetsOf,
   houseStarted,
   SMART_CHECKS,
   candidateTotal,
@@ -362,7 +363,8 @@ function pathTreeSheet(name: string, lead: [string, number][], goals: TreeGoal[]
   return s;
 }
 
-function pathSystemSheets(system: GoalPathSystem, goals: { id: string; label: string; target: string }[], decodeLayout: boolean): SheetModel[] {
+/** The path system in the book's layouts: 表 3-9 (goal → paths by level) and, for S2-03, 表 3-10 (by perspective, as imported from the decode map). */
+export function pathSystemSheets(system: GoalPathSystem, goals: { id: string; label: string; target: string }[], decodeLayout: boolean): SheetModel[] {
   const nodes = orderedPaths(system.nodes ?? [], goals.map((g) => g.id));
   const treeGoals = goals.map((g) => ({ id: g.id, cells: [g.label, g.target] as Cell[] }));
   const sheets = [pathTreeSheet("路径系统（表3-9）", [["目标", 24], ["目标值", 14]], treeGoals, nodes)];
@@ -617,17 +619,17 @@ export function artifactSheets(code: string, payload: unknown, upstream: Record<
       return missionSheets(payload as MissionWorksheet);
     case "M-VISION":
       return visionSheets(payload as VisionWorksheet);
-    case "S2-03-T":
-      return goalTargetsSheets(payload as GoalTargets);
     case "S2-01":
       return decodeMapSheets(payload as DecodeMap);
     case "S2-03": {
-      const goals = ((upstream["S2-03-T"] as GoalTargets | undefined)?.goals ?? []).map((g) => ({
+      // 第一步 定目标 then 第二步 找路径, as in the book.
+      const targets = targetsOf(payload);
+      const goals = (targets?.goals ?? []).map((g) => ({
         id: g.id,
         label: g.task || g.metric,
         target: [g.metric, g.value].filter(Boolean).join(" "),
       }));
-      return pathSystemSheets(payload as GoalPathSystem, goals, true);
+      return [...(targets ? goalTargetsSheets(targets) : []), ...pathSystemSheets(payload as GoalPathSystem, goals, true)];
     }
     case "S2-06": {
       const goals = ((upstream["S2-05"] as DeptUndertakingTable | undefined)?.rows ?? []).map((r) => ({

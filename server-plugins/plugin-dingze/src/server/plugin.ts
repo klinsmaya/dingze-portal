@@ -15,6 +15,7 @@ import {
 } from './services/artifacts';
 import { consultantBoard } from './services/board';
 import { opsBoard } from './services/usage';
+import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
 import { addMaterial, deleteMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
@@ -220,6 +221,15 @@ export class PluginDingzeServer extends Plugin {
     });
     // Every handler checks space membership, project role and artifact status itself.
     this.app.acl.allow('dingze', '*', 'loggedIn');
+
+    // One-off data alignment after an upgrade; each step is a no-op once done.
+    this.app.on('afterStart', async () => {
+      try {
+        await mergeGoalTargets(this.db, (message) => this.app.log.info(message));
+      } catch (error: any) {
+        this.app.log.error(`dingze: merging S2-03-T failed: ${error?.message ?? error}`);
+      }
+    });
   }
 
   async install() {

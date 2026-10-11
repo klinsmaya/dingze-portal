@@ -2,15 +2,16 @@ import { Network, Table2, X } from "lucide-react";
 import { useState } from "react";
 
 import {
+  type GoalPathSystem,
   DECODE_CATEGORIES,
   type DecodeMap,
   type DecodeTheme,
-  type GoalTargets,
   type Issue,
   PERSPECTIVES,
   type Perspective,
   type StrategyMap,
   emptyTheme,
+  targetsOf,
 } from "@dingze/shared";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ type Props = {
   onChange: (next: DecodeMap) => void;
   readOnly: boolean;
   issues: Issue[];
-  upstream: { "S2-03-T"?: GoalTargets };
+  upstream: { "S2-03"?: GoalPathSystem };
 };
 
 const RANK: Record<Perspective, number> = { learning: 0, process: 1, customer: 2, financial: 3 };
@@ -53,7 +54,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
   const [view, setView] = useState<"table" | "diagram">("table");
   const invalid = errorAnchors(issues);
   const themes = value.themes ?? [];
-  const goals = upstream["S2-03-T"]?.goals ?? [];
+  const goals = targetsOf(upstream["S2-03"])?.goals ?? [];
   const gap = value.valueGap ?? { target: "", baseline: "", gap: "" };
   const setThemes = (next: DecodeTheme[]) => onChange({ ...value, valueGap: gap, themes: next });
   const setTheme = (id: string, patch: Partial<DecodeTheme>) => setThemes(patchById(themes, id, patch));

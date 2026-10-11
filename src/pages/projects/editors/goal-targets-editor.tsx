@@ -34,7 +34,7 @@ const COLUMNS: { key: "purpose" | "task" | "metric" | "value" | "unit"; label: s
   { key: "unit", label: "单位", placeholder: "", width: "min-w-16" },
 ];
 
-/** S2-03-T: annual company goals (目的＋任务＋目标值), the starting point of 找路径. */
+/** S2-03 第一步 定目标: annual company goals (目的＋任务＋目标值), the starting point of 找路径. */
 export function GoalTargetsEditor({ value, onChange, readOnly, issues, upstream, projectYear }: Props) {
   const invalid = errorAnchors(issues);
   const goals = value.goals ?? [];

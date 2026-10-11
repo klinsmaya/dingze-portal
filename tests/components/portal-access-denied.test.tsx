@@ -16,6 +16,7 @@ import { starter as zhCN } from "@/locales/zh-CN";
 vi.mock("@refinedev/core", () => ({
   useGetIdentity: () => ({ data: undefined, isLoading: false }),
   useTranslate: () => (_key: string, fallback: string) => fallback,
+  useLogout: () => ({ mutate: () => undefined }),
 }));
 
 const deniedData = {

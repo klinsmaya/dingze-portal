@@ -1,4 +1,4 @@
-// 定目标责 tables: annual targets (S2-03-T) and budget worksheet, the decode map (S2-01),
+// 定目标责 tables: the target zone of S2-03 and budget worksheet, the decode map (S2-01),
 // company and department path systems (S2-03 / S2-06), key projects (S2-08), RACI
 // (S2-04), department undertaking (S2-05) and scorecards (S2-07). Spec V1.2 §二(七).
 
@@ -20,7 +20,7 @@ export function parseAmount(value: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-// ── S2-03-T 公司级年度目标 ──
+// ── S2-03 目标区：公司级年度目标（第一步 定目标）──
 
 /** 目标 = 目的 + 任务 + 目标值（衡量指标 + 指标值）。 */
 export interface AnnualGoal {
@@ -234,15 +234,29 @@ export function themeGoal(map: DecodeMap, themeId: string, seen = new Set<string
 
 /**
  * A path system hangs level-1 paths under goals (`goalId`), then levels 2–4 under
- * their parent. Company paths hang under S2-03-T goals; department paths under
- * S2-05 rows.
+ * their parent. Company paths hang under the goals of the S2-03 target zone; department
+ * paths under S2-05 rows.
  */
 export interface GoalPathSystem extends PathSystem {
   nodes: (PathNode & { goalId?: string | null })[];
+  /** S2-03 only: 第一步 定目标 (表 3-4/3-5) — the goals the company paths start from. */
+  targets?: GoalTargets;
 }
 
 export function emptyPathSystem(): GoalPathSystem {
   return { nodes: [] };
+}
+
+export function emptyCompanyPathSystem(year: number): GoalPathSystem {
+  return { nodes: [], targets: emptyGoalTargets(year) };
+}
+
+/** The S2-03 target zone, from an S2-03 payload (or a pre-merge S2-03-T payload). */
+export function targetsOf(system: unknown): GoalTargets | undefined {
+  if (!system || typeof system !== 'object') return undefined;
+  const s = system as GoalPathSystem & Partial<GoalTargets>;
+  if (s.targets) return s.targets;
+  return Array.isArray(s.goals) ? (s as unknown as GoalTargets) : undefined;
 }
 
 export function pathNode(patch: Partial<PathNode & { goalId?: string | null }> = {}): PathNode & { goalId?: string | null } {
@@ -325,7 +339,7 @@ export function pathsFromDecodeMap(map: DecodeMap | null | undefined, goals: Goa
         amount: parseAmount(t.value),
       }),
     );
-  return { nodes: [...existing.nodes, ...nodes] };
+  return { ...existing, nodes: [...existing.nodes, ...nodes] };
 }
 
 // ── S2-08 关键项目列表（表 3-13） ──

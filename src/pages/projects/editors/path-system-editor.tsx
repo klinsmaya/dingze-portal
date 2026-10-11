@@ -1,4 +1,4 @@
-import { CornerDownRight, ListTree, Plus, Table2 } from "lucide-react";
+import { Columns3, CornerDownRight, LayoutPanelLeft, ListTree, Plus, Table2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -17,7 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { pathSystemSheets } from "@/lib/dingze/export/sheets";
 import { errorAnchors } from "@/lib/dingze/rows";
+import { SheetTable } from "@/pages/projects/components/sheet-table";
 import { cn } from "@/lib/utils";
 
 import { EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
@@ -35,7 +37,13 @@ type Props = {
   goalWord: string;
   /** 子步骤 5：导入解码地图（S2-03 only）. */
   importFromMap?: { count: number; run: () => void };
+  /** S2-03 also offers 表 3-10 (paths by perspective, as imported from the decode map). */
+  decodeLayout?: boolean;
+  /** Spec ID of the graph view: S2-02 for the company system. */
+  graphSpecId?: string;
 };
+
+type View = "fill" | "t39" | "t310" | "tree";
 
 const LEVEL_LABELS = ["", "一级路径", "二级路径", "三级路径", "四级路径"];
 
@@ -64,11 +72,14 @@ function rollUp(node: Node, nodes: Node[]): { sum: number; ok: boolean } | null 
 }
 
 /** S2-03 / S2-06: goal → 1st … 4th level paths, each with metric and value (分得下去、推得回来). */
-export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap }: Props) {
-  const [view, setView] = useState<"table" | "tree">("table");
+export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap, decodeLayout, graphSpecId }: Props) {
+  const [view, setView] = useState<View>("fill");
   const invalid = errorAnchors(issues);
   const nodes = (value.nodes ?? []) as Node[];
-  const set = (next: Node[]) => onChange({ nodes: next });
+  // Keep the other parts of the payload (the S2-03 target zone) when paths change.
+  const set = (next: Node[]) => onChange({ ...value, nodes: next });
+  const layoutGoals = goals.map((g) => ({ id: g.id, label: g.label, target: [g.metric, g.value].filter(Boolean).join(" ") }));
+  const [t39, t310] = pathSystemSheets(value, layoutGoals, true);
   const patch = (id: string, p: Partial<Node>) =>
     set(nodes.map((n) => (n.id === id ? { ...n, ...p, ...(p.value !== undefined ? { amount: parseAmount(p.value) } : {}) } : n)));
   const addChild = (parent: Node) =>
@@ -97,12 +108,20 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
     <section aria-label="路径系统" className="flex flex-col gap-4">
       <EditorToolbar hint={`先 How 后 Who：每个${goalWord}拆出一级路径，再逐级分解到二、三级（标准图到四级）；每条路径都要有衡量指标和指标值，下级合计要推得回本级。`}>
         {importFromMap ? <ImportButton label="子步骤 5 · 从解码地图导入" count={importFromMap.count} readOnly={readOnly} onClick={importFromMap.run} /> : null}
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "tree")} variant="outline" size="sm">
-          <ToggleGroupItem value="table">
-            <Table2 /> 表格
+        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as View)} variant="outline" size="sm" className="flex-wrap">
+          <ToggleGroupItem value="fill" title="逐条填写路径、指标和指标值">
+            <Table2 /> 填写
           </ToggleGroupItem>
-          <ToggleGroupItem value="tree">
-            <ListTree /> 路径图
+          <ToggleGroupItem value="t39" title="书中表 3-9：目标在左，一、二、三、四级路径向右展开（Excel 表格式路径系统图）">
+            <Columns3 /> 横排表 <span className="text-[10px] opacity-70">表 3-9</span>
+          </ToggleGroupItem>
+          {decodeLayout ? (
+            <ToggleGroupItem value="t310" title="书中表 3-10：按财务、客户、内部流程、学习与成长四个层面排列（从解码地图导入的样子）">
+              <LayoutPanelLeft /> 按层面 <span className="text-[10px] opacity-70">表 3-10</span>
+            </ToggleGroupItem>
+          ) : null}
+          <ToggleGroupItem value="tree" title="路径系统图：思维导图式的图形视图，和表格是同一份数据">
+            <ListTree /> 路径图 {graphSpecId ? <span className="text-[10px] opacity-70">{graphSpecId}</span> : null}
           </ToggleGroupItem>
         </ToggleGroup>
       </EditorToolbar>
@@ -113,6 +132,15 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
         </p>
       ) : view === "tree" ? (
         <PathTree goals={goals} nodes={nodes} />
+      ) : view === "t39" || view === "t310" ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-muted-foreground">
+            {view === "t39"
+              ? "表 3-9 横排表：只读预览，与“导出 Excel”里的布局一致；修改请切回“填写”。"
+              : "表 3-10 按层面：解码地图四个层面导入后的样子；只读预览，修改请切回“填写”。"}
+          </p>
+          <SheetTable sheet={view === "t39" ? t39 : (t310 ?? t39)} />
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           {goals.map((goal) => {

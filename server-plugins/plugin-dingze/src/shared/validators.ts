@@ -32,6 +32,7 @@ import {
   validateDecodeMap,
   validateDeptUndertaking,
   validateGoalPathSystem,
+  targetsOf,
   validateGoalTargets,
   validateKeyProjects,
   validateRaciTable,
@@ -381,15 +382,16 @@ export function validateArtifact(code: string, payload: unknown, upstream: Recor
       return validateMissionWorksheet(payload as MissionWorksheet);
     case 'M-VISION':
       return validateVisionWorksheet(payload as VisionWorksheet);
-    case 'S2-03-T':
-      return validateGoalTargets(payload as GoalTargets);
     case 'M-BUDGET':
       return validateBudgetWorksheet(payload as BudgetWorksheet);
     case 'S2-01':
-      return validateDecodeMap(payload as DecodeMap, upstream['S2-03-T'] as GoalTargets | undefined);
+      return validateDecodeMap(payload as DecodeMap, targetsOf(upstream['S2-03']));
     case 'S2-03': {
-      const goals = ((upstream['S2-03-T'] as GoalTargets | undefined)?.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric }));
-      return validateGoalPathSystem(payload as GoalPathSystem, goals);
+      // 第一步 定目标 first: without goals there is nothing to find paths for.
+      const targets = targetsOf(payload) ?? { year: 0, strategyReview: '', lastPeriodIssues: '', goals: [] };
+      const targetIssues = validateGoalTargets(targets).map((i) => ({ ...i, message: `定目标：${i.message}` }));
+      const goals = (targets.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric }));
+      return [...targetIssues, ...validateGoalPathSystem(payload as GoalPathSystem, goals).map((i) => ({ ...i, message: `找路径：${i.message}` }))];
     }
     case 'S2-06': {
       const rows = (upstream['S2-05'] as DeptUndertakingTable | undefined)?.rows ?? [];

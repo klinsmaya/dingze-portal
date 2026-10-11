@@ -255,9 +255,10 @@ const PLAN_BOOKS = ['S3-07', 'S3-08'];
 
 /** Current content of the artifacts `def` depends on, for checks that compare against them. */
 async function upstreamPayloads(ctx: Context, projectId: number, def: ArtifactDef, transaction?: any) {
-  if (def.dependsOn.length === 0) return {};
+  const codes = [...def.dependsOn, ...(def.reads ?? [])];
+  if (codes.length === 0) return {};
   const rows = await ctx.db.getRepository('dz_artifacts').find({
-    filter: { projectId, code: { $in: def.dependsOn } },
+    filter: { projectId, code: { $in: codes } },
     appends: ['currentVersion'],
     transaction,
   });

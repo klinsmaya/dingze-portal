@@ -56,25 +56,34 @@ const node = (id: string, parentId: string | null, level: number, amount: number
 });
 
 describe("path system", () => {
+  it("S2-03 starts with 定目标: no year goal blocks, and issues name their step", () => {
+    const issues = validateArtifact("S2-03", { nodes: [] });
+    expect(issues).toContainEqual(expect.objectContaining({ level: "error", message: expect.stringContaining("定目标：至少确定一个公司级年度目标") }));
+    const goal = { id: "g1", purpose: "支撑增长", task: "提升售气量", metric: "售气量", value: "1100 万方", unit: "万方", perspective: "financial" as const, sourceRowId: null };
+    const withGoal = validateArtifact("S2-03", { nodes: [], targets: { year: 2026, strategyReview: "承接 S1-07", lastPeriodIssues: "", goals: [goal] } });
+    expect(withGoal.some((i) => i.message.startsWith("定目标"))).toBe(false);
+    expect(withGoal.every((i) => i.message.startsWith("找路径"))).toBe(true);
+  });
+
   it("accepts children that add back up to their parent", () => {
     const nodes = [node("1", null, 1, 700), node("1.1", "1", 2, 500), node("1.2", "1", 2, 200)];
-    expect(hasBlockingIssues(validateArtifact("S2-03", { nodes }))).toBe(false);
+    expect(hasBlockingIssues(validateArtifact("S2-06", { nodes }))).toBe(false);
   });
 
   it("blocks children that do not add back up", () => {
     const nodes = [node("1", null, 1, 700), node("1.1", "1", 2, 500), node("1.2", "1", 2, 220)];
-    const issues = validateArtifact("S2-03", { nodes });
+    const issues = validateArtifact("S2-06", { nodes });
     expect(issues).toContainEqual(expect.objectContaining({ level: "error", anchor: "1", message: expect.stringContaining("推不回来") }));
   });
 
   it("does not compare children measured by a different metric", () => {
     const nodes = [node("1", null, 1, 700), node("1.1", "1", 2, 2000, "新增客户数量")];
-    expect(validateArtifact("S2-03", { nodes }).some((i) => i.message.includes("推不回来"))).toBe(false);
+    expect(validateArtifact("S2-06", { nodes }).some((i) => i.message.includes("推不回来"))).toBe(false);
   });
 
   it("requires a metric and a value on every path and caps the depth at four levels", () => {
     const nodes = [{ ...node("1", null, 1, 700), metric: "" }, node("x", "1", 5, null, "新增售气量")];
-    const messages = validateArtifact("S2-03", { nodes }).map((i) => i.message);
+    const messages = validateArtifact("S2-06", { nodes }).map((i) => i.message);
     expect(messages.some((m) => m.includes("缺衡量指标"))).toBe(true);
     expect(messages.some((m) => m.includes("层级超出"))).toBe(true);
   });

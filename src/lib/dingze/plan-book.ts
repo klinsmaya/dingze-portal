@@ -1,7 +1,6 @@
 import {
   type DeptUndertakingTable,
   type GoalPathSystem,
-  type GoalTargets,
   type KpiBreakdown,
   NODE_STATUS_LABELS,
   PLAN_BOOK_CHAPTERS,
@@ -17,6 +16,7 @@ import {
   type StrategyKpiTable,
   type StrategyMap,
   currentYearTargets,
+  targetsOf,
   houseStarted,
   orderedPaths,
   priorityScore,
@@ -44,7 +44,6 @@ export type PlanBookUpstream = {
   "S1-02"?: StrategyMap;
   "S1-06"?: StrategyKpiTable;
   "S1-07"?: KpiBreakdown;
-  "S2-03-T"?: GoalTargets;
   "S2-03"?: GoalPathSystem;
   "S2-05"?: DeptUndertakingTable;
   "S2-06"?: GoalPathSystem;
@@ -155,7 +154,7 @@ export function buildCompanyPlanBook(params: {
 }): PlanBookModel {
   const { text: t, upstream: u, year } = params;
   const charters = u["S3-02"]?.charters ?? [];
-  const goals = u["S2-03-T"]?.goals ?? [];
+  const goals = targetsOf(u["S2-03"])?.goals ?? [];
   const paths = orderedPaths(u["S2-03"]?.nodes ?? [], goals.map((g) => g.id));
   const targets = currentYearTargets(u["S1-07"], year);
 

@@ -64,6 +64,8 @@ export default function WorkspacePage() {
       <Navigate to={workspacePath(project.id, next?.code ?? "S1-01")} replace />
     );
   }
+  // S2-03-T (定目标) was folded into S2-03's target zone to follow 附录 B.
+  if (params.code === "S2-03-T") return <Navigate to={workspacePath(project.id, "S2-03")} replace />;
   if (!isArtifactCode(params.code)) {
     return (
       <div className="p-6">
@@ -86,7 +88,7 @@ function Workspace({ code }: { code: string }) {
   const def = getArtifactDef(code);
   const detail = useArtifactDetail(project, code);
   const save = useSaveArtifact(project, code);
-  const upstream = useUpstreamPayloads(project, def.dependsOn).payloads;
+  const upstream = useUpstreamPayloads(project, [...def.dependsOn, ...(def.reads ?? [])]).payloads;
 
   const artifact = detail.data?.artifact ?? null;
   const serverPayload =

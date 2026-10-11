@@ -24,14 +24,27 @@ export function locateAnchor(anchor: string, root: ParentNode = document): boole
     const el = root.querySelector<HTMLElement>(selector);
     if (!el) continue;
     if (el.getAttribute("role") === "tab") el.click();
-    for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement) p.open = true;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.remove(FLASH);
-    void el.offsetWidth;
-    el.classList.add(FLASH);
-    window.setTimeout(() => el.classList.remove(FLASH), 1800);
-    const field = el.matches("input, textarea, select") ? el : el.querySelector<HTMLElement>("input:not([readonly]), textarea:not([readonly]), select:not([disabled])");
-    field?.focus({ preventScroll: true });
+    let revealed = false;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (p instanceof HTMLDetailsElement) p.open = true;
+      // Editors with step zones (e.g. S2-03 定目标 / 找路径) mark the panel and its switch.
+      const zone = p.getAttribute("data-zone");
+      if (zone) {
+        root.querySelector<HTMLElement>(`[data-zone-tab="${CSS.escape(zone)}"]`)?.click();
+        revealed = true;
+      }
+    }
+    const show = () => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.remove(FLASH);
+      void el.offsetWidth;
+      el.classList.add(FLASH);
+      window.setTimeout(() => el.classList.remove(FLASH), 1800);
+      const field = el.matches("input, textarea, select") ? el : el.querySelector<HTMLElement>("input:not([readonly]), textarea:not([readonly]), select:not([disabled])");
+      field?.focus({ preventScroll: true });
+    };
+    if (revealed) window.setTimeout(show, 0);
+    else show();
     return true;
   }
   return false;

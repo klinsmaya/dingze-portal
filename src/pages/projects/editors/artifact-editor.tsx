@@ -8,11 +8,9 @@ import {
   type DecodeMap,
   type DeptUndertakingTable,
   type GoalPathSystem,
-  type GoalTargets,
   type KeyProjectList,
   type RaciTable,
   type ScorecardSet,
-  pathsFromDecodeMap,
 } from "@dingze/shared";
 import type {
   IpoocDesign,
@@ -30,8 +28,9 @@ import type {
 import type { ProjectOrgUnit, ProjectTeamMember } from "@/lib/dingze/api";
 
 import { CharterEditor } from "./charter-editor";
+import { CompanyPathEditor } from "./company-path-editor";
 import { DecodeMapEditor } from "./decode-map-editor";
-import { BudgetWorksheetEditor, GoalTargetsEditor } from "./goal-targets-editor";
+import { BudgetWorksheetEditor } from "./goal-targets-editor";
 import { IpoocEditor } from "./ipooc-editor";
 import { KeyProjectsEditor } from "./key-projects-editor";
 import { PathSystemEditor } from "./path-system-editor";
@@ -108,27 +107,12 @@ export function ArtifactEditor({
           projectYear={projectYear}
         />
       );
-    case "S2-03-T":
-      return <GoalTargetsEditor {...common} value={value as GoalTargets} upstream={upstream} projectYear={projectYear} />;
     case "M-BUDGET":
       return <BudgetWorksheetEditor {...common} value={value as BudgetWorksheet} />;
     case "S2-01":
-      return <DecodeMapEditor {...common} value={value as DecodeMap} upstream={upstream as { "S2-03-T"?: GoalTargets }} />;
-    case "S2-03": {
-      const targets = upstream["S2-03-T"] as GoalTargets | undefined;
-      const map = upstream["S2-01"] as DecodeMap | undefined;
-      const system = value as GoalPathSystem;
-      const imported = pathsFromDecodeMap(map, targets, system);
-      return (
-        <PathSystemEditor
-          {...common}
-          value={system}
-          goalWord="年度目标"
-          goals={(targets?.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric, metric: g.metric, value: g.value }))}
-          importFromMap={{ count: imported.nodes.length - (system.nodes ?? []).length, run: () => onChange(imported) }}
-        />
-      );
-    }
+      return <DecodeMapEditor {...common} value={value as DecodeMap} upstream={upstream as { "S2-03"?: GoalPathSystem }} />;
+    case "S2-03":
+      return <CompanyPathEditor {...common} value={value as GoalPathSystem} upstream={upstream} projectYear={projectYear} />;
     case "S2-06": {
       const rows = (upstream["S2-05"] as DeptUndertakingTable | undefined)?.rows ?? [];
       return (
