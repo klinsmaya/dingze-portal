@@ -25,7 +25,10 @@ export interface ArtifactDef {
   code: string;
   /** Spec ID (附录 B). Method worksheets carry the spec ID of the artifact they belong to. */
   specId: string;
+  /** The book's table name, shown in small print next to the spec ID. */
   name: string;
+  /** Plain-language title for people new to the method; the main heading everywhere. */
+  plain: string;
   stage: StageKey;
   /** Checklist columns: 工作任务 and 实施步骤. */
   task: string;
@@ -65,47 +68,47 @@ export const STAGES: { key: StageKey; name: string; goal: string }[] = [
 export const ARTIFACTS: ArtifactDef[] = [
   // ── 定战略责 ──
   {
-    code: 'S1-01', specId: 'S1-01', name: '战略简约六分法表 / 战略屋', stage: 'strategy',
+    code: 'S1-01', specId: 'S1-01', name: '战略简约六分法表 / 战略屋', plain: '战略一页纸（六分法 / 战略屋）', stage: 'strategy',
     task: '内容共识：纷繁战略简约化', step: '战略简约六分法 / 战略屋', bookRef: '表 2-1、图 2-3',
     priority: 'P0', editor: 'strategy-content', unlockAfter: [], dependsOn: [],
   },
   {
-    code: 'M-MISSION', specId: 'S1-01', name: '使命五要素萃取', stage: 'strategy',
+    code: 'M-MISSION', specId: 'S1-01', name: '使命五要素萃取', plain: '提炼使命', stage: 'strategy',
     task: '逻辑共识：简约战略逻辑化', step: '使命共识', bookRef: '表 2-3',
     priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
   },
   {
-    code: 'M-VISION', specId: 'S1-01', name: '愿景三法', stage: 'strategy',
+    code: 'M-VISION', specId: 'S1-01', name: '愿景三法', plain: '提炼愿景', stage: 'strategy',
     task: '逻辑共识：简约战略逻辑化', step: '愿景共识', bookRef: '战略推导法、对标一流法、引以为傲法',
     priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
   },
   {
-    code: 'S1-02', specId: 'S1-02', name: '战略地图', stage: 'strategy',
+    code: 'S1-02', specId: 'S1-02', name: '战略地图', plain: '战略地图', stage: 'strategy',
     task: '逻辑共识：简约战略逻辑化', step: '战略内容的逻辑共识', bookRef: '图 2-8、图 2-9',
     priority: 'P0', editor: 'strategy-map', unlockAfter: ['S1-01'], dependsOn: ['S1-01'],
   },
   {
-    code: 'S1-03', specId: 'S1-03', name: '企业战略、策略逻辑表', stage: 'strategy',
+    code: 'S1-03', specId: 'S1-03', name: '企业战略、策略逻辑表', plain: '战略与策略对照表', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第一步 导出企业的战略和策略', bookRef: '表 2-7',
     priority: 'P0', editor: 'table', unlockAfter: ['S1-02'], dependsOn: ['S1-01'],
   },
   {
-    code: 'S1-04', specId: 'S1-04', name: 'IPOOC 指标设计表', stage: 'strategy',
+    code: 'S1-04', specId: 'S1-04', name: 'IPOOC 指标设计表', plain: '衡量指标设计', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第二步 设定衡量指标', bookRef: '表 2-8',
     priority: 'P1', editor: 'table', unlockAfter: ['S1-03'], dependsOn: ['S1-03'],
   },
   {
-    code: 'S1-05', specId: 'S1-05', name: 'KPI 筛选评价表', stage: 'strategy',
+    code: 'S1-05', specId: 'S1-05', name: 'KPI 筛选评价表', plain: '指标筛选打分', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第三步 筛选战略 KPI', bookRef: '表 2-10、表 2-11',
     priority: 'P1', editor: 'table', unlockAfter: ['S1-04'], dependsOn: ['S1-04'],
   },
   {
-    code: 'S1-06', specId: 'S1-06', name: '战略 KPI 表', stage: 'strategy',
+    code: 'S1-06', specId: 'S1-06', name: '战略 KPI 表', plain: '战略指标清单', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第三步 筛选战略 KPI', bookRef: '表 2-10、表 2-11 筛选结果',
     priority: 'P0', editor: 'table', unlockAfter: ['S1-03'], dependsOn: ['S1-03', 'S1-05'],
   },
   {
-    code: 'S1-07', specId: 'S1-07', name: '战略 KPI 3—5 年年度分解表', stage: 'strategy',
+    code: 'S1-07', specId: 'S1-07', name: '战略 KPI 3—5 年年度分解表', plain: '战略指标逐年目标值', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第四步 设定指标值并分解至 3—5 年', bookRef: '表 2-12',
     priority: 'P0', editor: 'table', unlockAfter: ['S1-06'], dependsOn: ['S1-06'],
   },
@@ -114,69 +117,69 @@ export const ARTIFACTS: ArtifactDef[] = [
   // S2-03 holds both 第一步 定目标 (target zone, 表 3-4/3-5) and 第二步 找路径 (paths, 表 3-9/3-10);
   // S2-01 sits in between and reads the target zone (spec 二(七)1–2, 附录 B #10, 4.4).
   {
-    code: 'S2-03', specId: 'S2-03', name: '公司级目标路径系统表', stage: 'goal',
+    code: 'S2-03', specId: 'S2-03', name: '公司级目标路径系统表', plain: '公司级年度目标 · 路径', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第一步 定目标 → 第二步 找路径', bookRef: '表 3-4、表 3-5、表 3-9、表 3-10',
     priority: 'P0', editor: 'path-system', unlockAfter: [], dependsOn: ['S1-02', 'S1-07', 'S2-01'],
   },
   {
-    code: 'M-BUDGET', specId: 'S2-03', name: '年度经营预算', stage: 'goal',
+    code: 'M-BUDGET', specId: 'S2-03', name: '年度经营预算', plain: '年度经营预算', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第一步 定目标', bookRef: '表 3-5',
     priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S2-03',
   },
   {
-    code: 'S2-01', specId: 'S2-01', name: '年度战略解码地图', stage: 'goal',
+    code: 'S2-01', specId: 'S2-01', name: '年度战略解码地图', plain: '年度目标解码图', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第二步 找路径（解码地图子步骤 1–4）', bookRef: '图 3-3、图 3-7～3-10',
     priority: 'P0', editor: 'decode-map', unlockAfter: [], dependsOn: [], reads: ['S2-03'],
   },
   {
-    code: 'S2-08', specId: 'S2-08', name: '关键项目列表', stage: 'goal',
+    code: 'S2-08', specId: 'S2-08', name: '关键项目列表', plain: '关键项目清单', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第三步 抓关键 · 第四步 立项目', bookRef: '表 3-13',
     priority: 'P0', editor: 'table', unlockAfter: ['S2-03'], dependsOn: ['S2-03'],
   },
   {
-    code: 'S2-04', specId: 'S2-04', name: 'RACI 责任分解矩阵', stage: 'goal',
+    code: 'S2-04', specId: 'S2-04', name: 'RACI 责任分解矩阵', plain: '责任分工矩阵', stage: 'goal',
     task: '横向到边，责任全域协同', step: '列出责任者 → 构建 RACI → 验证与优化', bookRef: '表 3-17、表 3-18、表 3-20',
     priority: 'P0', editor: 'raci', unlockAfter: ['S2-03'], dependsOn: ['S2-03', 'S2-08'],
   },
   {
-    code: 'S2-05', specId: 'S2-05', name: '部门目标承接表', stage: 'goal',
+    code: 'S2-05', specId: 'S2-05', name: '部门目标承接表', plain: '部门目标承接', stage: 'goal',
     task: '纵向到底，目标层层击穿', step: '步骤 2 分部门', bookRef: '表 3-20',
     priority: 'P0', editor: 'table', unlockAfter: ['S2-04'], dependsOn: ['S2-03', 'S2-04', 'S2-08'],
   },
   {
-    code: 'S2-06', specId: 'S2-06', name: '部门级目标路径系统图 / 表', stage: 'goal',
+    code: 'S2-06', specId: 'S2-06', name: '部门级目标路径系统图 / 表', plain: '部门目标 · 路径', stage: 'goal',
     task: '纵向到底，目标层层击穿', step: '部门级再找路径', bookRef: '同表 3-9',
     priority: 'P0', editor: 'path-system', unlockAfter: ['S2-05'], dependsOn: ['S2-04', 'S2-05'],
   },
   {
-    code: 'S2-07', specId: 'S2-07', name: '绩效计分卡', stage: 'goal',
+    code: 'S2-07', specId: 'S2-07', name: '绩效计分卡', plain: '部门绩效计分卡', stage: 'goal',
     task: '纵向到底，目标层层击穿', step: '步骤 3 挂考核', bookRef: '表 3-21',
     priority: 'P0', editor: 'table', unlockAfter: ['S2-06'], dependsOn: ['S2-04', 'S2-05'],
   },
 
   // ── 定行动责 ──
   {
-    code: 'S3-02', specId: 'S3-02', name: '项目任务书（含 WBS）', stage: 'action',
+    code: 'S3-02', specId: 'S3-02', name: '项目任务书（含 WBS）', plain: '项目任务书', stage: 'action',
     task: '任务明确，全局可视', step: '项目与项目制管理', bookRef: '表 4-4',
     priority: 'P0', editor: 'project-charter', unlockAfter: [], dependsOn: ['S2-08', 'S2-06', 'S2-04'],
   },
   {
-    code: 'S3-05', specId: 'S3-05', name: '计划实施推进表（含节点表）', stage: 'action',
+    code: 'S3-05', specId: 'S3-05', name: '计划实施推进表（含节点表）', plain: '项目推进计划', stage: 'action',
     task: '节点明确，进程可控', step: '划分节点 → 输出《计划实施推进表》', bookRef: '表 4-5、表 4-6',
     priority: 'P0', editor: 'schedule', unlockAfter: ['S3-02'], dependsOn: ['S3-02'],
   },
   {
-    code: 'S3-06', specId: 'S3-06', name: '项目资源匹配表', stage: 'action',
+    code: 'S3-06', specId: 'S3-06', name: '项目资源匹配表', plain: '项目资源清单', stage: 'action',
     task: '资源明确，支撑可见', step: '算清需求 → 核对存量 → 补齐缺口', bookRef: '表 4-8',
     priority: 'P0', editor: 'resource-match', unlockAfter: ['S3-05'], dependsOn: ['S3-02', 'S3-05'],
   },
   {
-    code: 'S3-07', specId: 'S3-07', name: '公司级年度经营计划书', stage: 'action',
+    code: 'S3-07', specId: 'S3-07', name: '公司级年度经营计划书', plain: '公司年度经营计划书', stage: 'action',
     task: '年度经营计划书', step: '公司计划', bookRef: '公司级计划书模板（8 章）',
     priority: 'P0', editor: 'plan-book', unlockAfter: ['S3-06'], dependsOn: ['S1-01', 'S1-02', 'S1-06', 'S1-07', 'S2-03', 'S2-04', 'S2-05', 'S2-07', 'S3-02', 'S3-05', 'S3-06'],
   },
   {
-    code: 'S3-08', specId: 'S3-08', name: '部门年度经营计划书', stage: 'action',
+    code: 'S3-08', specId: 'S3-08', name: '部门年度经营计划书', plain: '部门年度经营计划书', stage: 'action',
     task: '年度经营计划书', step: '部门计划', bookRef: '部门级计划书模板（8 章）',
     priority: 'P0', editor: 'plan-book', unlockAfter: ['S3-06'], dependsOn: ['S2-05', 'S2-06', 'S2-07', 'S3-02', 'S3-05', 'S3-06'],
   },

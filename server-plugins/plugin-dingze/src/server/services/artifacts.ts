@@ -142,6 +142,33 @@ export interface SaveInput {
   fromProposalId?: number;
   /** Set when the user confirmed a digital consultant's suggestion in the chat. */
   aiSuggested?: boolean;
+  /** The edit commands this save contains (修改记录). */
+  changes?: unknown;
+}
+
+const VIAS = ['edit', 'structure', 'chat', 'paste', 'undo', 'import'];
+
+/** Keeps the command log small and well-formed: at most 200 commands, values clipped. */
+export function sanitizeChanges(raw: unknown, by: string): unknown[] {
+  if (!Array.isArray(raw)) return [];
+  const clip = (v: unknown) => {
+    if (v === undefined || v === null) return null;
+    const text = typeof v === 'string' ? v : JSON.stringify(v);
+    return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  };
+  return raw.slice(-200).map((c: any) => ({
+    via: VIAS.includes(c?.via) ? c.via : 'edit',
+    label: String(c?.label ?? '').slice(0, 200),
+    at: typeof c?.at === 'string' ? c.at : new Date().toISOString(),
+    by,
+    commentId: c?.commentId ? Number(c.commentId) || null : null,
+    changes: (Array.isArray(c?.changes) ? c.changes : []).slice(0, 50).map((e: any) => ({
+      path: String(e?.path ?? '').slice(0, 200),
+      kind: ['added', 'removed', 'changed'].includes(e?.kind) ? e.kind : 'changed',
+      before: clip(e?.before),
+      after: clip(e?.after),
+    })),
+  }));
 }
 
 export async function saveArtifact(ctx: Context, pc: ProjectContext, def: ArtifactDef, input: SaveInput) {
@@ -172,6 +199,7 @@ export async function saveArtifact(ctx: Context, pc: ProjectContext, def: Artifa
         payload: input.payload,
         upstreamRefs: upstream.refs,
         note: input.note,
+        changes: sanitizeChanges(input.changes, (ctx.auth?.user as any)?.nickname || (ctx.auth?.user as any)?.username || ''),
         spaceName: pc.spaceName,
       },
       context: ctx,
@@ -349,11 +377,50 @@ export async function transitionArtifact(
   });
 }
 
+const LIFECYCLE_EVENTS = ['stepDone', 'submitReview', 'approve', 'returnToEdit', 'confirm', 'reopen', 'forceLock', 'forceReturn'];
+
+/** The latest lifecycle event per artifact of the given projects (who returned it and why, …). */
+export async function lastEvents(ctx: Context, projectIds: number[]) {
+  const out = new Map<string, { action: string; reason: string | null; at: string | null; by: string | null }>();
+  if (!projectIds.length) return out;
+  const events = await ctx.db.getRepository('dz_audit_events').find({
+    filter: { projectId: { $in: projectIds }, action: { $in: LIFECYCLE_EVENTS } },
+    appends: ['createdBy'],
+    sort: ['-id'],
+    limit: 2000,
+  });
+  for (const e of events as any[]) {
+    const key = `${e.get('projectId')}:${e.get('code')}`;
+    if (out.has(key)) continue;
+    const by = e.get('createdBy');
+    out.set(key, { action: e.get('action'), reason: e.get('reason') ?? null, at: e.get('createdAt') ?? null, by: by ? by.get('nickname') || by.get('username') : null });
+  }
+  return out;
+}
+
+/** Every step's state for next-action and status displays. */
+export async function projectProgress(ctx: Context, projectId: number) {
+  const [rows, states, events] = await Promise.all([
+    ctx.db.getRepository('dz_artifacts').find({ filter: { projectId }, fields: ['code', 'status', 'stale'] }),
+    loadStates(ctx, projectId),
+    lastEvents(ctx, [projectId]),
+  ]);
+  const byCode = new Map((rows as any[]).map((r) => [r.get('code'), r]));
+  return ARTIFACTS.map((def) => ({
+    code: def.code,
+    status: ((byCode.get(def.code) as any)?.get('status') as ArtifactStatus) ?? 'not_started',
+    stale: !!(byCode.get(def.code) as any)?.get('stale'),
+    unlocked: unlockInfo(def, states).unlocked,
+    lastEvent: events.get(`${projectId}:${def.code}`) ?? null,
+  }));
+}
+
 export async function projectOverview(ctx: Context, pc: ProjectContext) {
   const projectId = pc.project.get('id');
   const rows = await ctx.db.getRepository('dz_artifacts').find({ filter: { projectId } });
   const byCode = new Map(rows.map((r: any) => [r.get('code'), r]));
   const states = await loadStates(ctx, projectId);
+  const events = await lastEvents(ctx, [projectId]);
   // Departments and the project team feed RACI columns, undertakings and owner pickers.
   const comments = await openCommentCounts(ctx, projectId);
   const [orgUnits, members] = await Promise.all([
@@ -393,6 +460,7 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
         updatedAt: row?.get('updatedAt') ?? null,
         unlock: unlockInfo(def, states),
         openComments: comments[def.code] ?? 0,
+        lastEvent: events.get(`${projectId}:${def.code}`) ?? null,
       };
     }),
   };

@@ -19,6 +19,8 @@ export default defineCollection({
     // { [upstreamCode]: upstreamVersionId } read when this version was made
     { type: 'jsonb', name: 'upstreamRefs', defaultValue: {} },
     { type: 'text', name: 'note' },
+    // Command log of the edits this version saved: [{ via, label, at, by, commentId, changes[] }].
+    { type: 'jsonb', name: 'changes', defaultValue: [] },
     spaceField,
   ],
 });

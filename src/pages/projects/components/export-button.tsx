@@ -26,6 +26,8 @@ export function ExportButton({
   dirty,
   onExported,
   label = "导出 Excel",
+  variant = "outline",
+  size = "default",
 }: {
   code: string;
   name: string;
@@ -38,6 +40,8 @@ export function ExportButton({
   dirty: boolean;
   onExported?: (info: ExportInfo) => void;
   label?: string;
+  variant?: "default" | "outline" | "ghost";
+  size?: "default" | "sm";
 }) {
   const [pending, setPending] = useState(false);
   const sheets = artifactSheets(code, payload, upstream);
@@ -67,7 +71,7 @@ export function ExportButton({
   };
 
   return (
-    <Button variant="outline" onClick={run} disabled={pending}>
+    <Button variant={variant} size={size} onClick={run} disabled={pending}>
       <FileSpreadsheet /> {pending ? "导出中…" : label}
     </Button>
   );

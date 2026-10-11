@@ -1,4 +1,5 @@
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
+import { Link } from "react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
@@ -14,9 +15,12 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { artifactSheets } from "@/lib/dingze/export/sheets";
 import { downloadXlsx } from "@/lib/dingze/export/xlsx";
 import { formatTime } from "@/lib/dingze/records";
+import { workspacePath } from "@/lib/dingze/progress";
 import type { DeliveryArtifact } from "@/lib/dingze/records-api";
+import { cn } from "@/lib/utils";
 import { useDeliveryBundle, useRecordExport } from "@/lib/dingze/records-queries";
 
+import { DiagramExportButton } from "./components/diagram-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { useProjectContext } from "./project-context";
@@ -42,8 +46,8 @@ export default function DeliveryPage() {
 
   const deliverables = ARTIFACTS.filter((def) => {
     const a = byCode.get(def.code);
-    if (!a?.payload) return false;
-    return PLAN_BOOKS.includes(def.code) || artifactSheets(def.code, a.payload, upstream).length > 0;
+    if (!a?.payload || PLAN_BOOKS.includes(def.code)) return false;
+    return artifactSheets(def.code, a.payload, upstream).length > 0;
   });
 
   const scorecards = byCode.get("S2-07");
@@ -73,11 +77,16 @@ export default function DeliveryPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-brand">交付</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          正式交付物按定版版本导出；尚未定版的成果导出为带“草稿”标记的文件，避免被当作定版件流转。
-        </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            最终交付是年度经营计划书（Word）。没定版的内容导出时会标“草稿”，避免被当作定版件流转。
+          </p>
+        </div>
+        <Link to={`/projects/${project.id}/artifacts`} className="ml-auto text-sm text-primary hover:underline">
+          查看全部表的版本与修改记录 →
+        </Link>
       </div>
 
       {bundle.error ? (
@@ -89,9 +98,53 @@ export default function DeliveryPage() {
         <Skeleton className="h-96 rounded-xl" />
       ) : (
         <>
-          <section aria-labelledby="deliverables" className="flex flex-col gap-3">
-            <h2 id="deliverables" className="font-heading text-lg font-bold text-brand">
-              正式交付物
+          <section aria-labelledby="plan-books" className="flex flex-col gap-3">
+            <h2 id="plan-books" className="sr-only">年度经营计划书</h2>
+            {PLAN_BOOKS.map((code) => {
+              const def = getArtifactDef(code);
+              const a = byCode.get(code);
+              return (
+                <div key={code} className={cn("flex flex-wrap items-center gap-4 rounded-2xl border p-5", code === "S3-07" ? "border-primary bg-primary/5" : "bg-card")}>
+                  <FileText className={cn("size-9 shrink-0", code === "S3-07" ? "text-primary" : "text-muted-foreground")} />
+                  <div className="min-w-56 flex-1">
+                    <div className={cn("font-heading font-bold text-brand", code === "S3-07" ? "text-xl" : "text-base")}>{def.plain}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {def.specId} · {def.name} ·{" "}
+                      {a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}（未定版）`) : "还没有开始写"}
+                    </div>
+                  </div>
+                  {a?.payload ? (
+                    <PlanBookExportButton
+                      code={code}
+                      payload={a.payload}
+                      rev={a.rev}
+                      status={a.locked ? "locked" : a.status}
+                      enterprise={project.enterprise?.name ?? enterprise}
+                      year={project.year}
+                      upstream={upstream}
+                      dirty={false}
+                      onExported={recordExport}
+                      variant={code === "S3-07" ? "default" : "outline"}
+                      size={code === "S3-07" ? "lg" : "default"}
+                      label={code === "S3-07" ? "下载计划书 Word" : "下载部门计划书 Word"}
+                    />
+                  ) : (
+                    <Button variant="outline" nativeButton={false} render={<Link to={workspacePath(project.id, code)} />}>
+                      去写计划书
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+
+          <details className="group rounded-xl border bg-card" open={false}>
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
+              其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、战略图 PNG / SVG（次要，按需导出）</span>
+            </summary>
+          <section aria-labelledby="deliverables" className="flex flex-col gap-3 border-t p-4">
+            <h2 id="deliverables" className="sr-only">
+              其他表格
             </h2>
             {STAGES.map((stage) => {
               const items = deliverables.filter((d) => d.stage === stage.key);
@@ -105,13 +158,13 @@ export default function DeliveryPage() {
                       return (
                         <li key={def.code} className="flex flex-wrap items-center gap-3 border-t px-4 py-3">
                           <div className="min-w-56 flex-1">
-                            <div className="font-medium">《{def.name}》</div>
+                            <div className="font-medium">{def.plain}</div>
                             <div className="text-xs text-muted-foreground">
-                              {def.specId} · {a.locked ? `定版 v${a.rev}` : `草稿 v${a.rev}`}
+                              {def.specId} · {def.name} · {a.locked ? `定版 v${a.rev}` : `草稿 v${a.rev}`}
                             </div>
                           </div>
                           <StatusBadge status={a.status} />
-                          <div className="flex gap-2">
+                          <div className="flex gap-1">
                             <ExportButton
                               code={def.code}
                               name={def.name}
@@ -123,17 +176,21 @@ export default function DeliveryPage() {
                               upstream={upstream}
                               dirty={false}
                               onExported={recordExport}
+                              variant="ghost"
+                              size="sm"
+                              label="Excel"
                             />
-                            <PlanBookExportButton
+                            <DiagramExportButton
                               code={def.code}
+                              name={def.name}
                               payload={a.payload}
                               rev={a.rev}
                               status={a.locked ? "locked" : a.status}
-                              enterprise={project.enterprise?.name ?? enterprise}
-                              year={project.year}
-                              upstream={upstream}
+                              enterprise={enterprise}
                               dirty={false}
                               onExported={recordExport}
+                              variant="ghost"
+                              size="sm"
                             />
                           </div>
                         </li>
@@ -145,6 +202,7 @@ export default function DeliveryPage() {
             })}
             {deliverables.length === 0 ? <p className="text-sm text-muted-foreground">还没有可以导出的成果。</p> : null}
           </section>
+          </details>
 
           <section aria-labelledby="scorecards" className="flex flex-col gap-3">
             <h2 id="scorecards" className="font-heading text-lg font-bold text-brand">

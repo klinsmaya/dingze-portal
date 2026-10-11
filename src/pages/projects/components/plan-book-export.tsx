@@ -23,6 +23,9 @@ export function PlanBookExportButton({
   upstream,
   dirty,
   onExported,
+  variant = "outline",
+  size = "default",
+  label,
 }: {
   code: string;
   payload: unknown;
@@ -33,6 +36,9 @@ export function PlanBookExportButton({
   upstream: Record<string, unknown>;
   dirty: boolean;
   onExported?: (info: ExportInfo) => void;
+  variant?: "default" | "outline" | "ghost";
+  size?: "default" | "sm" | "lg";
+  label?: string;
 }) {
   const [pending, setPending] = useState(false);
   if ((code !== "S3-07" && code !== "S3-08") || rev === 0 || !payload) return null;
@@ -70,8 +76,8 @@ export function PlanBookExportButton({
   };
 
   return (
-    <Button variant="outline" onClick={run} disabled={pending}>
-      <FileText /> {pending ? "导出中…" : "导出 Word"}
+    <Button variant={variant} size={size} onClick={run} disabled={pending}>
+      <FileText /> {pending ? "导出中…" : (label ?? "导出 Word")}
     </Button>
   );
 }

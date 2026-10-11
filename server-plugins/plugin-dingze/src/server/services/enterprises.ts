@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { PROJECT_ROLE_LABELS, type ProjectRole, STAGES, stageGateCodes } from '../../shared';
+import { PROJECT_ROLE_LABELS, type ProjectRole, STAGES, nextAction, stageGateCodes } from '../../shared';
+import { projectProgress } from './artifacts';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames } from './access';
 import { notifyAssignment } from './notify';
 import { creator, insertUser } from './ops';
@@ -189,5 +190,12 @@ export async function myProjects(ctx: Context) {
       }),
     );
   };
-  return projects.map((p: any) => ({ ...p.toJSON(), projectRole: roleByProject.get(p.get('id')) ?? null, progress: progress(p.get('id')) }));
+  // The concrete next step on each card (“继续填：…”, “去定版：…”) instead of a bare “进入”.
+  const out = [];
+  for (const p of projects as any[]) {
+    const role = (roleByProject.get(p.get('id')) as ProjectRole | undefined) ?? null;
+    const steps = await projectProgress(ctx, p.get('id'));
+    out.push({ ...p.toJSON(), projectRole: role, progress: progress(p.get('id')), next: nextAction(steps, role) });
+  }
+  return out;
 }

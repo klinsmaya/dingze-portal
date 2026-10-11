@@ -21,6 +21,8 @@ export function DiagramExportButton({
   enterprise,
   dirty,
   onExported,
+  variant = "outline",
+  size = "default",
 }: {
   code: string;
   name: string;
@@ -30,6 +32,8 @@ export function DiagramExportButton({
   enterprise: string;
   dirty: boolean;
   onExported?: (info: ExportInfo) => void;
+  variant?: "default" | "outline" | "ghost";
+  size?: "default" | "sm";
 }) {
   const [pending, setPending] = useState(false);
   const available = artifactDiagrams(code, payload);
@@ -56,7 +60,7 @@ export function DiagramExportButton({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" disabled={pending}>
+          <Button variant={variant} size={size} disabled={pending}>
             <ImageDown /> {pending ? "导出中…" : "导出图片"} <ChevronDown />
           </Button>
         }

@@ -2,6 +2,8 @@ import {
   ARTIFACTS,
   STAGES,
   type ArtifactDef,
+  type ArtifactProgress,
+  type NextAction,
   type ProjectRole,
   type StageKey,
   getArtifactDef,
@@ -87,6 +89,17 @@ export function todosFor(artifacts: ArtifactOverview[], role: ProjectRole | null
   }
   const order: TodoKind[] = ["confirm", "review", "stale", "returned"];
   return todos.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind));
+}
+
+/** Where a next action leads: the table, the export page, or the project home. */
+export function nextActionPath(projectId: number, next: NextAction): string {
+  if (next.code) return workspacePath(projectId, next.code);
+  return next.kind === "deliver" ? `/projects/${projectId}/delivery` : `/projects/${projectId}/overview`;
+}
+
+/** The table states next-action and status helpers need, from the project overview. */
+export function progressOf(artifacts: ArtifactOverview[]): ArtifactProgress[] {
+  return artifacts.map((a) => ({ code: a.code, status: a.status, stale: a.stale, unlocked: a.unlock.unlocked, lastEvent: a.lastEvent ?? null }));
 }
 
 export function workspacePath(projectId: number, code: string) {

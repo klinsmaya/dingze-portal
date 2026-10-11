@@ -5,6 +5,7 @@ import type {
   LifecycleAction,
   ProjectRole,
   UnlockInfo,
+  NextAction,
 } from "@dingze/shared";
 
 // Every 定责 request carries the enterprise space it targets (multi-space plugin).
@@ -43,6 +44,8 @@ export type ProjectSummary = {
   projectRole: ProjectRole | null;
   /** P0 tables locked per stage, for the project cards. */
   progress?: Record<string, { locked: number; total: number }>;
+  /** The concrete next step for the caller (继续填：…, 去定版：…). */
+  next?: NextAction;
 };
 
 export async function listMyProjects(spaces: MySpaces): Promise<ProjectSummary[]> {
@@ -65,6 +68,8 @@ export type ArtifactOverview = {
   currentRev: number;
   updatedAt: string | null;
   unlock: UnlockInfo;
+  /** Latest lifecycle event (who returned it and why, …). */
+  lastEvent?: { action: string; reason: string | null; at: string | null; by: string | null } | null;
 };
 
 export type ProjectOrgUnit = {

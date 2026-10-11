@@ -12,7 +12,14 @@ import { cn } from "@/lib/utils";
 
 import type { ProjectContextValue } from "./project-context";
 
-const NAV = [
+// Enterprise members get four plain entries; the consulting side keeps the full set.
+const ENTERPRISE_NAV = [
+  { to: "overview", label: "今天要做的" },
+  { to: "workspace", label: "填写" },
+  { to: "materials", label: "资料" },
+  { to: "delivery", label: "导出" },
+];
+const FULL_NAV = [
   { to: "overview", label: "工作台" },
   { to: "workspace", label: "咨询工作区" },
   { to: "materials", label: "资料与画像" },
@@ -20,6 +27,7 @@ const NAV = [
   { to: "delivery", label: "交付" },
   { to: "expert", label: "专家咨询" },
 ];
+const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];
 
 export default function ProjectLayout() {
   const projectId = Number(useParams().projectId);
@@ -51,7 +59,7 @@ export default function ProjectLayout() {
           </div>
         </div>
         <nav aria-label="项目导航" className="flex flex-wrap">
-          {NAV.map((item) => (
+          {(overview.data?.projectRole && ENTERPRISE_ROLES.includes(overview.data.projectRole) && !overview.data.isConsultAdmin ? ENTERPRISE_NAV : FULL_NAV).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

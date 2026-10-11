@@ -10,9 +10,11 @@ import { notify, projectMemberIds } from './notify';
 const MAX_LENGTH = 2000;
 const who = (user: any) => (user ? user.get('nickname') || user.get('username') || '' : '');
 
+// Design 10 §4: every project member may comment, read-only members included (they cannot
+// change content); comments stay possible after 定版.
 function requireCommenter(pc: ProjectContext) {
-  if (pc.access.isConsultAdmin) return;
-  if (!pc.projectRole || pc.projectRole === 'readonly') throw new HttpError(403, '只读成员不能批注');
+  if (pc.access.isConsultAdmin || pc.access.isOps) return;
+  if (!pc.projectRole) throw new HttpError(403, '不是项目成员，不能批注');
 }
 
 export async function listComments(ctx: Context, pc: ProjectContext, def: ArtifactDef) {
@@ -25,6 +27,7 @@ export async function listComments(ctx: Context, pc: ProjectContext, def: Artifa
     id: Number(c.get('id')),
     parentId: c.get('parentId') ? Number(c.get('parentId')) : null,
     anchor: c.get('anchor') ?? null,
+    anchors: (c.get('anchors') ?? []) as string[],
     anchorLabel: c.get('anchorLabel') ?? '',
     content: c.get('content'),
     mentions: (c.get('mentions') ?? []) as number[],
@@ -44,7 +47,7 @@ export async function addComment(
   ctx: Context,
   pc: ProjectContext,
   def: ArtifactDef,
-  input: { anchor?: unknown; anchorLabel?: unknown; content?: unknown; parentId?: unknown; mentions?: unknown },
+  input: { anchor?: unknown; anchors?: unknown; anchorLabel?: unknown; content?: unknown; parentId?: unknown; mentions?: unknown },
 ) {
   requireCommenter(pc);
   const content = String(input.content ?? '').trim();
@@ -69,6 +72,7 @@ export async function addComment(
         projectId,
         code: def.code,
         anchor: root ? root.get('anchor') : input.anchor ? String(input.anchor).slice(0, 200) : null,
+        anchors: root ? root.get('anchors') ?? [] : Array.isArray(input.anchors) ? input.anchors.slice(0, 50).map((a) => String(a).slice(0, 200)) : [],
         anchorLabel: root ? root.get('anchorLabel') : String(input.anchorLabel ?? '').slice(0, 200),
         content,
         parentId: root ? root.get('id') : null,

@@ -23,7 +23,7 @@ export async function getArtifactRegistry(projectId: number, spaceName: string) 
 }
 
 export type ArtifactHistory = {
-  versions: { rev: number; kind: string; note: string; at: string; by: string }[];
+  versions: { rev: number; kind: string; note: string; at: string; by: string; changes: SavedCommand[] }[];
   events: { action: string; fromStatus: ArtifactStatus | null; toStatus: ArtifactStatus | null; rev: number | null; reason: string; at: string; by: string }[];
 };
 
@@ -38,6 +38,21 @@ export type VersionDiff = {
   entries: { path: string; kind: DiffKind; before: string; after: string }[];
   truncated: boolean;
 };
+
+export type SavedCommand = {
+  via: "edit" | "structure" | "chat" | "paste" | "undo" | "import";
+  label: string;
+  at: string;
+  by: string;
+  commentId: number | null;
+  changes: { path: string; kind: DiffKind; before: string | null; after: string | null }[];
+};
+
+export type VersionPayload = { rev: number; kind: string; at: string; by: string; payload: unknown };
+
+export async function getVersionPayload(projectId: number, spaceName: string, code: string, rev: number) {
+  return nocobaseClient.action<VersionPayload>("dingze", "versionPayload", { method: "GET", query: { projectId, code, rev }, headers: spaceHeaders(spaceName) });
+}
 
 export async function getVersionDiff(projectId: number, spaceName: string, code: string, from: number, to: number) {
   return nocobaseClient.action<VersionDiff>("dingze", "versionDiff", { method: "GET", query: { projectId, code, from, to }, headers: spaceHeaders(spaceName) });

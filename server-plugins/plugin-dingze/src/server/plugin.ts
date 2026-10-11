@@ -21,7 +21,7 @@ import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExper
 import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
 import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
-import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff } from './services/registry';
+import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff, versionPayload } from './services/registry';
 import { createProject, listEnterprises, myProjects, provisionEnterprise, setProjectMembers } from './services/enterprises';
 import {
   addEnterpriseMembers,
@@ -130,6 +130,7 @@ export class PluginDingzeServer extends Plugin {
             note: v.note,
             fromProposalId: v.fromProposalId ? Number(v.fromProposalId) : undefined,
             aiSuggested: v.aiSuggested === true,
+            changes: v.changes,
           });
         }),
         transition: action(async (ctx) => {
@@ -142,6 +143,10 @@ export class PluginDingzeServer extends Plugin {
         artifactHistory: action(async (ctx) => {
           const pc = await loadProjectContext(ctx, ctx.action.params.projectId);
           return artifactHistory(ctx, pc, requireArtifactDef(ctx.action.params.code));
+        }),
+        versionPayload: action(async (ctx) => {
+          const p = ctx.action.params;
+          return versionPayload(ctx, await loadProjectContext(ctx, p.projectId), requireArtifactDef(p.code), p.rev);
         }),
         versionDiff: action(async (ctx) => {
           const p = ctx.action.params;

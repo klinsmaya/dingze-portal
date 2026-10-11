@@ -80,7 +80,7 @@ export async function artifactHistory(ctx: Context, pc: ProjectContext, def: Art
   const [versions, events] = await Promise.all([
     ctx.db.getRepository('dz_artifact_versions').find({
       filter: { projectId, code: def.code },
-      fields: ['id', 'rev', 'kind', 'note', 'createdAt', 'createdById'],
+      fields: ['id', 'rev', 'kind', 'note', 'changes', 'createdAt', 'createdById'],
       appends: ['createdBy'],
       sort: ['-rev'],
     }),
@@ -92,7 +92,7 @@ export async function artifactHistory(ctx: Context, pc: ProjectContext, def: Art
     }),
   ]);
   return {
-    versions: versions.map((v: any) => ({ rev: v.get('rev'), kind: v.get('kind'), note: v.get('note') ?? '', at: v.get('createdAt'), by: who(v.get('createdBy')) })),
+    versions: versions.map((v: any) => ({ rev: v.get('rev'), kind: v.get('kind'), note: v.get('note') ?? '', at: v.get('createdAt'), by: who(v.get('createdBy')), changes: v.get('changes') ?? [] })),
     events: events.map((e: any) => ({
       action: e.get('action'),
       fromStatus: e.get('fromStatus') ?? null,
@@ -110,6 +110,16 @@ function preview(value: unknown): string {
   if (value === undefined || value === null) return '';
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return text.length > MAX_VALUE ? `${text.slice(0, MAX_VALUE)}…` : text;
+}
+
+/** One saved version's content, for the 修订 view that compares the draft with any version. */
+export async function versionPayload(ctx: Context, pc: ProjectContext, def: ArtifactDef, rev: unknown) {
+  const v: any = await ctx.db.getRepository('dz_artifact_versions').findOne({
+    filter: { projectId: pc.project.get('id'), code: def.code, rev: Number(rev) },
+    appends: ['createdBy'],
+  });
+  if (!v) throw new HttpError(404, '版本不存在');
+  return { rev: v.get('rev'), kind: v.get('kind'), at: v.get('createdAt'), by: who(v.get('createdBy')), payload: v.get('payload') };
 }
 
 export async function versionDiff(ctx: Context, pc: ProjectContext, def: ArtifactDef, fromRev: unknown, toRev: unknown) {

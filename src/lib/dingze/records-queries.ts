@@ -8,6 +8,7 @@ import {
   getDeliveryBundle,
   getMyNotifications,
   getVersionDiff,
+  getVersionPayload,
   markNotificationsRead,
   recordExport,
 } from "./records-api";
@@ -37,6 +38,15 @@ export function useVersionDiff(project: ProjectSummary, code: string | null, fro
     queryKey: recordKeys.diff(project.id, code ?? "", from ?? 0, to ?? 0),
     queryFn: () => getVersionDiff(project.id, project.spaceName, code!, from!, to!),
     enabled: !!code && !!from && !!to && from !== to,
+    staleTime: Infinity,
+  });
+}
+
+export function useVersionPayload(project: ProjectSummary, code: string, rev: number | null) {
+  return useQuery({
+    queryKey: ["dingze", "version", project.id, code, rev ?? 0],
+    queryFn: () => getVersionPayload(project.id, project.spaceName, code, rev!),
+    enabled: !!rev,
     staleTime: Infinity,
   });
 }

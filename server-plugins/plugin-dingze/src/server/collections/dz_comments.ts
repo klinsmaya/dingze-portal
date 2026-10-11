@@ -10,6 +10,8 @@ export default defineCollection({
   fields: [
     { type: 'belongsTo', name: 'project', target: 'dz_projects', foreignKey: 'projectId' },
     { type: 'string', name: 'code', allowNull: false },
+    // 圈选: a comment pinned to a group of rows / nodes; `anchor` keeps the first of them.
+    { type: 'jsonb', name: 'anchors', defaultValue: [] },
     // Row or field id inside the artifact payload; null = the whole table.
     { type: 'string', name: 'anchor' },
     { type: 'string', name: 'anchorLabel' },
