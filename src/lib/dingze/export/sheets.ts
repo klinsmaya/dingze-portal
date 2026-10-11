@@ -26,6 +26,7 @@ import {
   PERSPECTIVES,
   SCREEN_DIMENSIONS,
   SIXFOLD_FIELDS,
+  houseStarted,
   SMART_CHECKS,
   candidateTotal,
   type IpoocDesign,
@@ -81,7 +82,8 @@ function strategyContentSheets(c: StrategyContent): SheetModel[] {
     ["内容", 60],
   ]);
   for (const f of SIXFOLD_FIELDS) sixfold.rows.push([f.label, String(c[f.key] ?? "")]);
-  return c.primary === "sixfold" ? [sixfold, house] : [house, sixfold];
+  // 六分法 is the required table; the house (P1) is exported only when it has content.
+  return houseStarted(c) ? [sixfold, house] : [sixfold];
 }
 
 function strategyMapSheets(map: StrategyMap): SheetModel[] {

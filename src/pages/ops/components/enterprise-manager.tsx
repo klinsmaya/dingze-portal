@@ -161,7 +161,7 @@ function EditEnterpriseDialog({
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>编辑企业档案</DialogTitle>
-            <DialogDescription>修改规模不会改变已有项目的战略主表达。</DialogDescription>
+            <DialogDescription>维护企业名称、简称与规模。</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>

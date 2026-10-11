@@ -20,24 +20,34 @@ const fullHouse = (): StrategyContent => ({
   foundation: { organization: "点供事业部", mechanism: "项目考核", talent: "培养 20 名骨干" },
 });
 
+const fullSixfold = () => ({
+  ...emptyStrategyContent("sixfold"),
+  mission: "让城市用上清洁能源",
+  vision: "区域领先的综合能源服务商",
+  strategicGoals: "2030 年营收 30 亿",
+  strategyChoice: "稳城燃、强光伏、育储能",
+  stepsAndMeasures: "三步走",
+  indicatorSystem: "收入、利润、人效",
+});
+
 describe("S1-01 strategy content", () => {
-  it("passes a complete strategy house even when the six-part table is empty", () => {
-    const issues = validateArtifact("S1-01", fullHouse());
-    expect(hasBlockingIssues(issues)).toBe(false);
-    expect(issues.some((i) => i.level === "warning" && i.message.includes("六分法"))).toBe(true);
-  });
-
-  it("blocks a house with a pending cell", () => {
-    const content = fullHouse();
-    content.foundation.mechanism = "待补";
-    const issues = validateArtifact("S1-01", content);
-    expect(issues).toContainEqual(expect.objectContaining({ level: "error", anchor: "foundation.mechanism" }));
-  });
-
-  it("requires all six aspects when the six-part table is primary", () => {
-    const content = { ...fullHouse(), primary: "sixfold" as const, strategicGoals: "2030 年营收 30 亿" };
+  it("blocks a complete strategy house while the six-part table is missing aspects (六分法 is P0)", () => {
+    const content = { ...fullHouse(), strategicGoals: "2030 年营收 30 亿" };
     const errors = validateArtifact("S1-01", content).filter((i) => i.level === "error");
     expect(errors.map((e) => e.anchor)).toEqual(["strategyChoice", "stepsAndMeasures", "indicatorSystem"]);
+  });
+
+  it("counts “待补” as missing in the six-part table", () => {
+    const content = { ...fullSixfold(), indicatorSystem: "待补" };
+    expect(validateArtifact("S1-01", content)).toContainEqual(expect.objectContaining({ level: "error", anchor: "indicatorSystem" }));
+  });
+
+  it("only warns about a half-filled strategy house (P1)", () => {
+    const content = { ...fullSixfold(), values: "客户第一" };
+    const issues = validateArtifact("S1-01", content);
+    expect(hasBlockingIssues(issues)).toBe(false);
+    expect(issues.some((i) => i.level === "warning" && i.message.includes("战略屋"))).toBe(true);
+    expect(validateArtifact("S1-01", fullSixfold())).toEqual([]);
   });
 });
 

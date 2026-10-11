@@ -120,8 +120,10 @@ export function seedStrategyMap(content: StrategyContent): StrategyMap {
   const add = (perspective: Perspective, title: string, note = '') => {
     if (filled(title)) objectives.push({ id: newRowId('o'), perspective, title: title.trim(), note });
   };
-  if (content.primary === 'house') {
-    add('financial', content.goals?.y3 ?? '', '三年经营目标');
+  // 六分法 is always there; a filled-in strategy house adds its battlefields and foundation.
+  if (filled(content.strategicGoals)) add('financial', content.strategicGoals, '战略目标');
+  else add('financial', content.goals?.y3 ?? '', '三年经营目标');
+  if ((content.battlefields ?? []).some((b) => filled(b.name))) {
     for (const b of content.battlefields ?? []) {
       add('customer', b.name, '主要战场');
       add('process', b.advantage, `如何致胜 · ${b.name}`);
@@ -129,7 +131,6 @@ export function seedStrategyMap(content: StrategyContent): StrategyMap {
     add('learning', content.foundation?.talent ?? '', '落地保障 · 人才');
     add('learning', content.foundation?.organization ?? '', '落地保障 · 组织');
   } else {
-    add('financial', content.strategicGoals, '战略目标');
     add('customer', content.strategyChoice, '策略选择');
     add('process', content.stepsAndMeasures, '步骤举措');
   }
@@ -186,12 +187,10 @@ export function validateStrategyLogic(logic: StrategyLogic): Issue[] {
   return issues;
 }
 
-/** One strategy per battlefield (house) or the sixfold strategy choice, each with an empty tactic. */
+/** One strategy per line of the sixfold strategy choice (or per battlefield when the house has them), each with an empty tactic. */
 export function seedStrategyLogic(content: StrategyContent): StrategyLogic {
-  const statements =
-    content.primary === 'house'
-      ? (content.battlefields ?? []).map((b) => b.name)
-      : (content.strategyChoice ?? '').split(/[\n；;]+/);
+  const battlefields = (content.battlefields ?? []).map((b) => b.name).filter(filled);
+  const statements = battlefields.length ? battlefields : (content.strategyChoice ?? '').split(/[\n；;]+/);
   return {
     strategies: statements
       .map((s) => s.trim())

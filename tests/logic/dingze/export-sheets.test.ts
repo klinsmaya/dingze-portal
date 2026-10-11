@@ -36,8 +36,9 @@ describe("artifact export sheets", () => {
     expect(sheet.rows[0]).toEqual(["", "售气量", "万方", 1100, "待补", "", "≥1600", 1250]);
   });
 
-  it("puts the primary expression first for S1-01", () => {
-    expect(artifactSheets("S1-01", emptyStrategyContent("sixfold")).map((s) => s.name)).toEqual(["战略简约六分法", "战略屋"]);
+  it("exports 六分法 for S1-01, and the house only when it was filled in", () => {
+    expect(artifactSheets("S1-01", emptyStrategyContent("house")).map((s) => s.name)).toEqual(["战略简约六分法"]);
+    expect(artifactSheets("S1-01", { ...emptyStrategyContent("sixfold"), values: "客户第一" }).map((s) => s.name)).toEqual(["战略简约六分法", "战略屋"]);
   });
 
   it("has nothing to export for unknown codes or empty payloads", () => {

@@ -65,7 +65,6 @@ export default defineTools({
           task: def.task,
           step: def.step,
           bookRef: def.bookRef,
-          projectPrimaryExpression: pc.project.get('primaryExpression'),
           status: row ? STATUS_LABELS[row.get('status') as keyof typeof STATUS_LABELS] : '未开始',
           rev: row?.get('currentRev') ?? 0,
           payload,

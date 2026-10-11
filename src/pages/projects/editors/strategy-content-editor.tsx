@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 
 import {
   SIXFOLD_FIELDS,
+  houseStarted,
   type Battlefield,
   type Issue,
   type StrategyContent,
@@ -39,7 +40,6 @@ type EditorProps = {
   onChange: (next: StrategyContent) => void;
   readOnly: boolean;
   issues: Issue[];
-  canChangePrimary: boolean;
 };
 
 function issueFor(issues: Issue[], anchor: string) {
@@ -244,14 +244,15 @@ function SixfoldView({ value, onChange, readOnly, issues }: EditorProps) {
 }
 
 export function StrategyContentEditor(props: EditorProps) {
-  const { value, onChange, readOnly, canChangePrimary } = props;
-  const [view, setView] = useState<StrategyExpression>(value.primary);
+  const { value } = props;
+  // 六分法 is the P0 table; the strategy house is an optional (P1) expression of the same data.
+  const [view, setView] = useState<StrategyExpression>("sixfold");
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="表达方式" className="flex overflow-hidden rounded-lg border">
-          {(["house", "sixfold"] as const).map((key) => (
+          {(["sixfold", "house"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -263,17 +264,15 @@ export function StrategyContentEditor(props: EditorProps) {
                 view === key ? "bg-brand font-bold text-brand-foreground" : "bg-card text-muted-foreground hover:text-foreground"
               )}
             >
-              {key === "house" ? "战略屋" : "六分法"}
-              {value.primary === key ? <span className="ml-1 text-xs opacity-80">（主表达）</span> : null}
+              {key === "house" ? "战略屋" : "战略简约六分法"}
+              <span className="ml-1 text-xs opacity-80">{key === "house" ? "（可选）" : "（必做）"}</span>
             </button>
           ))}
         </div>
-        {canChangePrimary && !readOnly && value.primary !== view ? (
-          <Button variant="outline" size="sm" onClick={() => onChange({ ...value, primary: view })}>
-            设为主表达
-          </Button>
-        ) : null}
-        <span className="text-xs text-muted-foreground">主表达填齐才能“本步完成”，另一种可选。</span>
+        <span className="text-xs text-muted-foreground">
+          六个方面全部填齐（写“待补”不算）才能“本步完成”；战略屋是可选的另一种表达，使命、愿景两处共用。
+          {houseStarted(value) ? "" : " 战略屋尚未填写。"}
+        </span>
       </div>
 
       {view === "house" ? <HouseView {...props} /> : <SixfoldView {...props} />}

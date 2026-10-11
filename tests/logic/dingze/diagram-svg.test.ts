@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyStrategyContent } from "@dingze/shared";
 
-import { escapeXml, strategyContentSvg, strategyHouseSvg, strategyMapSvg, wrapText } from "@/lib/dingze/diagram-svg";
+import { artifactDiagrams, escapeXml, strategyHouseSvg, strategyMapSvg, wrapText } from "@/lib/dingze/diagram-svg";
 
 describe("diagram text wrapping", () => {
   it("fits CJK text by width and marks a cut with an ellipsis", () => {
@@ -44,10 +44,13 @@ describe("strategy diagrams", () => {
     expect(d.height).toBeGreaterThan(400);
   });
 
-  it("follows the chosen expression", () => {
-    const six = strategyContentSvg({ ...emptyStrategyContent("sixfold"), strategyChoice: "一个核心＋三大业务" });
-    expect(six.svg).toContain("战略简约六分法表");
-    expect(six.svg).toContain("一个核心＋三大业务");
+  it("always draws 六分法 for S1-01 and adds the house only when it was filled in", () => {
+    const six = artifactDiagrams("S1-01", { ...emptyStrategyContent("house"), strategyChoice: "一个核心＋三大业务" });
+    expect(six.map((d) => d.key)).toEqual(["sixfold"]);
+    expect(six[0].diagram.svg).toContain("战略简约六分法表");
+    expect(six[0].diagram.svg).toContain("一个核心＋三大业务");
+    expect(artifactDiagrams("S1-01", house).map((d) => d.key)).toEqual(["sixfold", "house"]);
+    expect(artifactDiagrams("S1-03", house)).toEqual([]);
   });
 
   it("draws the map with lanes, objectives, cause arrows and synergy lines", () => {

@@ -34,7 +34,7 @@ export const EDITABLE_CODES = new Set([
 export function emptyPayload(code: string, project: { primaryExpression: "house" | "sixfold"; year: number; scheduleScale?: "month" | "quarter" }): unknown {
   switch (code) {
     case "S1-01":
-      return emptyStrategyContent(project.primaryExpression);
+      return emptyStrategyContent("sixfold");
     case "M-MISSION":
       return emptyMissionWorksheet();
     case "M-VISION":

@@ -17,11 +17,12 @@ import {
   type StrategyKpiTable,
   type StrategyMap,
   currentYearTargets,
+  houseStarted,
   orderedPaths,
   priorityScore,
 } from "@dingze/shared";
 
-import { type SvgDiagram, strategyContentSvg, strategyMapSvg } from "./diagram-svg";
+import { type SvgDiagram, sixfoldSvg, strategyHouseSvg, strategyMapSvg } from "./diagram-svg";
 
 // A plan book as plain blocks: entered chapters come from the payload, same-source chapters
 // are assembled from upstream tables. The workspace preview and the Word export share it,
@@ -134,18 +135,16 @@ function charterAppendix(c: ProjectCharter): Block[] {
 }
 
 /** S3-07: the company plan book. */
-/** The strategy house (or 六分法) and the strategy map, when those tables have content. */
+/** 六分法 (and the strategy house when it was filled in) and the strategy map. */
 function strategyFigures(u: PlanBookUpstream): Block[] {
-  const figures: Block[] = [];
+  const figures: { caption: string; diagram: SvgDiagram }[] = [];
   const content = u["S1-01"];
   if (content) {
-    const house = content.primary !== "sixfold";
-    figures.push({ kind: "figure", caption: `图 1-1 ${house ? "战略屋" : "战略简约六分法表"}（S1-01）`, diagram: strategyContentSvg(content) });
+    figures.push({ caption: "战略简约六分法表（S1-01）", diagram: sixfoldSvg(content) });
+    if (houseStarted(content)) figures.push({ caption: "战略屋（S1-01）", diagram: strategyHouseSvg(content) });
   }
-  if (u["S1-02"]?.objectives?.length) {
-    figures.push({ kind: "figure", caption: `图 1-${figures.length + 1} 战略地图（S1-02）`, diagram: strategyMapSvg(u["S1-02"]) });
-  }
-  return figures;
+  if (u["S1-02"]?.objectives?.length) figures.push({ caption: "战略地图（S1-02）", diagram: strategyMapSvg(u["S1-02"]) });
+  return figures.map((f, i) => ({ kind: "figure", caption: `图 1-${i + 1} ${f.caption}`, diagram: f.diagram }));
 }
 
 export function buildCompanyPlanBook(params: {

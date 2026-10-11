@@ -532,7 +532,6 @@ function Workspace({ code }: { code: string }) {
                   issues={issues}
                   upstream={upstream}
                   projectYear={project.year}
-                  canChangePrimary={role === "ent_lead" || role === "lead_consultant"}
                   keyProjectLevel={project.keyProjectLevel}
                   orgUnits={overview.orgUnits ?? []}
                   team={overview.team ?? []}

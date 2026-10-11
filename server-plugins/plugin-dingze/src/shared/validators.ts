@@ -151,13 +151,23 @@ export function validateHouse(content: StrategyContent): Issue[] {
   return issues;
 }
 
-/** Only the primary expression gates “本步完成”; the other one is reported as warnings. */
+/** Whether any field that only the house has (价值观, goals, battlefields, foundation) is filled. */
+export function houseStarted(content: StrategyContent): boolean {
+  return (
+    filled(content.values) ||
+    Object.values(content.goals ?? {}).some(filled) ||
+    (content.battlefields ?? []).some((b) => filled(b.name) || filled(b.advantage) || filled(b.mustWin)) ||
+    Object.values(content.foundation ?? {}).some(filled)
+  );
+}
+
+/**
+ * Spec 二(六)2 and Q14: the six aspects of 战略简约六分法 are P0 and must all be filled before
+ * “本步完成”; the strategy house is a P1 expression, so a started house only produces warnings.
+ */
 export function validateStrategyContent(content: StrategyContent): Issue[] {
-  const [primary, secondary] =
-    content.primary === 'house'
-      ? [validateHouse(content), validateSixfold(content)]
-      : [validateSixfold(content), validateHouse(content)];
-  return [...primary, ...secondary.map((i) => ({ ...i, level: 'warning' as const }))];
+  const house = houseStarted(content) ? validateHouse(content).map((i) => ({ ...i, level: 'warning' as const })) : [];
+  return [...validateSixfold(content), ...house];
 }
 
 // ── 路径系统表（S2-03 / S2-06）──

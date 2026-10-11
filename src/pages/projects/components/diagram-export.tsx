@@ -7,7 +7,7 @@ import { STATUS_LABELS, type ArtifactStatus } from "@dingze/shared";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { downloadDiagram } from "@/lib/dingze/diagram-image";
-import { artifactDiagram } from "@/lib/dingze/diagram-svg";
+import { artifactDiagrams } from "@/lib/dingze/diagram-svg";
 import { errorMessage } from "@/lib/dingze/errors";
 import type { ExportInfo } from "@/lib/dingze/records-api";
 
@@ -32,15 +32,16 @@ export function DiagramExportButton({
   onExported?: (info: ExportInfo) => void;
 }) {
   const [pending, setPending] = useState(false);
-  if (rev === 0 || !artifactDiagram(code, payload)) return null;
+  const available = artifactDiagrams(code, payload);
+  if (rev === 0 || available.length === 0) return null;
   const draft = status !== "locked";
 
-  const run = async (format: "svg" | "png") => {
+  const run = async (key: string, format: "svg" | "png") => {
     setPending(true);
     try {
       const subtitle = `${enterprise} · ${STATUS_LABELS[status]} v${rev}${draft ? " · 草稿（未定版，仅供讨论）" : ""}`;
-      const diagram = artifactDiagram(code, payload, subtitle)!;
-      const baseName = `${enterprise}-${code}-${name}-v${rev}`.replace(/[\\/:*?"<>|]/g, "_");
+      const { label, diagram } = artifactDiagrams(code, payload, subtitle).find((d) => d.key === key)!;
+      const baseName = `${enterprise}-${code}-${available.length > 1 ? label : name}-v${rev}`.replace(/[\\/:*?"<>|]/g, "_");
       await downloadDiagram(diagram, baseName, format);
       onExported?.({ code, rev, format, fileName: `${baseName}.${format}`, draft });
       if (dirty) toast.info("已导出最近一次保存的版本，未保存的修改不在图片里");
@@ -60,9 +61,15 @@ export function DiagramExportButton({
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuItem onClick={() => run("png")}>PNG 图片（汇报、文档）</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run("svg")}>SVG 矢量图（可再编辑）</DropdownMenuItem>
+      <DropdownMenuContent align="end" className="min-w-52">
+        {available.flatMap((d) =>
+          (["png", "svg"] as const).map((format) => (
+            <DropdownMenuItem key={`${d.key}-${format}`} onClick={() => run(d.key, format)}>
+              {available.length > 1 ? `${d.label} · ` : ""}
+              {format === "png" ? "PNG 图片（汇报、文档）" : "SVG 矢量图（可再编辑）"}
+            </DropdownMenuItem>
+          ))
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

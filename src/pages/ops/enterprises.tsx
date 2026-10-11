@@ -219,7 +219,7 @@ function ProvisionDialog({
             </div>
             <FieldSet>
               <FieldLegend variant="label">企业规模</FieldLegend>
-              <FieldDescription>决定新项目默认的战略主表达：中小企业用战略屋，大型企业用六分法。</FieldDescription>
+              <FieldDescription>用于分类统计；所有项目都以战略简约六分法为必做表，战略屋为可选表达。</FieldDescription>
               <RadioGroup value={size} onValueChange={(v) => setSize(v as "sme" | "large")} className="flex gap-6">
                 <label className="flex items-center gap-2 text-sm">
                   <RadioGroupItem value="sme" /> 中小企业

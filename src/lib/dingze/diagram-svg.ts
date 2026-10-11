@@ -1,4 +1,4 @@
-import { SIXFOLD_FIELDS, type StrategyContent, type StrategyMap } from "@dingze/shared";
+import { SIXFOLD_FIELDS, houseStarted, type StrategyContent, type StrategyMap } from "@dingze/shared";
 
 import { LANE_HEIGHT, LANE_LABEL_WIDTH, layoutStrategyMap, linkLines } from "./map-layout";
 
@@ -186,11 +186,6 @@ export function sixfoldSvg(content: StrategyContent, subtitle?: string): SvgDiag
   return wrap(WIDTH, y + margin, body, "战略简约六分法表");
 }
 
-/** S1-01 in the project's chosen expression. */
-export function strategyContentSvg(content: StrategyContent, subtitle?: string): SvgDiagram {
-  return content.primary === "sixfold" ? sixfoldSvg(content, subtitle) : strategyHouseSvg(content, subtitle);
-}
-
 /** 战略地图: four perspective lanes, objectives as boxes, cause arrows and synergy dashes. */
 export function strategyMapSvg(map: StrategyMap, subtitle?: string, title = "战略地图"): SvgDiagram {
   const head = header(title, subtitle);
@@ -228,10 +223,16 @@ export function strategyMapSvg(map: StrategyMap, subtitle?: string, title = "战
   return wrap(WIDTH, legendY + 20, body, title);
 }
 
-/** The diagram of an artifact that has one: S1-01 (战略屋 / 六分法) and S1-02 (战略地图). */
-export function artifactDiagram(code: string, payload: unknown, subtitle?: string): SvgDiagram | null {
-  if (!payload || typeof payload !== "object") return null;
-  if (code === "S1-01") return strategyContentSvg(payload as StrategyContent, subtitle);
-  if (code === "S1-02") return strategyMapSvg(payload as StrategyMap, subtitle);
-  return null;
+/** The diagrams of an artifact: S1-01 六分法 (plus the strategy house when filled in), S1-02 战略地图. */
+export function artifactDiagrams(code: string, payload: unknown, subtitle?: string): { key: string; label: string; diagram: SvgDiagram }[] {
+  if (!payload || typeof payload !== "object") return [];
+  if (code === "S1-01") {
+    const content = payload as StrategyContent;
+    return [
+      { key: "sixfold", label: "战略简约六分法表", diagram: sixfoldSvg(content, subtitle) },
+      ...(houseStarted(content) ? [{ key: "house", label: "战略屋", diagram: strategyHouseSvg(content, subtitle) }] : []),
+    ];
+  }
+  if (code === "S1-02") return [{ key: "map", label: "战略地图", diagram: strategyMapSvg(payload as StrategyMap, subtitle) }];
+  return [];
 }

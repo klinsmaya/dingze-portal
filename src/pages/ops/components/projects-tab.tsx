@@ -28,7 +28,7 @@ import { useOpsMutation } from "@/lib/dingze/ops-queries";
 import { flattenOrgUnits, orgUnitPath } from "@/lib/dingze/org-units";
 import { type MemberRow, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
 
-import { EXPRESSION_LABELS, SCENE_LABELS, SCHEDULE_LABELS } from "./labels";
+import { SCENE_LABELS, SCHEDULE_LABELS } from "./labels";
 
 type ProjectWithMembers = EnterpriseDetail["projects"][number];
 
@@ -63,7 +63,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
           <Card key={project.id}>
             <CardHeader>
               <CardDescription>
-                {project.year} 年度 · {SCENE_LABELS[project.scene]} · 主表达 {EXPRESSION_LABELS[project.primaryExpression]} ·
+                {project.year} 年度 · {SCENE_LABELS[project.scene]} ·
                 重点工作 {project.keyProjectLevel} 级 · 计划{SCHEDULE_LABELS[project.scheduleScale]}
               </CardDescription>
               <CardTitle className="flex items-center gap-2 text-lg text-brand">
@@ -109,14 +109,14 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
 
 type ProjectDraft = Pick<OpsProject, "name" | "year" | "scene" | "primaryExpression" | "keyProjectLevel" | "scheduleScale" | "status">;
 
-function draftFor(target: ProjectWithMembers | "new", detail: EnterpriseDetail): ProjectDraft {
+function draftFor(target: ProjectWithMembers | "new"): ProjectDraft {
   if (target !== "new") return target;
   const year = new Date().getFullYear();
   return {
     name: `${year} 年度战略落地`,
     year,
     scene: "camp",
-    primaryExpression: detail.enterprise.size === "large" ? "sixfold" : "house",
+    primaryExpression: "sixfold",
     keyProjectLevel: 2,
     scheduleScale: "month",
     status: "active",
@@ -136,7 +136,7 @@ function ProjectDialog({
   const [shown, setShown] = useState<typeof target>(null);
   if (target !== shown) {
     setShown(target);
-    setDraft(target ? draftFor(target, detail) : null);
+    setDraft(target ? draftFor(target) : null);
   }
   const create = useOpsMutation(opsApi.createProject);
   const update = useOpsMutation(opsApi.updateProject);
@@ -189,13 +189,6 @@ function ProjectDialog({
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <SelectField id="project-scene" label="场景" value={draft.scene} options={SCENE_LABELS} onChange={(v) => set("scene", v)} />
-                <SelectField
-                  id="project-expression"
-                  label="战略主表达"
-                  value={draft.primaryExpression}
-                  options={EXPRESSION_LABELS}
-                  onChange={(v) => set("primaryExpression", v)}
-                />
                 <SelectField
                   id="project-level"
                   label="重点工作层级"

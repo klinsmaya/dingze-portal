@@ -58,7 +58,6 @@ type Props = {
   /** Upstream payloads by code (current versions). */
   upstream: Record<string, unknown>;
   projectYear: number;
-  canChangePrimary: boolean;
   keyProjectLevel: 1 | 2;
   orgUnits: ProjectOrgUnit[];
   team: ProjectTeamMember[];
@@ -75,7 +74,6 @@ export function ArtifactEditor({
   issues,
   upstream,
   projectYear,
-  canChangePrimary,
   keyProjectLevel,
   orgUnits,
   team,
@@ -86,7 +84,7 @@ export function ArtifactEditor({
   const common = { readOnly, issues, onChange };
   switch (code) {
     case "S1-01":
-      return <StrategyContentEditor {...common} value={value as StrategyContent} canChangePrimary={canChangePrimary} />;
+      return <StrategyContentEditor {...common} value={value as StrategyContent} />;
     case "M-MISSION":
       return <MissionWorksheetEditor {...common} value={value as MissionWorksheet} />;
     case "M-VISION":

@@ -1,14 +1,16 @@
-import { artifactDiagram } from "@/lib/dingze/diagram-svg";
+import { artifactDiagrams } from "@/lib/dingze/diagram-svg";
 import { artifactSheets } from "@/lib/dingze/export/sheets";
 
 /** A cited locked table, laid out as its export sheets (read-only). */
 export function CitationTables({ code, payload, upstream }: { code: string; payload: unknown; upstream: Record<string, unknown> }) {
   const sheets = artifactSheets(code, payload, upstream);
-  const diagram = artifactDiagram(code, payload);
+  const diagrams = artifactDiagrams(code, payload);
   if (!sheets.length) return <p className="text-sm text-muted-foreground">这张表没有可显示的内容。</p>;
   return (
     <div className="flex flex-col gap-4">
-      {diagram ? <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(diagram.svg)}`} alt={`${code} 图`} className="w-full max-w-3xl self-center rounded-lg border bg-white" /> : null}
+      {diagrams.map((d) => (
+        <img key={d.key} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(d.diagram.svg)}`} alt={`${code} ${d.label}`} className="w-full max-w-3xl self-center rounded-lg border bg-white" />
+      ))}
       {sheets.map((sheet) => (
         <div key={sheet.name} className="flex flex-col gap-1">
           {sheets.length > 1 ? <div className="text-xs font-semibold text-muted-foreground">{sheet.name}</div> : null}

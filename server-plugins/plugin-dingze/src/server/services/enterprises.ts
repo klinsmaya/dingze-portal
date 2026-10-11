@@ -108,7 +108,6 @@ export async function createProject(ctx: Context, input: ProjectInput) {
   const spaceName = enterprise.get('spaceName') as string;
   if (!(await userSpaceNames(ctx)).includes(spaceName)) throw new HttpError(404, '企业不存在');
   const list = members(input.members);
-  const defaultExpression = enterprise.get('size') === 'large' ? 'sixfold' : 'house';
 
   return ctx.db.sequelize.transaction(async (transaction: any) => {
     const project = await ctx.db.getRepository('dz_projects').create({
@@ -117,7 +116,8 @@ export async function createProject(ctx: Context, input: ProjectInput) {
         name: text(input.name, '项目名称'),
         year: input.year ? Number(input.year) : new Date().getFullYear(),
         scene: input.scene === 'inhouse' ? 'inhouse' : 'camp',
-        primaryExpression: input.primaryExpression ?? defaultExpression,
+        // 六分法 is required for every project (spec Q14); the house is optional inside S1-01.
+        primaryExpression: 'sixfold',
         keyProjectLevel: input.keyProjectLevel === 1 ? 1 : 2,
         scheduleScale: input.scheduleScale === 'quarter' ? 'quarter' : 'month',
         spaceName,

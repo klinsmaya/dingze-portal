@@ -12,7 +12,7 @@ export default defineCollection({
     { type: 'string', name: 'name', allowNull: false },
     { type: 'integer', name: 'year' },
     { type: 'string', name: 'scene', defaultValue: 'camp' },
-    { type: 'string', name: 'primaryExpression', defaultValue: 'house' },
+    { type: 'string', name: 'primaryExpression', defaultValue: 'sixfold' },
     { type: 'integer', name: 'keyProjectLevel', defaultValue: 2 },
     { type: 'string', name: 'scheduleScale', defaultValue: 'month' },
     { type: 'string', name: 'status', defaultValue: 'active' },

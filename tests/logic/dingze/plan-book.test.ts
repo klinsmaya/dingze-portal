@@ -60,7 +60,7 @@ describe("plan books", () => {
       },
     });
     const figures = book.chapters[0].blocks.filter((b) => b.kind === "figure");
-    expect(figures.map((f) => f.kind === "figure" && f.caption)).toEqual(["图 1-1 战略屋（S1-01）", "图 1-2 战略地图（S1-02）"]);
+    expect(figures.map((f) => f.kind === "figure" && f.caption)).toEqual(["图 1-1 战略简约六分法表（S1-01）", "图 1-2 战略地图（S1-02）"]);
     expect(figures[0].kind === "figure" && figures[0].diagram.svg).toContain("让能源更清洁");
     expect(book.chapters[0].blocks.findIndex((b) => b.kind === "figure")).toBeLessThan(book.chapters[0].blocks.findIndex((b) => b.kind === "heading" && b.text.startsWith("1.2")));
   });
