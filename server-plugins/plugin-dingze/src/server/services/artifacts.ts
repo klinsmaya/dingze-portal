@@ -13,7 +13,7 @@ import {
   hasBlockingIssues,
   isArtifactCode,
   nextStatus,
-  requiresValidation,
+  validationApplies,
   staleTargets,
   unlockInfo,
   validateArtifact,
@@ -290,7 +290,7 @@ export async function transitionArtifact(
       const unlock = unlockInfo(def, states);
       if (!unlock.unlocked && !artifact.get('exception')) throw new HttpError(409, unlock.waitingFor ?? '这一步尚未解锁', 'LOCKED_STEP');
     }
-    if (requiresValidation(action) && !artifact.get('exception')) {
+    if (validationApplies(action, !!artifact.get('exception'))) {
       const upstream = await upstreamPayloads(ctx, projectId, def, transaction);
       const issues = validateArtifact(def.code, artifact.get('currentVersion')?.get('payload'), upstream);
       if (hasBlockingIssues(issues)) {

@@ -6,6 +6,7 @@ import {
   type ArtifactStatus,
   type LifecycleAction,
   canPerform,
+  validationApplies,
 } from "@dingze/shared";
 
 import { Button } from "@/components/ui/button";
@@ -91,10 +92,10 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
   return (
     <div className="flex flex-wrap gap-2">
       {visible.map((spec) => {
-        const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "confirm";
+        const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "confirm" || spec.action === "forceLock";
         const disabledReason = dirty && needsCleanDraft
           ? "请先保存修改"
-          : blocking > 0 && needsCleanDraft
+          : blocking > 0 && needsCleanDraft && validationApplies(spec.action, !!detail.artifact?.exception)
             ? `还有 ${blocking} 处未通过校验`
             : undefined;
         return (

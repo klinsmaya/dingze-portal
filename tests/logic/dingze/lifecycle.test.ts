@@ -146,3 +146,15 @@ describe("附录 B numbering", () => {
     expect(tables.every((a) => a.code === a.specId)).toBe(true);
   });
 });
+
+describe("step exceptions", () => {
+  it("let an incomplete table move on but never skip the checks at review or 定版", async () => {
+    const { validationApplies } = await import("@dingze/shared");
+    expect(validationApplies("stepDone", true)).toBe(false);
+    expect(validationApplies("stepDone", false)).toBe(true);
+    expect(validationApplies("approve", true)).toBe(true);
+    expect(validationApplies("confirm", true)).toBe(true);
+    expect(validationApplies("forceLock", true)).toBe(true);
+    expect(validationApplies("save", false)).toBe(false);
+  });
+});

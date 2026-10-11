@@ -97,9 +97,10 @@ const RULES: Record<LifecycleAction, TransitionRule> = {
   returnToEdit: { from: ['in_review', 'pending_confirm'], to: 'in_progress', roles: ['lead_consultant', 'ent_lead'], requiresReason: true },
   confirm: { from: ['pending_confirm'], to: 'locked', roles: ['ent_lead'], validates: true },
   reopen: { from: ['locked'], to: 'in_progress', roles: ['lead_consultant'], consultAdmin: true, requiresReason: true },
+  // 强制定版 skips review and enterprise confirmation, never the content checks (定版门禁).
   forceLock: {
     from: ['in_progress', 'step_done', 'in_review', 'pending_confirm'],
-    to: 'locked', roles: [], consultAdmin: true, requiresReason: true,
+    to: 'locked', roles: [], consultAdmin: true, requiresReason: true, validates: true,
   },
   forceReturn: {
     from: ['step_done', 'in_review', 'pending_confirm', 'locked'],
@@ -153,6 +154,15 @@ export function nextStatus(
 
 export function requiresValidation(action: LifecycleAction): boolean {
   return RULES[action].validates === true;
+}
+
+/**
+ * Whether the blocking checks apply. A step exception (spec 二(十三)4: 咨询师确认并记录原因)
+ * only lets an incomplete table move on to the next one; review and 定版 always check.
+ */
+export function validationApplies(action: LifecycleAction, exception: boolean): boolean {
+  if (!requiresValidation(action)) return false;
+  return !(exception && action === 'stepDone');
 }
 
 // ── Unlocking ──
