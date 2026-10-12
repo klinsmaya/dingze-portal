@@ -108,7 +108,12 @@
 - **编辑会话**：`EditSessionContext`（`pages/projects/components/edit-session.tsx`）把草稿、修改记录、当前批注、修订状态、圈选、修改卡预览共享给右栏三页签、修改卡和画布标记，编辑器本身不需要知道。
 - **画布标记**：`edit-markers.tsx` 按 `data-anchor` 找到格子 / 行 / 节点，用 `data-dz-mark` 叠加青色（改过 / 修订）、绿色（新增）、紫色（批注）、琥珀虚线（修改卡预览）、紫框（圈选）；批注编号钉是主区上的绝对定位层。没有锚点的普通字段在第一次被编辑时由工作区补上锚点。
 - **调结构**：`src/lib/dingze/tree-ops.ts` 对“扁平树”（`id / parentId / level`，一级挂在目标上）做新增、升降级、上下移、移动到、拆分、合并、删除，纯函数、可单测；`editors/tree-editor.tsx` 提供节点工具条、行菜单、“移动到…”预览对话框和可编辑思维导图（`role=tree`，拖动有放置提示），路径（S2-03 / S2-06）、解码地图（S2-01，四个层面作为根）和 WBS（S3-02）共用。
-- **修订**：取任意历史版本（`versionPayload`）和当前草稿做差异，标在画布上，删除项列在开关下方。
+- **修订**：取任意历史版本（`versionPayload`）和当前草稿做差异，标在画布上，删除项列在开关下方。会话的 `revisionCell(key)` 给出某一格的原值和修改人（取对比版本之后各版本保存的命令和本次未保存的命令），`GridCell` 据此显示“原值删除线 → 新值 · 修改人”；路径表把对比版本里有、当前没有的行画成可恢复的留痕行。
+- **工作台外壳**（`project-layout.tsx` + `workspace.tsx`）：整屏固定，顶栏通过插槽（`topbar.main / actions`）放当前步骤与子步骤；`src/lib/dingze/route.ts` 把阶段 → 工作任务 → 实施步骤 → 子步骤建成一张路线，左栏（`route-rail.tsx`）和顶栏共用；子步骤和区块写在网址里（`?sub=`、`?zone=`、`?field=`）。
+- **表头由编辑器发布**：编辑器调用 `useEditorChrome({ title, chip, views, variants, tools, zoom, summary, checks, extra })`，工作区把它画成表头三行和状态条（`workspace-chrome.tsx`、`status-bar.tsx`）；同一套工具条作用于导图选中的节点或表格聚焦的行。`checks(payload)` 让修改卡在确认前算出合计核对。
+- **导图**：`TreeMindMap` 支持根 → 层面（`layers`，带放置目标与字段补丁）→ 节点，合计胶囊（`rollUp`）、虚线占位、同级之间的插入位（`MoveTarget.before`）、“松开后会这样”预览和联动调整（`dropAdjust`）、小地图。
+- **修改卡**：`dingzeProposeChanges` 的每条修改可带 `op`（`set` / `remove` / `split` / `move`，见 `src/lib/dingze/changes.ts`；拆分出的条目 id 由原 id 派生，预览和确认后一致；路径的 `value` 与 `amount` 自动同步）。卡片在用户发消息后 5 分钟内出现即视为新到，工作区切到预览：编辑器渲染预览草稿（只读），`EditMarkers` 和琥珀色序号钉标出对应条目。
+- **批注**：就地输入框（`comment-composer.tsx`，右键菜单、Ctrl + Alt + M、圈选条）和 @ 输入（`mention-input.tsx`）；@数字咨询师 不作为提醒发出，而是把批注带到对话请它出修改建议。
 
 ## 9. 导出
 
