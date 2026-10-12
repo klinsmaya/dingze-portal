@@ -55,6 +55,7 @@ import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, TitleRow, 
 import { ValidationBar } from "./components/validation-bar";
 import { BookMethod } from "./components/book-method";
 import { ChangesPanel } from "./components/changes-panel";
+import { AnchorMenu, type CommentDraft, CommentComposer, LassoBar, LassoOutlines } from "./components/comment-composer";
 import { CommentsPanel, circled } from "./components/comments-panel";
 import { CommentPins, EditMarkers } from "./components/edit-markers";
 import { type EditSession, EditSessionContext, type EditorChrome, type RevisionState, pathNamer } from "./components/edit-session";
@@ -269,7 +270,7 @@ function Workspace({ code }: { code: string }) {
   const saveShortcut = useRef(onSave);
   saveShortcut.current = onSave;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [composeSignal, setComposeSignal] = useState(0);
+  const lastAnchor = useRef<string | null>(null);
   const revisionToggle = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -289,8 +290,8 @@ function Workspace({ code }: { code: string }) {
       }
       if (event.altKey && (key === "m" || event.code === "KeyM")) {
         event.preventDefault();
-        setAsideTab("comments");
-        setComposeSignal((n) => n + 1);
+        const at = chromeRef.current?.tools?.selected ?? lastAnchor.current;
+        openComposer.current(at ? [at] : []);
         return;
       }
       if (key === "s") {
@@ -323,6 +324,12 @@ function Workspace({ code }: { code: string }) {
   const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
+  // 就地批注 (design 10 画面 5): the composer at the cell / node, its draft listed in the 批注 tab.
+  const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
+  const [anchorMenu, setAnchorMenu] = useState<{ x: number; y: number; anchor: string } | null>(null);
+  const [justAdded, setJustAdded] = useState<number | null>(null);
+  const canComment = overview.isConsultAdmin || !!role;
+  const openComposer = useRef<(anchors: string[]) => void>(() => {});
   const compareWith = useCallback(
     async (rev: number | null, on: boolean) => {
       const target = rev ?? versions[1]?.rev ?? versions[0]?.rev ?? null;
@@ -377,8 +384,7 @@ function Workspace({ code }: { code: string }) {
       },
       commentOn: (anchor: string) => {
         if (anchor) setFocusAnchor(anchor);
-        setAsideTab("comments");
-        setComposeSignal((n) => n + 1);
+        openComposer.current(anchor ? [anchor] : []);
       },
       chrome: chromeRef,
       publishChrome: setChromeSig,
@@ -397,6 +403,12 @@ function Workspace({ code }: { code: string }) {
       before,
     };
   }, [revision, draft, edit.log]);
+  lastAnchor.current = focusAnchor;
+  openComposer.current = (anchors: string[]) => {
+    if (!canComment) return void toast.info("你在这个项目里不能批注");
+    const label = anchors.length > 1 ? `圈选 ${anchors.length} 处 · ${anchors.map((a) => nameOf(a)).join("、")}` : anchors.length ? nameOf(anchors[0]) || "这一处" : "整张表";
+    setCommentDraft((d) => (d && d.anchors.join("|") === anchors.join("|") ? d : { anchors, label, text: "" }));
+  };
   const allThreads = useMemo(() => [...(comments.data ?? [])].sort((a, b) => a.id - b.id), [comments.data]);
   const numberOf = useCallback((id: number) => {
     const i = allThreads.findIndex((t) => t.id === id);
@@ -744,6 +756,12 @@ function Workspace({ code }: { code: string }) {
               const anchor = target.closest?.("[data-anchor]")?.getAttribute("data-anchor");
               if (anchor) setFocusAnchor(anchor);
             }}
+            onContextMenu={(event) => {
+              const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
+              if (!anchor || !canComment || (event.target as HTMLElement).closest("input, textarea")) return;
+              event.preventDefault();
+              setAnchorMenu({ x: event.clientX, y: event.clientY, anchor });
+            }}
             onClickCapture={(event) => {
               if (!selecting) return;
               const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
@@ -762,6 +780,58 @@ function Workspace({ code }: { code: string }) {
               preview={previewAnchors}
               selection={selection}
             />
+            {selecting ? (
+              <LassoBar
+                count={selection.length}
+                onWrite={() => openComposer.current(selection)}
+                onCancel={() => {
+                  session.clearSelection();
+                  session.setSelecting(false);
+                }}
+              />
+            ) : null}
+            <LassoOutlines
+              groups={pins.filter((p) => !p.resolved && p.anchors.length > 1).map((p) => ({ id: p.id, no: p.no, anchors: p.anchors }))}
+              onOpen={(id) => {
+                setPanelPref(true);
+                setAsideTab("comments");
+                window.setTimeout(() => document.getElementById(`comment-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 50);
+              }}
+            />
+            {commentDraft ? (
+              <CommentComposer
+                project={project}
+                code={code}
+                team={overview.team ?? []}
+                draft={commentDraft}
+                onChange={(text) => setCommentDraft((d) => (d ? { ...d, text } : d))}
+                onClose={() => setCommentDraft(null)}
+                onSent={(id) => {
+                  setCommentDraft(null);
+                  setJustAdded(id);
+                  if (selection.length) {
+                    session.clearSelection();
+                    session.setSelecting(false);
+                  }
+                  setPanelPref(true);
+                  setAsideTab("comments");
+                }}
+              />
+            ) : null}
+            {anchorMenu ? (
+              <AnchorMenu
+                x={anchorMenu.x}
+                y={anchorMenu.y}
+                label={`${nameOf(anchorMenu.anchor)} 的菜单`}
+                onClose={() => setAnchorMenu(null)}
+                onComment={() => {
+                  const at = anchorMenu.anchor;
+                  setAnchorMenu(null);
+                  setFocusAnchor(at);
+                  openComposer.current([at]);
+                }}
+              />
+            ) : null}
             <CommentPins
               pins={pins}
               activeId={activeComment ?? highlightComment}
@@ -864,6 +934,7 @@ function Workspace({ code }: { code: string }) {
           </main>
           {EDITABLE_CODES.has(code) && unlocked ? (
             <StatusBar
+              summary={chrome?.summary}
               errors={blocking}
               warnings={issues.length - blocking}
               openComments={openThreads.length}
@@ -921,15 +992,15 @@ function Workspace({ code }: { code: string }) {
             <CommentsPanel
               project={project}
               code={code}
-              payload={draft}
               team={overview.team ?? []}
-              canComment={overview.isConsultAdmin || !!role}
+              canComment={canComment}
               canResolveAny={overview.isConsultAdmin || role === "ent_lead" || role === "lead_consultant"}
               currentUserId={identity.data?.id ?? null}
-              focusAnchor={focusAnchor}
-              highlightId={highlightComment}
+              highlightId={justAdded ?? highlightComment}
               numberOf={numberOf}
-              composeSignal={composeSignal}
+              draft={commentDraft}
+              onOpenDraft={() => setCommentDraft((d) => (d ? { ...d } : d))}
+              onNew={() => openComposer.current([])}
             />
           </div>
           <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", asideTab !== "changes" && "hidden")}>

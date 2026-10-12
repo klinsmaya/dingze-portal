@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText } from "lucide-react";
+import { CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,7 +18,9 @@ export function StatusBar({
   onComments,
   onRevision,
   onShortcuts,
+  summary,
 }: {
+  summary?: { tone: "ok" | "warn" | "muted"; text: string }[];
   errors: number;
   warnings: number;
   openComments: number;
@@ -38,6 +40,12 @@ export function StatusBar({
       aria-live="polite"
       className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-card px-4 py-1.5 text-xs"
     >
+      {summary?.map((s) => (
+        <span key={s.text} className="flex items-center gap-1 font-medium" style={{ color: s.tone === "ok" ? "var(--dz-ok)" : s.tone === "warn" ? "var(--dz-warn)" : undefined }}>
+          {s.tone === "ok" ? <CircleCheck className="size-3.5" /> : s.tone === "warn" ? <TriangleAlert className="size-3.5" /> : null}
+          {s.text}
+        </span>
+      ))}
       <button type="button" onClick={onIssues} className={cn("flex items-center gap-1", errors ? "text-destructive" : "text-status-done-foreground")}>
         {errors ? <CircleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
         {errors ? `${errors} 处必须改` : "校验通过"}

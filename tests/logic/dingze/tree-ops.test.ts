@@ -44,6 +44,15 @@ describe("tree operations", () => {
     expect(canMoveTo(tree, "a", { parentId: "b" }, 2)).toContain("超过");
   });
 
+  it("inserts a dragged branch in front of a sibling", () => {
+    const front = ok<N>(moveTo(tree, "b", { parentId: null, goalId: "g1", before: "a" }, 4));
+    expect(front.map((n) => n.id)).toEqual(["b", "a", "a1", "a2"]);
+    const between = ok<N>(moveTo(tree, "b", { parentId: "a", before: "a2" }, 4));
+    expect(shape(between)).toBe("a:g1:1 a1:a:2 b:a:2 a2:a:2");
+    expect(canMoveTo(tree, "a1", { parentId: "a", before: "a2" }, 4)).toBe("已经在这里");
+    expect(canMoveTo(tree, "a2", { parentId: "a", before: "a1" }, 4)).toBeNull();
+  });
+
   it("splits, merges and removes branches", () => {
     const s = ok<N>(split(tree, "a1", make, (n) => ({ path: `${n.path}（拆）` })));
     expect(s[2]).toMatchObject({ parentId: "a", path: "公交（拆）" });

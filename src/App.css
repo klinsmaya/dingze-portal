@@ -479,6 +479,14 @@ body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
 .dz-mm-children > li > ul {
   align-self: stretch;
 }
+/* 拖动时同级之间的插入位：平时只是一条缝，悬停才展开成“放到这里”。 */
+.dz-mm-children > li.dz-mm-slot {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.dz-mm-children > li.dz-mm-slot:not(.dz-mm-slot-active)::before {
+  display: none;
+}
 
 /* Canvas dot grid (design 10 map views) */
 .dz-dots {

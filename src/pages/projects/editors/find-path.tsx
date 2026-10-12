@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { BookOpen, Check, ChevronDown, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -75,12 +75,12 @@ export function FindPathSteps({
   );
 }
 
-/** 图 3-7 reference card: click an item to start a level-1 path (or financial theme) from it. */
+/** 图 3-7 reference card (design 10 画面 1): ticked items are already on the map; click one to add it. */
 export function Figure37Card({
   used,
   onPick,
   readOnly,
-  hint = "点一项 = 加一个一级路径（挂到第一个年度目标，可再移动）",
+  hint = "点一项 = 在导图里加一个一级路径，也可以直接拖进去",
   defaultOpen = true,
 }: {
   /** How many existing items started from each figure item, by item key → order numbers. */
@@ -91,46 +91,62 @@ export function Figure37Card({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  return (
-    <aside aria-label="图 3-7 增长战略参考卡" className={cn("w-full shrink-0 rounded-xl border border-book-border bg-book p-3 text-sm text-book-foreground", open ? "lg:w-56" : "lg:w-auto")}>
-      <button type="button" className="flex w-full items-center justify-between font-heading font-bold" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span>{open ? "图 3-7 · 一级路径按两组想" : "图 3-7"}</span>
-        {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-expanded={false}
+        className="flex items-center gap-1.5 rounded-lg border bg-popover px-3 py-1.5 text-xs font-semibold shadow-md hover:border-brand"
+      >
+        <BookOpen className="size-3.5" /> 图 3-7 · 增长战略 <ChevronDown className="size-3.5" />
       </button>
-      {open ? (
-        <div className="mt-2 flex flex-col gap-3">
-          {FIGURE_3_7.map((s) => (
-            <div key={s.strategy} className="flex flex-col gap-1.5">
-              <div className="text-xs font-semibold opacity-80">{s.strategy}</div>
-              {s.groups.map((g) => (
-                <div key={g.name} className="flex flex-col gap-1">
-                  {s.groups.length > 1 || g.name !== s.strategy ? <div className="text-xs">{g.name}</div> : null}
-                  <div className="flex flex-wrap gap-1">
-                    {g.items.map((item) => {
-                      const nos = used[item.key] ?? [];
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          disabled={readOnly}
-                          onClick={() => onPick(item)}
-                          title={`${figureTag(item)}：加一个一级路径`}
-                          className={cn("rounded-md border bg-background px-2 py-1 text-xs text-foreground hover:border-brand disabled:opacity-60", nos.length && "border-brand/50")}
-                        >
-                          {nos.length ? <Check className="mr-0.5 inline size-3 text-status-done-foreground" /> : null}
-                          {item.label}
-                          {nos.length ? <span className="ml-1 text-[10px] text-muted-foreground">第 {nos.join("、")} 条</span> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+    );
+  }
+  return (
+    <aside aria-label="图 3-7 增长战略参考卡" className="w-60 rounded-xl border bg-popover text-sm shadow-lg">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <span className="flex items-center gap-1.5 font-heading text-sm font-bold">
+          <BookOpen className="size-3.5" /> 图 3-7 · 增长战略
+        </span>
+        <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)} aria-expanded>
+          收起
+        </button>
+      </div>
+      <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto px-3 py-2">
+        {FIGURE_3_7.map((s) =>
+          s.groups.map((g) => (
+            <div key={`${s.strategy}-${g.name}`} className="flex flex-col">
+              <div className="flex items-center gap-1 py-0.5 text-xs font-semibold" style={{ color: "var(--dz-fin)" }}>
+                <TrendingUp className="size-3" /> {g.name === "生产率" ? s.strategy : g.name}
+              </div>
+              {g.items.map((item) => {
+                const nos = used[item.key] ?? [];
+                const on = nos.length > 0;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    disabled={readOnly}
+                    onClick={() => onPick(item)}
+                    title={`${figureTag(item)}：加一个一级路径`}
+                    className="flex items-center gap-2 rounded px-1 py-1 text-left text-[13px] hover:bg-muted disabled:opacity-60"
+                  >
+                    <span aria-hidden className={cn("flex size-3.5 shrink-0 items-center justify-center rounded-sm border", on && "border-brand bg-brand text-brand-foreground")}>
+                      {on ? <Check className="size-3" /> : null}
+                    </span>
+                    <span className="flex-1">{item.label}</span>
+                    {on ? <span className="text-[11px] text-muted-foreground">第 {nos.join("、")} 条</span> : null}
+                  </button>
+                );
+              })}
             </div>
-          ))}
-          <p className="text-[11px] opacity-80">{hint}</p>
-        </div>
-      ) : null}
+          )),
+        )}
+      </div>
+      <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">{hint}</p>
     </aside>
   );
 }

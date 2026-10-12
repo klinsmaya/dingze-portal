@@ -1,4 +1,5 @@
 import {
+  Map as MapIcon,
   ArrowDown,
   ArrowUp,
   Check,
@@ -346,8 +347,8 @@ export function StructureToolbar({
       <ToolButton text label="移动到…" shortcut="Shift+F10" icon={<FolderInput />} onClick={t?.moveTo} disabled={off} />
       {t?.split || t?.merge ? (
         <>
-          <ToolButton text label="拆分" icon={<Split />} onClick={t?.split} disabled={off} />
-          <ToolButton text label="合并" icon={<Combine />} onClick={t?.merge} disabled={off} />
+          <ToolButton label="拆分" icon={<Split />} onClick={t?.split} disabled={off} />
+          <ToolButton label="合并" icon={<Combine />} onClick={t?.merge} disabled={off} />
         </>
       ) : null}
         </>
@@ -369,6 +370,7 @@ export function StructureToolbar({
           <span className="w-11 text-center text-xs tabular-nums">{Math.round(z.value * 100)}%</span>
           <ToolButton label="放大" icon={<ZoomIn />} onClick={() => z.set(Math.min(1.6, Math.round((z.value + 0.1) * 10) / 10))} />
           <ToolButton label="适应画布" icon={<Maximize />} onClick={z.fit} />
+          {z.setMinimap ? <ToolButton label="小地图" icon={<MapIcon />} onClick={() => z.setMinimap?.(!z.minimap)} active={z.minimap} /> : null}
         </div>
       ) : null}
       <ToolButton label="快捷键" shortcut="?" icon={<Keyboard />} onClick={onShortcuts} />

@@ -82,7 +82,11 @@ export type EditorChrome = {
   variant?: string;
   setVariant?: (key: string) => void;
   tools?: EditorTools;
-  zoom?: { value: number; set: (value: number) => void; fit: () => void };
+  zoom?: { value: number; set: (value: number) => void; fit: () => void; minimap?: boolean; setMinimap?: (on: boolean) => void };
+  /** Changes when the editor's `extra` controls change state, so the header re-renders. */
+  extraKey?: string;
+  /** Shown at the left of the status bar, e.g. “合计 1000 / 1000”“推得回来 3 处”. */
+  summary?: { tone: "ok" | "warn" | "muted"; text: string }[];
   /** Extra buttons at the right end of the toolbar (e.g. 从 Excel 粘贴). */
   extra?: ReactNode;
 };
@@ -106,7 +110,9 @@ export function useEditorChrome(chrome: EditorChrome | null, enabled = true) {
         sl: chrome.tools?.selectedLabel,
         tk: chrome.tools ? Object.keys(chrome.tools).filter((k) => typeof (chrome.tools as Record<string, unknown>)[k] === "function") : null,
         z: chrome.zoom?.value,
-        x: !!chrome.extra,
+        m: chrome.zoom?.minimap,
+        su: chrome.summary,
+        x: chrome.extra ? (chrome.extraKey ?? true) : false,
       })
     : "";
   if (session && enabled) {

@@ -12,6 +12,7 @@ import {
   type Perspective,
   type StrategyMap,
   emptyTheme,
+  parseAmount,
   targetsOf,
 } from "@dingze/shared";
 
@@ -25,6 +26,8 @@ import { FIGURE_3_7, type Figure37Item } from "@/lib/dingze/figure-3-7";
 
 import { FIND_PATH_STEPS, Figure37Card } from "./find-path";
 import { AddButton, EditorToolbar, RowActions, TextCell } from "./kit";
+import { sumText } from "./path-system-editor";
+import { PERSPECTIVE_STYLE } from "./perspective-style";
 import { MapDiagram } from "./map-diagram";
 import { type TreeConfig, TreeMindMap } from "./tree-editor";
 
@@ -130,6 +133,13 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
     const nos = financial.flatMap((t, i) => (t.category === item.decodeCategory ? [i + 1] : []));
     if (nos.length) figureUsed[item.key] = nos;
   }
+  // The map hangs on the annual goal(s).
+  const hub =
+    goals.length === 1
+      ? { id: "goal", label: goals[0].task || goals[0].metric || "年度目标", sub: goals[0].metric, value: goals[0].value }
+      : { id: "goal", label: goals.length ? `年度目标（${goals.length} 个）` : "年度目标", sub: goals.length ? goals.map((g) => g.metric).filter(Boolean).join("、") : "定目标后显示" };
+  // Financial themes add up to the goal when there is one goal; with several, the sum is only shown.
+  const gapTarget = goals.length === 1 ? parseAmount(goals[0].value ?? "") : null;
   const pickFigure = (item: Figure37Item) => setThemes([...themes, emptyTheme("financial", { category: item.decodeCategory })]);
 
   const baseChrome: EditorChrome = {
@@ -163,17 +173,42 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
             { key: "value", label: "指标值" },
           ]}
           patch={(id, p) => setTheme(id, p as Partial<DecodeTheme>)}
-          detail={(n) => {
+          tag={(n) => {
             const up = (n.supports ?? []).map((id) => themes.find((x) => x.id === id)?.title).filter(Boolean);
-            return [[n.metric, n.value].filter(Boolean).join(" ") || "（未填指标）", up.length ? `支撑：${up.join("、")}` : ""].filter(Boolean).join(" · ");
+            return up.length ? `支撑 ${up.join("、")}` : categoryLabel(n as unknown as DecodeTheme);
           }}
-          tag={(n) => categoryLabel(n as unknown as DecodeTheme)}
-          rootCards={PERSPECTIVES.map((p, i) => ({
-            root: { id: p.key, label: p.label, sub: p.key === "financial" && gap.gap ? `差距 ${gap.gap}` : FIND_PATH_STEPS[i]?.title },
-            badge: `子步骤 ${i + 1}${themes.some((t) => t.perspective === p.key) ? "" : " · 待开始"}`,
-            nodes: cfg.nodes.filter((n) => n.goalId === p.key),
-            onAdd: () => setThemes([...themes, emptyTheme(p.key)]),
-          }))}
+          amount={(n) => n.value}
+          detail={(n) => n.metric || "（未填指标）"}
+          rootCards={[
+            {
+              // 年度目标 → 四个层面 → 战略主题 (design 10 画面 1).
+              root: hub,
+              badge: "年度目标",
+              nodes: [],
+              layers: PERSPECTIVES.map((p, i) => {
+                const own = cfg.nodes.filter((n) => n.goalId === p.key);
+                const style = PERSPECTIVE_STYLE[p.key];
+                const Icon = style.icon;
+                const amounts = own.map((n) => parseAmount(n.value));
+                const numeric = p.key === "financial" && own.length > 0 && amounts.every((a) => a !== null);
+                return {
+                  key: p.key,
+                  label: p.label,
+                  sub: FIND_PATH_STEPS[i]?.title,
+                  icon: <Icon className="size-4" />,
+                  tone: style.tone,
+                  soft: style.soft,
+                  nodes: own,
+                  placeholder: `子步骤 ${i + 1} · 待开始`,
+                  roll: numeric ? sumText(amounts as number[], gapTarget) : null,
+                  onAdd: () => setThemes([...themes, emptyTheme(p.key)]),
+                  target: { parentId: null, goalId: p.key },
+                };
+              }),
+            },
+          ]}
+          addLabel="战略主题"
+          addHint={sub === 1 ? "按图 3-7 两组想" : undefined}
           emptyHint="还没有主题"
           side={sub === 1 && !readOnly ? <Figure37Card defaultOpen={!financial.length} used={figureUsed} onPick={pickFigure} readOnly={readOnly} hint="点一项 = 在财务层面加一个主题（类别已选好）" /> : undefined}
         />

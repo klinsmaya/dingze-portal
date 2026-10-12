@@ -434,6 +434,7 @@ function WbsTable({ wbs, onChange, readOnly, invalid, charterName }: { wbs: WbsP
           patch={(id, p) => onChange(patchById(wbs, id, p))}
           detail={(w) => [w.deliverable && `交付：${w.deliverable}`, w.owner && `责任人 ${w.owner}`].filter(Boolean).join(" · ") || "（未填交付物）"}
           rootCards={[{ root: cfg.roots[0], nodes: wbs.filter((w) => !w.parentId), onAdd: () => onChange([...wbs, wbsPackage()]) }]}
+          addLabel="一级工作包"
           emptyHint="还没有工作包"
         />
       ) : (

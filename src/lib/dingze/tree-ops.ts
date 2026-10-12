@@ -145,7 +145,11 @@ export function outdent<T extends TreeItem>(nodes: T[], id: string): TreeResult<
   return { ok: true, nodes: normalize(next), focus: id };
 }
 
-export type MoveTarget = { parentId: string | null; goalId?: string | null };
+/** `before`: insert in front of that sibling (drag between siblings); otherwise last. */
+export type MoveTarget = { parentId: string | null; goalId?: string | null; before?: string | null };
+
+const sameGroup = (node: TreeItem, target: MoveTarget) =>
+  target.parentId ? node.parentId === target.parentId : !node.parentId && (node.goalId ?? null) === (target.goalId ?? null);
 
 /** Where a node may go: any node outside its own branch that still leaves room for its levels. */
 export function canMoveTo<T extends TreeItem>(nodes: T[], id: string, target: MoveTarget, maxLevel: number): string | null {
@@ -156,8 +160,14 @@ export function canMoveTo<T extends TreeItem>(nodes: T[], id: string, target: Mo
     const parent = nodes.find((n) => n.id === target.parentId);
     if (!parent) return "找不到目标";
     if (parent.level + depth(nodes, id) > maxLevel) return `移过去会超过 ${maxLevel} 级`;
-    if (node.parentId === parent.id) return "已经在这里";
-  } else if (!node.parentId && (node.goalId ?? null) === (target.goalId ?? null)) return "已经在这里";
+  }
+  if (sameGroup(node, target)) {
+    if (target.before === undefined) return "已经在这里";
+    const sibs = siblings(nodes, node);
+    const at = sibs.findIndex((n) => n.id === id);
+    if (target.before === id || (target.before ?? null) === (sibs[at + 1]?.id ?? null)) return "已经在这里";
+  }
+  if (target.before && !nodes.some((n) => n.id === target.before)) return "找不到目标";
   return null;
 }
 
@@ -172,6 +182,12 @@ export function moveTo<T extends TreeItem>(nodes: T[], id: string, target: MoveT
   let next = shift(nodes, ids, level - node.level).map((n) =>
     n.id === id ? { ...n, parentId: parent?.id ?? null, goalId: parent ? null : (target.goalId ?? null) } : n,
   );
+  if (target.before) {
+    const rest = next.filter((n) => n.id !== id);
+    const index = rest.findIndex((n) => n.id === target.before);
+    next = [...rest.slice(0, index), next.find((n) => n.id === id)!, ...rest.slice(index)];
+    return { ok: true, nodes: normalize(next), focus: id };
+  }
   const lastSibling = (parent ? childrenOf(next, parent.id) : next.filter((n) => !n.parentId && (n.goalId ?? null) === (target.goalId ?? null)))
     .filter((n) => n.id !== id)
     .pop();
