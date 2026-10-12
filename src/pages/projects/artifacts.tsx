@@ -31,7 +31,7 @@ const STATUS_FILTERS: { value: RegistryFilter["status"]; label: string }[] = [
 const DERIVED_LABELS = { view: "图形视图", embedded: "内嵌表", snapshot: "只读快照" } as const;
 
 /** 成果与定版：every artifact of the project with state, versions, operators and AI-vs-locked difference. */
-export default function ArtifactsPage() {
+export default function ArtifactsPage({ embedded = false }: { embedded?: boolean }) {
   const { project } = useProjectContext();
   const registry = useArtifactRegistry(project);
   const [filter, setFilter] = useState<RegistryFilter>({ stage: "all", status: "all" });
@@ -99,10 +99,10 @@ export default function ArtifactsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6">
+    <div className={embedded ? "flex flex-col gap-5" : "mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6"}>
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-brand">成果与定版</h1>
+          {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">成果与定版</h1>}
           <p className="mt-1 text-sm text-muted-foreground">
             附录 B 共 24 项成果：{tableCount} 张表独立填写和定版，4 项是图形视图或内嵌表（随所属表定版），S3-09 移出 V1。已定版 {locked} / {tableCount}。
             使命、愿景、经营预算是方法底稿，不单独编号、不计入成果。

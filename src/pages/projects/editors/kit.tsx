@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useEditSession } from "@/pages/projects/components/edit-session";
+import { Link } from "react-router";
 
 const pendingTone = "border-suggestion-border bg-suggestion text-suggestion-foreground";
 
@@ -272,5 +273,19 @@ export function GridCell({
       ) : null}
       {children}
     </div>
+  );
+}
+
+/** 一行“数据从哪来”的说明 (闭环：组织 → RACI / 部门承接 / 部门计划书), with a link to where it is kept. */
+export function SourceNote({ children, to, linkLabel, warn }: { children: ReactNode; to?: string; linkLabel?: string; warn?: boolean }) {
+  return (
+    <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs", warn ? "text-[color:var(--dz-warn)]" : "text-muted-foreground")}>
+      <span>{children}</span>
+      {to ? (
+        <Link to={to} className="text-primary hover:underline">
+          {linkLabel ?? "查看"} →
+        </Link>
+      ) : null}
+    </p>
   );
 }

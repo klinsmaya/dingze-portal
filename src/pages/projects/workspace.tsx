@@ -30,7 +30,7 @@ import { nextStep, workspacePath } from "@/lib/dingze/progress";
 import { useArtifactDetail, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { useProfile } from "@/lib/dingze/materials-api";
+import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
 import { useAddComment } from "@/lib/dingze/comments-api";
 import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
@@ -58,6 +58,7 @@ import { BookMethod } from "./components/book-method";
 import { ChangesPanel } from "./components/changes-panel";
 import { AnchorMenu, type CommentDraft, CommentComposer, LassoBar, LassoOutlines } from "./components/comment-composer";
 import { CommentsPanel, circled } from "./components/comments-panel";
+import { MaterialViewer } from "./components/material-shared";
 import { CommentPins, EditMarkers } from "./components/edit-markers";
 import { type EditSession, EditSessionContext, type EditorChrome, type RevisionState, pathNamer } from "./components/edit-session";
 import { ShortcutsDialog, StatusBar } from "./components/status-bar";
@@ -272,6 +273,9 @@ function Workspace({ code }: { code: string }) {
   saveShortcut.current = onSave;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const lastAnchor = useRef<string | null>(null);
+  const materialsQuery = useMaterials(project);
+  const materialList = useMemo(() => [...(materialsQuery.data ?? [])].sort((a, b) => b.at.localeCompare(a.at)), [materialsQuery.data]);
+  const [viewingMaterial, setViewingMaterial] = useState<number | null>(null);
   const allThreadsRef = useRef<{ id: number; author: string }[]>([]);
   const revisionRef = useRef<{ entries: DiffEntry[]; whoOf: (path: string) => string | undefined; stats: ReturnType<EditSession["revisionStats"]> } | null>(null);
   const revisionToggle = useRef<() => void>(() => {});
@@ -641,14 +645,15 @@ function Workspace({ code }: { code: string }) {
     ? [
         { to: `${base}/overview`, label: "今天要做的", icon: "today" },
         { to: `${base}/materials`, label: "资料", icon: "materials" },
-        { to: `${base}/delivery`, label: "导出", icon: "export" },
+        { to: `${base}/materials#org`, label: "组织", icon: "org" },
+        { to: `${base}/results`, label: "成果", icon: "artifacts" },
       ]
     : [
         { to: `${base}/overview`, label: "工作台", icon: "today" },
-        { to: `${base}/materials`, label: "资料与画像", icon: "materials" },
-        { to: `${base}/artifacts`, label: "成果与定版", icon: "artifacts" },
-        { to: `${base}/delivery`, label: "交付", icon: "export" },
-        { to: `${base}/expert`, label: "专家咨询", icon: "expert" },
+        { to: `${base}/materials`, label: "资料", icon: "materials" },
+        { to: `${base}/materials#org`, label: "组织", icon: "org" },
+        { to: `${base}/results`, label: "成果", icon: "artifacts" },
+        { to: `${base}/expert`, label: "专家", icon: "expert" },
       ];
   const stageLinks = STAGES.map((st) => {
     const first = ARTIFACTS.find((a) => a.stage === st.key && a.priority !== "method")!;
@@ -696,7 +701,9 @@ function Workspace({ code }: { code: string }) {
             links={railLinks}
             collapsed={railCollapsed}
             onToggle={() => setRailPref(!railCollapsed)}
-          />
+                materials={materialList}
+                onOpenMaterial={setViewingMaterial}
+              />
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -953,7 +960,7 @@ function Workspace({ code }: { code: string }) {
                         {ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked") ? (
                           <>
                             全部 P0 成果都已定版，可以到
-                            <Link to={`${base}/delivery`} className="mx-1 font-semibold text-brand underline">
+                            <Link to={`${base}/results?tab=delivery`} className="mx-1 font-semibold text-brand underline">
                               导出
                             </Link>
                             页下载正式交付物。
@@ -1023,6 +1030,7 @@ function Workspace({ code }: { code: string }) {
             />
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <MaterialViewer id={viewingMaterial} onClose={() => setViewingMaterial(null)} />
         </div>
 
         <aside

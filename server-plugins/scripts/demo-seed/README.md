@@ -10,6 +10,7 @@
 | `check.ts` | 本地用共享校验规则预检内容（不联网） |
 | `seed.ts` | 按角色把三个项目推到目标状态，并写入批注 |
 | `status.mjs` | 读回某个项目各表状态 |
+| `startup.mjs` | 项目启动所需：部门负责人、成员归部门、每个项目三份资料和已复核 / 确认的画像 |
 
 ```bash
 export DINGZE_SECRETS_DIR=~/.dingze-secrets   # 私有目录，chmod 700；放 dz_*.pw，不要放进仓库
@@ -19,6 +20,7 @@ cd server-plugins/scripts/demo-seed
 node setup.mjs
 $ESB check.ts --bundle --platform=node --format=esm --outfile=/tmp/dz-check.mjs && node /tmp/dz-check.mjs
 $ESB seed.ts  --bundle --platform=node --format=esm --outfile=/tmp/dz-seed.mjs  && node /tmp/dz-seed.mjs     # 或 node /tmp/dz-seed.mjs 1|2|3 只跑一个项目
+node startup.mjs
 node status.mjs 1 dz-017728e2ab dz_zhang
 ```
 

@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Building2,
   Check,
   ChevronDown,
   ChevronsLeft,
@@ -43,8 +44,8 @@ function StepIcon({ step, className }: { step: RouteStep; className?: string }) 
   return <Circle className={cn("size-3.5", STATE_DOT[step.state], className)} />;
 }
 
-export type RailLink = { to: string; label: string; icon: "today" | "materials" | "export" | "artifacts" | "expert" };
-const LINK_ICONS = { today: ArrowLeft, materials: FolderOpen, export: FileDown, artifacts: Library, expert: UsersRound };
+export type RailLink = { to: string; label: string; icon: "today" | "materials" | "org" | "export" | "artifacts" | "expert" };
+const LINK_ICONS = { today: ArrowLeft, materials: FolderOpen, org: Building2, export: FileDown, artifacts: Library, expert: UsersRound };
 
 /** 项目路线 (design 10 left rail): 工作任务 → 实施步骤 → 子步骤, collapsible to an icon bar. */
 export function RouteRail({
@@ -54,7 +55,12 @@ export function RouteRail({
   links,
   collapsed,
   onToggle,
+  materials = [],
+  onOpenMaterial,
 }: {
+  /** 参考资料: the project's materials, newest first; opened in a side sheet. */
+  materials?: { id: number; title: string }[];
+  onOpenMaterial?: (id: number) => void;
   projectId: number;
   route: Route;
   /** First open table of each stage, for the stage switch. */
@@ -105,22 +111,23 @@ export function RouteRail({
 
   return (
     <nav aria-label="项目路线" className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b px-3 py-2">
+      <div className="flex shrink-0 flex-col gap-1 border-b px-3 py-2">
         {back ? (
-          <Link to={back.to} className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link to={back.to} className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
             <ArrowLeft className="size-4 shrink-0" /> <span className="truncate">{back.label}</span>
           </Link>
-        ) : (
-          <span className="flex-1" />
-        )}
-        {others.map((l) => {
-          const Icon = LINK_ICONS[l.icon];
-          return (
-            <Link key={l.to} to={l.to} title={l.label} aria-label={l.label} className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-              <Icon className="size-4" />
-            </Link>
-          );
-        })}
+        ) : null}
+        <div className="grid grid-cols-4 gap-0.5" aria-label="项目入口">
+          {others.map((l) => {
+            const Icon = LINK_ICONS[l.icon];
+            return (
+              <Link key={l.to} to={l.to} className="flex flex-col items-center gap-0.5 rounded-md px-1 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground">
+                <Icon className="size-4" />
+                {l.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex shrink-0 items-start justify-between gap-2 px-4 pt-3 pb-2">
@@ -204,6 +211,24 @@ export function RouteRail({
         })}
       </div>
 
+      <div className="shrink-0 border-t px-4 py-2.5 text-xs text-muted-foreground">
+        <div className="mb-1 flex items-center gap-1">
+          <FolderOpen className="size-3" /> 参考资料
+          <Link to={`/projects/${projectId}/materials#library`} className="ml-auto text-primary hover:underline">
+            {materials.length ? "全部 / 上传" : "去上传"}
+          </Link>
+        </div>
+        {materials.length ? (
+          materials.slice(0, 4).map((m) => (
+            <button key={m.id} type="button" onClick={() => onOpenMaterial?.(m.id)} className="flex w-full items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+              <FileText className="size-3 shrink-0" />
+              <span className="truncate">{m.title}</span>
+            </button>
+          ))
+        ) : (
+          <p>还没有资料：企业简介、组织架构、战略规划传上来，数字咨询师起草更准。</p>
+        )}
+      </div>
       {products.length ? (
         <div className="shrink-0 border-t px-4 py-2.5 text-xs text-muted-foreground">
           <div className="mb-1 flex items-center gap-1">

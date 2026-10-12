@@ -1,4 +1,4 @@
-import { ArrowRight, CircleCheck } from "lucide-react";
+import { ArrowRight, CircleCheck, CircleDashed, CircleDot } from "lucide-react";
 import { Link } from "react-router";
 
 import { collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
@@ -6,7 +6,9 @@ import { collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared"
 import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
 import { STEP_ARTIFACTS, nextActionPath, progressOf, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
 import { cn } from "@/lib/utils";
 
 import { useProjectContext } from "./project-context";
@@ -29,6 +31,8 @@ export default function ProjectOverviewPage() {
   const steps = progressOf(artifacts);
   const next = nextAction(steps, role);
   const stages = stageProgress(artifacts);
+  // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
+  const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
   // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
   const moving = steps
     .filter((a) => a.code !== next.code && getArtifactDef(a.code).priority !== "method")
@@ -39,10 +43,12 @@ export default function ProjectOverviewPage() {
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       <div>
         <p className="text-sm text-muted-foreground">
-          {project.year} 年度 · {project.scene === "camp" ? "训练营" : "企业内训"} · 往哪打 · 怎么走 · 谁负责
+          {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
         <h1 className="font-heading text-3xl font-bold text-brand">今天要做的</h1>
       </div>
+
+      <StartupCard projectId={project.id} />
 
       <section aria-label="今天要做的" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         <Link
@@ -144,3 +150,80 @@ export default function ProjectOverviewPage() {
   );
 }
 
+
+const START_LINKS: Record<StartupItem["key"], { href: (id: number) => string; label: string } | null> = {
+  org: { href: (id) => `/projects/${id}/materials#org`, label: "看组织与职责" },
+  materials: { href: (id) => `/projects/${id}/materials#library`, label: "去上传资料、确认画像" },
+  team: null,
+};
+
+/**
+ * 项目启动: 组织与职责、资料与画像、团队与角色 — the same three for 训练营 and 企业内训. Shown open
+ * until all three are in place, then folded to one line.
+ */
+function StartupCard({ projectId }: { projectId: number }) {
+  const { project, overview } = useProjectContext();
+  const materials = useMaterials(project);
+  const profile = useProfile(project);
+  if (materials.isLoading || profile.isLoading) return null;
+  const items = startupChecklist({ orgUnits: overview.orgUnits ?? [], team: overview.team ?? [], materialCount: materials.data?.length ?? 0, profileItems: profile.data?.items ?? [] });
+  const done = items.filter((i) => i.state === "done").length;
+  if (done === items.length) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl border bg-card px-4 py-2.5 text-sm text-muted-foreground">
+        <CircleCheck className="size-4 text-status-done-foreground" /> 项目启动已就绪：{items.map((i) => `${i.title}（${i.detail}）`).join("；")}
+      </p>
+    );
+  }
+  return (
+    <section aria-labelledby="startup" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h2 id="startup" className="font-heading text-lg font-bold text-brand">
+          项目启动
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          已就绪 {done} / {items.length}。三项齐了再填表最顺，没齐也可以先做。
+        </span>
+      </div>
+      <ol className="grid gap-3 md:grid-cols-3">
+        {items.map((item) => {
+          const link = START_LINKS[item.key];
+          return (
+            <li key={item.key} className={cn("flex flex-col gap-1.5 rounded-xl border p-3", item.state === "done" && "bg-muted/40")}>
+              <div className="flex items-center gap-2 font-semibold">
+                {item.state === "done" ? (
+                  <CircleCheck className="size-4 text-status-done-foreground" />
+                ) : item.state === "partial" ? (
+                  <CircleDot className="size-4" style={{ color: "var(--dz-warn)" }} />
+                ) : (
+                  <CircleDashed className="size-4 text-muted-foreground" />
+                )}
+                {item.title}
+              </div>
+              <div className="text-xs text-muted-foreground">{item.detail}</div>
+              {item.problems.length ? (
+                <ul className="flex list-disc flex-col gap-0.5 pl-4 text-xs">
+                  {item.problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {item.notes.map((n) => (
+                <p key={n} className="text-xs text-muted-foreground">
+                  {n}
+                </p>
+              ))}
+              {link && item.state !== "done" ? (
+                <Link to={link.href(projectId)} className="mt-auto text-xs font-medium text-primary hover:underline">
+                  {link.label} →
+                </Link>
+              ) : item.key === "team" && item.state !== "done" ? (
+                <span className="mt-auto text-xs text-muted-foreground">成员和角色由咨询机构运营在“项目与分派”里设置，有调整请告诉主咨询师。</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}

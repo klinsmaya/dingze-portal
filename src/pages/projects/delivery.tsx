@@ -28,7 +28,7 @@ import { useProjectContext } from "./project-context";
 const PLAN_BOOKS = ["S3-07", "S3-08"];
 
 /** 交付：正式交付物（定版版本，未定版为草稿）、各部门绩效计分卡和导出记录。 */
-export default function DeliveryPage() {
+export default function DeliveryPage({ embedded = false }: { embedded?: boolean }) {
   const { project } = useProjectContext();
   const bundle = useDeliveryBundle(project);
   const recordExport = useRecordExport(project);
@@ -76,17 +76,19 @@ export default function DeliveryPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6">
+    <div className={embedded ? "flex flex-col gap-6" : "mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6"}>
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>
+          {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>}
           <p className="mt-1 text-sm text-muted-foreground">
             最终交付是年度经营计划书（Word）。没定版的内容导出时会标“草稿”，避免被当作定版件流转。
           </p>
         </div>
-        <Link to={`/projects/${project.id}/artifacts`} className="ml-auto text-sm text-primary hover:underline">
-          查看全部表的版本与修改记录 →
-        </Link>
+        {embedded ? null : (
+          <Link to={`/projects/${project.id}/results`} className="ml-auto text-sm text-primary hover:underline">
+            查看全部表的版本与修改记录 →
+          </Link>
+        )}
       </div>
 
       {bundle.error ? (

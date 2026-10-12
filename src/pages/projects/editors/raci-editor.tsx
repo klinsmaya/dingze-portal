@@ -19,7 +19,9 @@ import type { ProjectOrgUnit } from "@/lib/dingze/api";
 import { errorAnchors, moveById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
-import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
+import { useProjectContext } from "@/pages/projects/project-context";
+
+import { AddButton, EditorToolbar, ImportButton, RowActions, SourceNote, TextCell } from "./kit";
 
 type Props = {
   value: RaciTable;
@@ -46,6 +48,7 @@ const LETTER_TONE: Record<RaciLetter, string> = {
 
 /** S2-04: rows are key projects (or key paths), columns are departments; A = 1 and R ≥ 1 per row. */
 export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUnits }: Props) {
+  const { project } = useProjectContext();
   const invalid = errorAnchors(issues);
   const [newColumn, setNewColumn] = useState("");
   const columns = value.columns ?? [];
@@ -66,8 +69,15 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
       }),
     });
 
+  const depts = orgUnits.filter((o) => o.kind === "department");
+  const headless = depts.filter((d) => !d.headId).map((d) => d.name);
   return (
     <section aria-label="RACI 责任分解矩阵" className="flex flex-col gap-4">
+      <SourceNote to={`/projects/${project.id}/materials#org`} linkLabel="看组织与职责" warn={!depts.length}>
+        {!depts.length
+          ? "组织里还没有部门：责任者列只能手动加。请企业管理员先在「本企业 › 组织部门」建好部门和负责人。"
+          : `责任者列取自组织部门（${depts.length} 个）${headless.length ? `；${headless.join("、")} 没有在系统里指定负责人，A 要由人确认` : ""}。组织之外的责任者可以加自定义列；定版后组织再变，这里只提示、不自动改。`}
+      </SourceNote>
       <EditorToolbar hint="R 执行者、A 最终负责者、C 咨询协同、I 知情。每行 A 必须唯一、至少一个 R；点 A 会自动从同行其他部门移走。">
         <ImportButton label="带入组织部门" count={deptSeed.length} readOnly={readOnly} onClick={() => onChange({ ...value, columns: [...columns, ...deptSeed] })} />
         <ImportButton

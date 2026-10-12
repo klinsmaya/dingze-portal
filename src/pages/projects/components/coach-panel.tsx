@@ -1,4 +1,4 @@
-import { Check, CircleCheck, Ellipsis, Eye, History, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -19,13 +19,26 @@ import { type StageKey, diffPayloads } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
+import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { cn } from "@/lib/utils";
 import { getAt, preview } from "@/lib/dingze/edit-log";
 
+import { useProjectContext } from "../project-context";
 import { type EditSession, useEditSession } from "./edit-session";
+import { useMaterialUpload } from "./material-shared";
 
 const SAY = "dz:coach-say";
 
@@ -436,7 +449,28 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
 /** 新对话 / 历史对话 (the chat header row is hidden under the panel tabs). */
 function ChatMenu() {
   const { startNewConversation, setConversationListOpen } = useAIChatBase();
+  const { project } = useProjectContext();
+  const materials = useMaterials(project);
+  const upload = useMaterialUpload();
+  const file = useRef<HTMLInputElement>(null);
+  // 资料进对话：上传的文件存进项目资料，同时把“请参考它”放进输入框（不自动发送）。
+  const cite = (list: { id: number; title: string }[]) =>
+    list.length && askCoach(`请参考资料${list.map((m) => `《${m.title}》（资料编号 ${m.id}）`).join("、")}，结合当前这张表，告诉我哪些内容能用上。`, false);
   return (
+    <>
+    <input
+      ref={file}
+      type="file"
+      multiple
+      accept={MATERIAL_ACCEPT}
+      className="hidden"
+      aria-label="上传资料"
+      onChange={async (e) => {
+        const added = await upload(e.target.files);
+        cite(added);
+        if (file.current) file.current.value = "";
+      }}
+    />
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-20" aria-label="对话菜单" />}>
         <Ellipsis />
@@ -448,8 +482,29 @@ function ChatMenu() {
         <DropdownMenuItem onClick={() => setConversationListOpen(true)}>
           <History /> 历史对话
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => file.current?.click()}>
+          <Paperclip /> 上传资料…
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <FolderOpen /> 引用资料
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-72 min-w-56 overflow-y-auto">
+            {(materials.data ?? []).length ? (
+              (materials.data ?? []).map((m) => (
+                <DropdownMenuItem key={m.id} onClick={() => cite([m])}>
+                  <span className="truncate">{m.title}</span>
+                </DropdownMenuItem>
+              ))
+            ) : (
+              <DropdownMenuItem disabled>还没有资料</DropdownMenuItem>
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }
 

@@ -18,14 +18,13 @@ const ENTERPRISE_NAV = [
   { to: "overview", label: "今天要做的" },
   { to: "workspace", label: "填写" },
   { to: "materials", label: "资料" },
-  { to: "delivery", label: "导出" },
+  { to: "results", label: "成果" },
 ];
 const FULL_NAV = [
   { to: "overview", label: "工作台" },
   { to: "workspace", label: "咨询工作区" },
   { to: "materials", label: "资料与画像" },
-  { to: "artifacts", label: "成果与定版" },
-  { to: "delivery", label: "交付" },
+  { to: "results", label: "成果" },
   { to: "expert", label: "专家咨询" },
 ];
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];

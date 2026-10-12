@@ -1,6 +1,7 @@
-import { CheckCheck, ClipboardPaste, Download, Eye, FileUp, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router";
 import { toast } from "sonner";
 
 import {
@@ -9,6 +10,7 @@ import {
   type ProfileCategory,
   type ProfileItem,
   canSetProfileStatus,
+  getArtifactDef,
   profileItem,
 } from "@dingze/shared";
 
@@ -20,20 +22,22 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
-import { MATERIAL_ACCEPT, SPREADSHEET_EXTENSIONS, UnsupportedFileError, extractText } from "@/lib/dingze/extract-text";
+import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { type MaterialSummary, downloadOriginal, uploadOriginal, useAddMaterial, useDeleteMaterial, useMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
+import { type MaterialSummary, downloadOriginal, useAddMaterial, useDeleteMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
+import { workspacePath } from "@/lib/dingze/progress";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
 import { CoachPanel } from "./components/coach-panel";
 import { TextCell } from "./editors/kit";
+import { MaterialViewer, useMaterialUpload } from "./components/material-shared";
+import { OrgView } from "./components/org-view";
 import { useProjectContext } from "./project-context";
 
 const STATUS_TONE: Record<ProfileItem["status"], string> = {
@@ -74,21 +78,45 @@ function PasteDialog({ open, onClose, onSubmit, pending }: { open: boolean; onCl
   );
 }
 
-function MaterialViewer({ id, onClose }: { id: number | null; onClose: () => void }) {
-  const { project } = useProjectContext();
-  const material = useMaterial(project, id);
+/** 已确认成果: every table once 定版 is part of the enterprise's materials (资料分类“已确认成果”). */
+function ConfirmedResults() {
+  const { project, overview } = useProjectContext();
+  const locked = overview.artifacts.filter((a) => a.status === "locked" && getArtifactDef(a.code).priority !== "method");
   return (
-    <Sheet open={!!id} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>{material.data?.title ?? "资料"}</SheetTitle>
-          <SheetDescription>
-            资料编号 {id} · {material.data?.chars ?? 0} 字{material.data && material.data.chars > material.data.text.length ? "（显示前 20000 字）" : ""}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="px-4 pb-6 text-sm whitespace-pre-wrap">{material.isLoading ? <Skeleton className="h-64" /> : material.data?.text}</div>
-      </SheetContent>
-    </Sheet>
+    <section aria-labelledby="confirmed" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h2 id="confirmed" className="font-heading text-lg font-bold text-brand">
+          已确认成果
+        </h2>
+        <span className="text-xs text-muted-foreground">表一定版就出现在这里，数字咨询师和专家咨询都按定版内容引用；版本、对比和导出在</span>
+        <Link to={`/projects/${project.id}/results`} className="text-xs text-primary hover:underline">
+          「成果」
+        </Link>
+      </div>
+      {locked.length === 0 ? (
+        <p className="rounded-xl border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">还没有定版的表。</p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {locked.map((a) => {
+            const def = getArtifactDef(a.code);
+            return (
+              <li key={a.code}>
+                <Link to={workspacePath(project.id, a.code)} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:border-primary">
+                  <FileCheck2 className="size-4 shrink-0 text-status-done-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{def.plain}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {def.specId} · 定版 v{a.currentRev}
+                      {a.stale ? " · 上游已变更" : ""}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -106,31 +134,10 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
   const [pasting, setPasting] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
 
+  const uploadFiles = useMaterialUpload();
   const upload = async (files: FileList | null) => {
-    if (!files?.length) return;
     setBusy(true);
-    for (const file of Array.from(files)) {
-      try {
-        // Text is read in the browser for the digital consultants; the original is stored as well.
-        const text = await extractText(file).catch((error) => {
-          if (error instanceof UnsupportedFileError) throw error;
-          return "";
-        });
-        const original = await uploadOriginal(file);
-        const result = await add.mutateAsync({ title: file.name.replace(/\.[^.]+$/, ""), kind: "file", fileName: file.name, size: file.size, text, fileId: original.id });
-        if (!result.searchable) {
-          toast.warning(
-            SPREADSHEET_EXTENSIONS.some((e) => file.name.toLowerCase().endsWith(`.${e}`))
-              ? `已上传《${file.name}》原件，但表格里没有内容可供检索`
-              : `已上传《${file.name}》原件，但没有读到文字（可能是扫描件）：数字咨询师检索不到它，可以再“粘贴文字”补一份`
-          );
-        } else {
-          toast.success(`已上传《${file.name}》原件并提取文字${result.truncated ? "（文字过长，检索只用前 15 万字）" : ""}`);
-        }
-      } catch (error) {
-        toast.error(`《${file.name}》：${errorMessage(error)}`);
-      }
-    }
+    await uploadFiles(files);
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -217,6 +224,13 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
 
 /** 资料与画像: the enterprise's materials and the profile (事实 / 假设 / 未知 / 待补) built from them. */
 export default function MaterialsPage() {
+  // 从工作台“组织”“资料”等入口带锚点进来时，滚到对应一节。
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const timer = window.setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    return () => window.clearTimeout(timer);
+  }, [hash]);
   const { project, overview } = useProjectContext();
   const materials = useMaterials(project);
   const profile = useProfile(project);
@@ -326,7 +340,24 @@ export default function MaterialsPage() {
             </Alert>
           ) : null}
 
+          <nav aria-label="本页目录" className="-mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {[
+              ["#library", "资料库"],
+              ["#confirmed", "已确认成果"],
+              ["#org", "组织与职责"],
+              ["#profile", "企业画像"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="text-primary hover:underline">
+                {label}
+              </a>
+            ))}
+          </nav>
+
           {materials.isLoading ? <Skeleton className="h-32" /> : <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />}
+
+          <ConfirmedResults />
+
+          <OrgView orgUnits={overview.orgUnits ?? []} team={overview.team ?? []} />
 
           <section aria-labelledby="profile" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
