@@ -1,6 +1,6 @@
 import { nocobaseClient } from "@nocobase/portal-sdk/client";
 
-import type { ProjectRole } from "@dingze/shared";
+import type { ArtifactStatus, ProjectRole, StartupState } from "@dingze/shared";
 
 // 运营管理 endpoints. Each names its enterprise or project explicitly and the plugin
 // checks the caller's space membership and system role, so no x-spaces header is needed.
@@ -86,6 +86,7 @@ export type OpsBoardProject = {
   name: string;
   year: number;
   enterpriseId: number;
+  campId?: number | null;
   stages: { key: string; name: string; locked: number; total: number }[];
   backlog: { stepDone: number; inReview: number; pendingConfirm: number; stale: number; comments: number };
   lastActivityAt: string | null;
@@ -105,6 +106,45 @@ export type OpsBoard = {
   enterprises: Pick<Enterprise, "id" | "name" | "shortName" | "status">[];
   projects: OpsBoardProject[];
 };
+
+export type CampStatus = "planning" | "running" | "closed";
+
+export type Camp = {
+  id: number;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  location: string | null;
+  status: CampStatus;
+  /** 今日目标表：现场看板按这几张表看进度。 */
+  focusCodes: string[];
+  note: string | null;
+  projectCount?: number;
+};
+
+export type CampProject = {
+  id: number;
+  name: string;
+  year: number;
+  scene: "camp" | "inhouse";
+  service: "guided" | "self";
+  enterprise: { id: number; name: string; shortName: string };
+  members: { userId: number; nickname: string; projectRole: ProjectRole }[];
+  enterpriseMembers: number;
+  startup: { key: "org" | "materials" | "team"; title: string; state: StartupState; detail: string; problems: string[] }[];
+  stages: OpsBoardProject["stages"];
+  focus: { code: string; status: ArtifactStatus }[];
+  stuck: { stepDone: number; inReview: number; pendingConfirm: number; stale: number; comments: number };
+  exports: number;
+  lockedTotal: number;
+  lastActivityAt: string | null;
+  usage: OpsBoardProject["usage"];
+};
+
+export type CampDetail = { camp: Camp; projects: CampProject[] };
+
+export type CampEnrollResult = { ok: boolean; enterprise: string; projectId?: number; username?: string; initialPassword?: string | null; error?: string };
+export type CampAccountResult = { ok: boolean; nickname: string; username: string; role?: ProjectRole; initialPassword?: string | null; existed?: boolean; error?: string };
 
 export const opsApi = {
   opsBoard: () => get<OpsBoard>("opsBoard"),
@@ -154,4 +194,20 @@ export const opsApi = {
   setProjectMembers: (values: { projectId: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
     post("setProjectMembers", values),
   removeProjectMember: (values: { projectId: number; userId: number }) => post("removeProjectMember", values),
+  listCamps: () => get<Camp[]>("listCamps"),
+  campDetail: (campId: number) => get<CampDetail>("campDetail", { campId }),
+  saveCamp: (values: Partial<Camp> & { name: string }) => post<Camp>("saveCamp", values),
+  campEnroll: (values: {
+    campId: number;
+    year?: number;
+    projectName?: string;
+    leadConsultantId?: number;
+    coConsultantIds?: number[];
+    rows: { name: string; shortName: string; size: "large" | "sme"; adminNickname: string; adminUsername: string; adminPhone?: string }[];
+  }) => post<{ results: CampEnrollResult[] }>("campEnroll", values),
+  campAttach: (values: { campId: number | null; projectIds: number[] }) => post<{ updated: number }>("campAttach", values),
+  campAccounts: (values: { projectId: number; rows: { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string }[] }) =>
+    post<{ results: CampAccountResult[] }>("campAccounts", values),
+  campRemind: (values: { campId: number; projectIds?: number[] }) => post<{ sent: number }>("campRemind", values),
+  campClose: (values: { campId: number; projects: { projectId: number; service: "guided" | "self" }[] }) => post<{ updated: number }>("campClose", values),
 };

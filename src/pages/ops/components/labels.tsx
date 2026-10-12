@@ -13,3 +13,5 @@ export function EnterpriseStatusBadge({ status }: { status: EnterpriseStatus }) 
     <Badge className="bg-status-done text-status-done-foreground">使用中</Badge>
   );
 }
+
+export const CAMP_STATUS_LABELS = { planning: "筹备中", running: "进行中", closed: "已结营" } as const;

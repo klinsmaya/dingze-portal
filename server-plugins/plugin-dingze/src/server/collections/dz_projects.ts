@@ -14,6 +14,8 @@ export default defineCollection({
     { type: 'string', name: 'scene', defaultValue: 'camp' },
     // 服务方式：guided 陪跑（有人工咨询师）/ self 自助（只有数字咨询师）。
     { type: 'string', name: 'service', defaultValue: 'guided' },
+    // 所属训练营批次（只在运营侧使用）。
+    { type: 'belongsTo', name: 'camp', target: 'dz_camps', foreignKey: 'campId', constraints: false },
     { type: 'string', name: 'primaryExpression', defaultValue: 'sixfold' },
     { type: 'integer', name: 'keyProjectLevel', defaultValue: 2 },
     { type: 'string', name: 'scheduleScale', defaultValue: 'month' },

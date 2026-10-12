@@ -34,7 +34,7 @@ async function sessionProjects(ctx: Context, sessionIds: string[]): Promise<Map<
   return out;
 }
 
-async function usageByProject(ctx: Context): Promise<Map<number, ProjectUsage>> {
+export async function usageByProject(ctx: Context): Promise<Map<number, ProjectUsage>> {
   const events = await ctx.db.getRepository('aiUsageEvents').find({
     filter: { aiEmployeeUsername: { $in: COACH_USERNAMES } },
     fields: ['sessionId', 'userId', 'occurredAt', 'inputTokens', 'outputTokens', 'totalTokens'],
@@ -80,6 +80,7 @@ export async function opsBoard(ctx: Context) {
       name: p.get('name'),
       year: p.get('year'),
       enterpriseId: p.get('enterpriseId'),
+      campId: p.get('campId') ?? null,
       stages: STAGES.map((s) => {
         const gate = stageGateCodes(s.key);
         return { key: s.key, name: s.name, locked: gate.filter((c) => status(c) === 'locked').length, total: gate.length };

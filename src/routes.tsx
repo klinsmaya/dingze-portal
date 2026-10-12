@@ -1,4 +1,4 @@
-import { Activity, BookOpenCheck, Building, Building2, ClipboardList, FolderKanban, MessagesSquare, Settings2, UsersRound } from "lucide-react";
+import { Activity, BookOpenCheck, Building, Building2, ClipboardList, FolderKanban, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
 import { Navigate, Outlet } from "react-router";
 
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
@@ -108,6 +108,15 @@ export const appRoutes = defineAppRoutes([
         },
       },
       { name: "ops.enterprise", path: "enterprises/:enterpriseId", lazy: () => import("@/pages/ops/enterprise-detail") },
+      {
+        name: "ops.camps",
+        path: "camps",
+        lazy: () => import("@/pages/ops/camps"),
+        resource: {
+          meta: { label: "训练营批次", priority: 1.5, icon: <Tent />, description: "按期组织训练营：批量加企业和发账号、营前准备、现场看板、结营。" },
+        },
+      },
+      { name: "ops.camp", path: "camps/:campId", lazy: () => import("@/pages/ops/camp-detail") },
       {
         name: "ops.team",
         path: "team",

@@ -16,6 +16,7 @@ import {
 } from './services/artifacts';
 import { consultantBoard } from './services/board';
 import { opsBoard } from './services/usage';
+import { campAccounts, campAttach, campClose, campDetail, campEnroll, campRemind, listCamps, saveCamp } from './services/camps';
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
@@ -103,6 +104,14 @@ export class PluginDingzeServer extends Plugin {
         myProjects: action((ctx) => myProjects(ctx)),
         consultantBoard: action((ctx) => consultantBoard(ctx)),
         opsBoard: action((ctx) => opsBoard(ctx)),
+        listCamps: action((ctx) => listCamps(ctx)),
+        saveCamp: action((ctx) => saveCamp(ctx, values(ctx) as any)),
+        campDetail: action((ctx) => campDetail(ctx, ctx.action.params.campId ?? values(ctx).campId)),
+        campEnroll: action((ctx) => campEnroll(ctx, values(ctx) as any)),
+        campAttach: action((ctx) => campAttach(ctx, values(ctx) as any)),
+        campAccounts: action((ctx) => campAccounts(ctx, values(ctx) as any)),
+        campRemind: action((ctx) => campRemind(ctx, values(ctx) as any)),
+        campClose: action((ctx) => campClose(ctx, values(ctx) as any)),
         addGuidanceGap: action(async (ctx) => {
           const v = values(ctx);
           const pc = await loadProjectContext(ctx, v.projectId);

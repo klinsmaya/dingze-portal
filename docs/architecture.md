@@ -39,7 +39,8 @@
 |---|---|
 | `dz_enterprises` | 企业档案（空间名、简称、规模、状态） |
 | `dz_org_units` | 组织部门 |
-| `dz_projects` | 项目（年度、场景、立项层级、时间刻度；S1-01 一律以六分法为必做表达） |
+| `dz_camps` | 训练营批次（只给运营）：名称、日期、地点、状态、今日目标表 |
+| `dz_projects` | 项目（年度、场景、服务方式陪跑 / 自助、所属训练营批次、立项层级、时间刻度；S1-01 一律以六分法为必做表达） |
 | `dz_project_members` | 项目成员与项目角色 |
 | `dz_artifacts` | 成果：状态、当前 / 本步完成 / 定版版本、上游已变更、例外 |
 | `dz_artifact_versions` | 版本快照：rev、kind（ai_draft / enterprise_edit / consultant_revision）、payload、upstreamRefs、changes（本次保存包含的修改命令：来源、标签、关联批注、逐路径原值 / 新值） |

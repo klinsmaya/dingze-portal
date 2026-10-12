@@ -11,11 +11,12 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage } from "@/lib/dingze/errors";
 import type { OpsBoardProject } from "@/lib/dingze/ops-api";
-import { useOpsBoard } from "@/lib/dingze/ops-queries";
+import { useCamps, useOpsBoard } from "@/lib/dingze/ops-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
 import { OpsPageHeader } from "./components/page-header";
+import { StageBars } from "./components/stage-bars";
 
 const number = new Intl.NumberFormat("zh-CN");
 
@@ -41,27 +42,6 @@ function Stat({ icon, label, value, hint }: { icon: React.ReactNode; label: stri
   );
 }
 
-function StageBars({ stages }: { stages: OpsBoardProject["stages"] }) {
-  return (
-    <div className="flex min-w-44 flex-col gap-1">
-      {stages.map((s) => {
-        const done = s.total > 0 && s.locked === s.total;
-        return (
-          <div key={s.key} className="flex items-center gap-2 text-xs" title={`${s.name}：已定版 ${s.locked} / ${s.total} 项 P0 成果`}>
-            <span className="w-14 shrink-0 text-muted-foreground">{s.name}</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <span className={cn("block h-full rounded-full", done ? "bg-status-done-foreground" : "bg-brand")} style={{ width: `${s.total ? (s.locked / s.total) * 100 : 0}%` }} />
-            </span>
-            <span className="w-9 shrink-0 text-right tabular-nums">
-              {s.locked}/{s.total}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function Backlog({ backlog }: { backlog: OpsBoardProject["backlog"] }) {
   const items = [
     { n: backlog.inReview, label: "待复核", tone: "border-gold text-brand" },
@@ -83,10 +63,12 @@ function Backlog({ backlog }: { backlog: OpsBoardProject["backlog"] }) {
 
 export default function OpsBoardPage() {
   const board = useOpsBoard();
+  const camps = useCamps();
   const [enterpriseId, setEnterpriseId] = useState("");
+  const [campId, setCampId] = useState("");
   const [onlyBacklog, setOnlyBacklog] = useState(false);
   const enterprises = useMemo(() => new Map((board.data?.enterprises ?? []).map((e) => [e.id, e])), [board.data]);
-  const projects = (board.data?.projects ?? []).filter((p) => (!enterpriseId || String(p.enterpriseId) === enterpriseId) && (!onlyBacklog || backlogCount(p) > 0));
+  const projects = (board.data?.projects ?? []).filter((p) => (!enterpriseId || String(p.enterpriseId) === enterpriseId) && (!campId || String(p.campId ?? "") === campId) && (!onlyBacklog || backlogCount(p) > 0));
 
   const all = board.data?.projects ?? [];
   const turns30 = all.reduce((n, p) => n + (p.usage?.turns30 ?? 0), 0);
@@ -127,6 +109,16 @@ export default function OpsBoardPage() {
                 </NativeSelectOption>
               ))}
             </NativeSelect>
+            {camps.data?.length ? (
+              <NativeSelect size="sm" aria-label="按训练营批次筛选" value={campId} onChange={(e) => setCampId(e.target.value)}>
+                <NativeSelectOption value="">全部批次</NativeSelectOption>
+                {camps.data.map((c) => (
+                  <NativeSelectOption key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            ) : null}
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={onlyBacklog} onCheckedChange={setOnlyBacklog} />
               只看有待办的项目

@@ -36,4 +36,17 @@ describe("startupChecklist", () => {
     });
     expect(items.every((i) => i.state === "done")).toBe(true);
   });
+
+  it("counts a unit head as placed even without a department of their own", () => {
+    const [org] = startupChecklist({
+      orgUnits: [{ id: 9, name: "澜岳食品", kind: "company" as const, parentId: null, headId: 21, sort: 0 }, dept(1, "营销中心", 22)],
+      team: [
+        { userId: 21, nickname: "周总", projectRole: "ent_lead", orgUnitId: null },
+        { userId: 22, nickname: "郑经理", projectRole: "dept_head", orgUnitId: 1 },
+      ],
+      materialCount: 0,
+      profileItems: [],
+    });
+    expect(org.state).toBe("done");
+  });
 });

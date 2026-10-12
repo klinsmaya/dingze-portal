@@ -6,6 +6,8 @@ export const opsKeys = {
   all: ["dingze", "ops"] as const,
   enterprises: ["dingze", "ops", "enterprises"] as const,
   board: ["dingze", "ops", "board"] as const,
+  camps: ["dingze", "ops", "camps"] as const,
+  camp: (id: number) => ["dingze", "ops", "camp", id] as const,
   enterprise: (id: number) => ["dingze", "ops", "enterprise", id] as const,
   users: (role?: SystemRole, q?: string) => ["dingze", "ops", "users", role ?? "", q ?? ""] as const,
 };
@@ -16,6 +18,14 @@ export function useEnterprises() {
 
 export function useOpsBoard() {
   return useQuery({ queryKey: opsKeys.board, queryFn: opsApi.opsBoard });
+}
+
+export function useCamps() {
+  return useQuery({ queryKey: opsKeys.camps, queryFn: opsApi.listCamps });
+}
+
+export function useCampDetail(campId: number | undefined) {
+  return useQuery({ queryKey: opsKeys.camp(campId ?? 0), queryFn: () => opsApi.campDetail(campId!), enabled: !!campId });
 }
 
 export function useEnterpriseDetail(enterpriseId: number | undefined) {
