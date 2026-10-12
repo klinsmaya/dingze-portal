@@ -64,6 +64,8 @@ export type ArtifactOverview = {
   status: ArtifactStatus;
   stale: boolean;
   staleReason: string | null;
+  /** 定版后组织又变了（最新在前，一行一条）。 */
+  orgNotice?: string | null;
   exception: boolean;
   currentRev: number;
   updatedAt: string | null;
@@ -78,6 +80,8 @@ export type ProjectOrgUnit = {
   kind: "company" | "department" | "team";
   parentId: number | null;
   headId: number | null;
+  headName?: string | null;
+  duty?: string | null;
   sort: number;
 };
 
@@ -161,6 +165,11 @@ export async function transitionArtifact(
     "transition",
     { body: values, headers: spaceHeaders(spaceName) }
   );
+}
+
+/** 组织已变更 → 主咨询师判断已定版的表不需要重开。 */
+export async function dismissOrgNotice(spaceName: string, values: { projectId: number; code: string; note?: string }) {
+  return nocobaseClient.action("dingze", "dismissOrgNotice", { body: values, headers: spaceHeaders(spaceName) });
 }
 
 export async function recordDissent(

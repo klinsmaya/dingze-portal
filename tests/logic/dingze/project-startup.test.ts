@@ -17,7 +17,7 @@ describe("startupChecklist", () => {
       profileItems: [],
     });
     expect(items.map((i) => i.state)).toEqual(["partial", "partial", "partial"]);
-    expect(items[0].notes[0]).toContain("燃气运营部 没有在系统里指定负责人");
+    expect(items[0].notes[0]).toContain("燃气运营部 还没写负责人");
     expect(items[0].problems.join("；")).toContain("刘主管 还没归到部门");
     expect(items[0].detail).toBe("2 个部门 · 1 / 2 人已归部门");
     expect(items[1].problems[0]).toContain("画像还是空的");

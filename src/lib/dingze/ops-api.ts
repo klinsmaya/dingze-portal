@@ -60,6 +60,10 @@ export type OrgUnit = {
   sort: number;
   parentId: number | null;
   headId: number | null;
+  /** 负责人没有账号时的姓名。 */
+  headName?: string | null;
+  /** 部门职责，供 RACI 等表参考。 */
+  duty?: string | null;
 };
 
 export type EnterpriseDetail = {
@@ -117,8 +121,20 @@ export const opsApi = {
     post<Enterprise>("updateEnterprise", values),
   addEnterpriseMembers: (values: { enterpriseId: number; userIds: number[] }) => post("addEnterpriseMembers", values),
   removeEnterpriseMember: (values: { enterpriseId: number; userId: number }) => post("removeEnterpriseMember", values),
-  saveOrgUnit: (values: { enterpriseId: number; id?: number; name: string; kind?: OrgUnit["kind"]; parentId?: number | null; headId?: number | null }) =>
-    post<OrgUnit>("saveOrgUnit", values),
+  saveOrgUnit: (values: {
+    enterpriseId: number;
+    id?: number;
+    name: string;
+    kind?: OrgUnit["kind"];
+    parentId?: number | null;
+    headId?: number | null;
+    headName?: string | null;
+    duty?: string | null;
+    sort?: number;
+  }) => post<OrgUnit>("saveOrgUnit", values),
+  importOrgUnits: (values: { enterpriseId: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] }) =>
+    post<{ created: number; updated: number; changes: number }>("importOrgUnits", values),
+  setMemberDepartment: (values: { enterpriseId: number; userId: number; orgUnitId: number | null }) => post<{ updated: number }>("setMemberDepartment", values),
   deleteOrgUnit: (values: { enterpriseId: number; id: number }) => post("deleteOrgUnit", values),
   listUsers: (query: { q?: string; role?: SystemRole } = {}) => get<DzUser[]>("listUsers", query),
   createUser: (values: {

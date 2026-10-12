@@ -24,8 +24,8 @@ export function startupChecklist(input: {
   const org: string[] = [];
   if (!depts.length) org.push("还没有部门：请企业管理员在「本企业 › 组织部门」里建好");
   // A head is optional: not every department head has an account here.
-  const headless = depts.filter((d) => !d.headId);
-  const orgNotes = headless.length ? [`${headless.map((d) => d.name).join("、")} 没有在系统里指定负责人（责任分工里的 A 要由人填写）`] : [];
+  const headless = depts.filter((d) => !d.headId && !d.headName);
+  const orgNotes = headless.length ? [`${headless.map((d) => d.name).join("、")} 还没写负责人（责任分工里的 A 要由人填写）`] : [];
   const floating = enterprise.filter((m) => !m.orgUnitId);
   if (floating.length) org.push(`${floating.map((m) => m.nickname).join("、")} 还没归到部门`);
 

@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { nextStep, workspacePath } from "@/lib/dingze/progress";
-import { useArtifactDetail, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
+import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
@@ -487,6 +487,7 @@ function Workspace({ code }: { code: string }) {
   }, [edit.log, undoCommand, numberOf]);
 
   const progress = overview.artifacts.find((a) => a.code === code);
+  const dismissOrg = useDismissOrgNotice(project, code);
 
   // 项目路线: where this table sits in the stage, and how far its sub-steps are.
   const routeCodes = def.stage === "goal" ? ["S2-01", "S2-03"] : def.stage === "strategy" ? ["S1-01"] : [];
@@ -669,6 +670,30 @@ function Workspace({ code }: { code: string }) {
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
   if (artifact?.stale) headerStates.push({ tone: "warn", text: "上游已变更", detail: `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。` });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
+  // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
+  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant";
+  if (progress?.orgNotice && status === "locked") {
+    headerStates.push({
+      tone: "warn",
+      text: "组织已变更",
+      detailLabel: "看变化",
+      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : "由主咨询师判断是否需要重开。"}`,
+      actions: canJudgeOrg ? (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={dismissOrg.isPending}
+          onClick={() => {
+            const note = window.prompt("说明一下为什么不需要重开（会记在审计里，可留空）：", "组织变更不影响这张表已定版的内容");
+            if (note === null) return;
+            dismissOrg.mutate(note, { onSuccess: () => toast.success("已确认不需要重开"), onError: (e) => toast.error(errorMessage(e)) });
+          }}
+        >
+          不需要重开
+        </Button>
+      ) : null,
+    });
+  }
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]

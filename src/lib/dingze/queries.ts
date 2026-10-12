@@ -12,6 +12,7 @@ import {
   listMyProjects,
   recordDissent,
   saveArtifact,
+  dismissOrgNotice,
   transitionArtifact,
 } from "./api";
 
@@ -93,6 +94,14 @@ export function useTransitionArtifact(project: ProjectSummary | undefined, code:
   return useMutation({
     mutationFn: (values: { action: Exclude<LifecycleAction, "save">; reason?: string }) =>
       transitionArtifact(project!.spaceName, { projectId: project!.id, code, ...values }),
+    onSuccess: () => invalidate(code),
+  });
+}
+
+export function useDismissOrgNotice(project: ProjectSummary | undefined, code: string) {
+  const invalidate = useInvalidateProject(project);
+  return useMutation({
+    mutationFn: (note?: string) => dismissOrgNotice(project!.spaceName, { projectId: project!.id, code, note }),
     onSuccess: () => invalidate(code),
   });
 }

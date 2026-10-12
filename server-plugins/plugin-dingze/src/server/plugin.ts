@@ -5,6 +5,7 @@ import type { LifecycleAction } from '../shared';
 import { HttpError, SYSTEM_ROLES, loadProjectContext } from './services/access';
 import {
   artifactDetail,
+  dismissOrgNotice,
   grantStepException,
   projectOverview,
   recordDissent,
@@ -33,6 +34,8 @@ import {
   removeProjectMember,
   resetPassword,
   saveOrgUnit,
+  setMemberDepartment,
+  importOrgUnits,
   updateEnterprise,
   updateProject,
 } from './services/ops';
@@ -222,6 +225,12 @@ export class PluginDingzeServer extends Plugin {
         addEnterpriseMembers: action((ctx) => addEnterpriseMembers(ctx, values(ctx) as any)),
         removeEnterpriseMember: action((ctx) => removeEnterpriseMember(ctx, values(ctx) as any)),
         saveOrgUnit: action((ctx) => saveOrgUnit(ctx, values(ctx) as any)),
+        setMemberDepartment: action((ctx) => setMemberDepartment(ctx, values(ctx) as any)),
+        importOrgUnits: action((ctx) => importOrgUnits(ctx, values(ctx) as any)),
+        dismissOrgNotice: action(async (ctx) => {
+          const v = values(ctx);
+          return dismissOrgNotice(ctx, await loadProjectContext(ctx, v.projectId), String(v.code ?? ''), v.note);
+        }),
         deleteOrgUnit: action((ctx) => deleteOrgUnit(ctx, values(ctx) as any)),
         listUsers: action((ctx) => listUsers(ctx, ctx.action.params as any)),
         createUser: action((ctx) => createUser(ctx, values(ctx) as any)),

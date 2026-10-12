@@ -123,6 +123,8 @@ export type HeaderState = {
   detail?: string | null;
   /** Link text for the popover, e.g. 查看原因 / 说明. */
   detailLabel?: string;
+  /** Buttons under the detail (e.g. 组织已变更 → 不需要重开). */
+  actions?: ReactNode;
 };
 
 const TONE: Record<HeaderState["tone"], string> = {
@@ -170,8 +172,9 @@ export function WhereRow({
               <PopoverTrigger className={cn("flex items-center gap-1 font-semibold underline-offset-2 hover:underline", TONE[s.tone])}>
                 <span className="size-1.5 rounded-full bg-current" /> {s.text} · {s.detailLabel ?? "查看原因"}
               </PopoverTrigger>
-              <PopoverContent align="end" className="max-w-sm text-sm">
+              <PopoverContent align="end" className="max-w-sm text-sm whitespace-pre-line">
                 {s.detail}
+                {s.actions ? <div className="mt-3 flex flex-wrap gap-2 whitespace-normal">{s.actions}</div> : null}
               </PopoverContent>
             </Popover>
           ) : (

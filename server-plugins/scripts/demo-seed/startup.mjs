@@ -38,6 +38,34 @@ async function organise(enterpriseId, heads, placements) {
   }
 }
 
+// 职责与无账号负责人（闭环第二批）：按组织表一次导入；已经一致时不产生变更。
+const ORG_TABLE = {
+  1: [
+    ['战略发展部', '', 'department', '张总', '战略规划、年度经营计划、投资管理'],
+    ['市场营销部', '', 'department', '赵部长', '工商业与居民用户开发、客户服务、价格管理'],
+    ['燃气运营部', '', 'department', '王经理', '输配运行、调度、管网巡检与抢修'],
+    ['调度中心', '燃气运营部', 'team', '刘主管', '24 小时供气调度与应急指挥'],
+    ['工程建设部', '', 'department', '孙部长', '管网与场站工程、工程项目管理'],
+    ['安全质量部', '', 'department', '钟部长', '安全生产、质量管理与应急演练'],
+    ['综合能源事业部', '', 'department', '林总', '分布式能源、LNG 点供、充换电'],
+    ['财务部', '', 'department', '周总监', '预算、核算、资金与投资回报分析'],
+    ['人力资源部', '', 'department', '郭部长', '招聘、培训、绩效与薪酬'],
+    ['信息中心', '', 'department', '袁主任', '智慧燃气平台、数据治理与信息安全'],
+  ],
+  3: [
+    ['战略投资部', '', 'department', '钱总', '公司战略与年度经营计划、投融资、董事会事务'],
+    ['储能事业部', '', 'department', '孙经理', '工商业储能 EPC 与合同能源管理的开发、方案和交付'],
+    ['充换电事业部', '', 'department', '郑经理', '充换电场站拓展、建设与运营，场站利用率'],
+    ['运维服务部', '', 'department', '吴经理', '自有与第三方储能电站代运维、运维平台'],
+    ['财务部', '', 'department', '何总监', '预算、核算、资金与回款管理'],
+    ['人力资源部', '', 'department', '冯经理', '招聘、培训、绩效与薪酬'],
+  ],
+};
+for (const [enterpriseId, rows] of Object.entries(ORG_TABLE)) {
+  const r = await ok(OPS, 'dingze:importOrgUnits', { enterpriseId: Number(enterpriseId), rows: rows.map(([name, parent, kind, head, duty]) => ({ name, parent, kind, head, duty })) });
+  log('org table', enterpriseId, JSON.stringify(r));
+}
+
 await organise(1, { 战略发展部: 'dz_zhang', 燃气运营部: 'dz_wang', 调度中心: 'dz_liu', 财务部: 'dz_zhou' }, { dz_zhang: '战略发展部' });
 await organise(3, { 战略投资部: 'dz_qian', 储能事业部: 'dz_sun', 财务部: 'dz_he' }, { dz_qian: '战略投资部', dz_sun: '储能事业部', dz_he: '财务部' });
 

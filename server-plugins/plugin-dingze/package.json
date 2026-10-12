@@ -4,7 +4,7 @@
   "displayName.zh-CN": "定责 · 企业战略咨询平台",
   "description": "Responsibility stages (strategy, goals, actions) for the strategy consulting platform: data model, lifecycle actions and digital consultants.",
   "description.zh-CN": "企业战略咨询平台“定三责”业务插件：数据模型、成果流转接口与数字咨询师。",
-  "version": "0.18.2",
+  "version": "0.19.1",
   "main": "dist/server/index.js",
   "dependencies": {},
   "peerDependencies": {

@@ -343,6 +343,8 @@ export async function transitionArtifact(
     }
 
     const values: Record<string, unknown> = { status: to };
+    // 组织变更提示只对“这一版定版”有意义：重开、退回或重新定版后就不再成立。
+    if (['confirm', 'forceLock', 'reopen', 'forceReturn'].includes(action)) values.orgNotice = null;
     if (action === 'stepDone') values.stepDoneVersionId = artifact.get('currentVersionId');
     if (action === 'confirm' || action === 'forceLock') values.lockedVersionId = artifact.get('currentVersionId');
     await artifact.update(values, { transaction });
@@ -438,6 +440,8 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
       kind: o.get('kind'),
       parentId: o.get('parentId') ?? null,
       headId: o.get('headId') ?? null,
+      headName: o.get('headName') ?? null,
+      duty: o.get('duty') ?? null,
       sort: o.get('sort') ?? 0,
     })),
     team: members.map((m: any) => ({
@@ -455,6 +459,7 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
         status: (row?.get('status') as ArtifactStatus) ?? 'not_started',
         stale: !!row?.get('stale'),
         staleReason: row?.get('staleReason') ?? null,
+        orgNotice: row?.get('orgNotice') ?? null,
         exception: !!row?.get('exception'),
         currentRev: row?.get('currentRev') ?? 0,
         updatedAt: row?.get('updatedAt') ?? null,
@@ -500,5 +505,22 @@ export async function grantStepException(ctx: Context, pc: ProjectContext, def: 
     });
     await audit(ctx, pc, { code: def.code, action: 'grantException', reason }, transaction);
     return { exception: true };
+  });
+}
+
+/**
+ * 组织已变更 → “不需要重开”: the lead consultant (or a consulting admin) judges the locked table
+ * still holds and clears the notice; the judgement is kept in the audit log.
+ */
+export async function dismissOrgNotice(ctx: Context, pc: ProjectContext, code: string, note?: string) {
+  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant')) throw new HttpError(403, '只有主咨询师可以确认不需要重开');
+  const projectId = pc.project.get('id');
+  return ctx.db.sequelize.transaction(async (transaction: any) => {
+    const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });
+    if (!row?.get('orgNotice')) return { ok: true };
+    const notice = row.get('orgNotice');
+    await row.update({ orgNotice: null }, { transaction });
+    await audit(ctx, pc, { code, action: 'dismissOrgNotice', reason: String(note ?? '').slice(0, 500) || '组织变更不影响已定版内容', meta: { notice } }, transaction);
+    return { ok: true };
   });
 }

@@ -2,7 +2,9 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
+import { ORG_DEPENDENT_CODES, type OrgUnitFacts, appendOrgNotice, describeOrgChange, getArtifactDef } from '../../shared';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
+import { notify, projectMemberIds } from './notify';
 
 // 运营管理：账号、企业档案、空间成员、组织部门与项目成员。
 // Every action re-checks who may touch which enterprise; the multi-space plugin does not
@@ -243,7 +245,16 @@ export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
     }),
     orgUnits: orgUnits.map((o: any) => {
       const json = o.toJSON();
-      return { id: json.id, name: json.name, kind: json.kind, sort: json.sort, parentId: json.parentId ?? null, headId: json.headId ?? null };
+      return {
+        id: json.id,
+        name: json.name,
+        kind: json.kind,
+        sort: json.sort,
+        parentId: json.parentId ?? null,
+        headId: json.headId ?? null,
+        headName: json.headName ?? null,
+        duty: json.duty ?? null,
+      };
     }),
     members: members.map(publicUser),
   };
@@ -295,9 +306,56 @@ export async function removeEnterpriseMember(ctx: Context, input: { enterpriseId
 
 // ── 组织部门 ─────────────────────────────────────────────────────────
 
+/** The facts of a unit that the department tables use. */
+const orgFacts = (u: any): OrgUnitFacts => ({
+  name: u.get('name'),
+  kind: u.get('kind'),
+  parentId: u.get('parentId') ?? null,
+  headId: u.get('headId') ?? null,
+  headName: u.get('headName') ?? null,
+  duty: u.get('duty') ?? null,
+});
+
+/**
+ * 组织变了：flag the locked department tables of every project of the enterprise and tell the
+ * lead consultant(s) and the enterprise lead; nothing in the tables changes by itself.
+ */
+async function flagOrgChange(ctx: Context, enterpriseId: number, line: string | null) {
+  if (!line) return;
+  const projects = await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId } });
+  const date = new Date().toISOString().slice(5, 10);
+  for (const project of projects) {
+    const projectId = project.get('id') as number;
+    const locked = await ctx.db.getRepository('dz_artifacts').find({ filter: { projectId, code: { $in: ORG_DEPENDENT_CODES }, status: 'locked' } });
+    if (!locked.length) continue;
+    for (const row of locked) await row.update({ orgNotice: appendOrgNotice(row.get('orgNotice'), line, date) });
+    const codes = locked.map((r: any) => r.get('code') as string);
+    await notify(ctx, {
+      projectId,
+      spaceName: project.get('spaceName'),
+      userIds: await projectMemberIds(ctx, projectId, ['lead_consultant', 'ent_lead']),
+      kind: 'orgChanged',
+      title: '组织已变更，请判断已定版的部门表要不要重开',
+      content: `${line}。受影响的已定版表：${codes.map((c) => getArtifactDef(c).specId).join('、')}。表里保留定版时的部门，不会自动改。`,
+      link: `/projects/${projectId}/workspace/${codes[0]}`,
+      code: codes[0],
+    });
+  }
+}
+
 export async function saveOrgUnit(
   ctx: Context,
-  input: { enterpriseId: number; id?: number; name: string; kind?: string; parentId?: number | null; headId?: number | null; sort?: number },
+  input: {
+    enterpriseId: number;
+    id?: number;
+    name: string;
+    kind?: string;
+    parentId?: number | null;
+    headId?: number | null;
+    headName?: string | null;
+    duty?: string | null;
+    sort?: number;
+  },
 ) {
   const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
   const repo = ctx.db.getRepository('dz_org_units');
@@ -313,16 +371,94 @@ export async function saveOrgUnit(
     kind: ['company', 'department', 'team'].includes(String(input.kind)) ? input.kind : 'department',
     parentId,
     headId: input.headId ? positiveId(input.headId, '负责人') : null,
+    headName: input.headId ? null : String(input.headName ?? '').trim().slice(0, 30) || null,
+    duty: String(input.duty ?? '').trim().slice(0, 500) || null,
     sort: Number.isFinite(Number(input.sort)) ? Number(input.sort) : 0,
   };
   if (input.id) {
     const unit = await repo.findOne({ filter: { id: Number(input.id), enterpriseId } });
     if (!unit) throw new HttpError(404, '部门不存在');
+    const before = orgFacts(unit);
     await unit.update(values);
+    await flagOrgChange(ctx, enterpriseId, describeOrgChange(before, orgFacts(unit)));
     return unit.toJSON();
   }
   const unit = await repo.create({ values: { ...values, enterpriseId, spaceName, ...creator(ctx) } });
+  await flagOrgChange(ctx, enterpriseId, describeOrgChange(null, orgFacts(unit)));
   return unit.toJSON();
+}
+
+/**
+ * 从 Excel 粘贴组织表：upsert by name in one transaction (parents first, as the rows arrive), heads
+ * matched to enterprise accounts by name or kept as a plain name; one combined change notice.
+ */
+export async function importOrgUnits(
+  ctx: Context,
+  input: { enterpriseId: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] },
+) {
+  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
+  const enterpriseId = enterprise.get('id') as number;
+  const rows = Array.isArray(input.rows) ? input.rows.slice(0, 200) : [];
+  if (!rows.length) throw new HttpError(400, '没有可导入的部门');
+  const people = await ctx.db.getRepository('spaces.users', spaceName).find({});
+  const personId = (name: string) => people.find((u: any) => u.get('nickname') === name || u.get('username') === name)?.get('id') ?? null;
+  const repo = ctx.db.getRepository('dz_org_units');
+  const lines: string[] = [];
+  let created = 0;
+  let updated = 0;
+  await ctx.db.sequelize.transaction(async (transaction: any) => {
+    const units = await repo.find({ filter: { enterpriseId }, transaction });
+    const byName = new Map<string, any>(units.map((u: any) => [u.get('name'), u]));
+    for (const [i, row] of rows.entries()) {
+      const name = text(row.name, '部门名称', 50);
+      const parent = row.parent ? byName.get(String(row.parent).trim()) : null;
+      const head = String(row.head ?? '').trim();
+      const headId = head ? personId(head) : null;
+      const existing = byName.get(name);
+      const values: Record<string, unknown> = {
+        name,
+        kind: ['company', 'department', 'team'].includes(String(row.kind)) ? row.kind : 'department',
+        parentId: parent && parent !== existing ? parent.get('id') : null,
+        ...(head ? { headId, headName: headId ? null : head.slice(0, 30) } : {}),
+        ...(String(row.duty ?? '').trim() ? { duty: String(row.duty).trim().slice(0, 500) } : {}),
+      };
+      if (existing) {
+        const before = orgFacts(existing);
+        await existing.update(values, { transaction });
+        const line = describeOrgChange(before, orgFacts(existing));
+        if (line) lines.push(line);
+        updated++;
+      } else {
+        const unit = await repo.create({ values: { ...values, sort: units.length + i + 1, enterpriseId, spaceName, ...creator(ctx) }, transaction });
+        byName.set(name, unit);
+        lines.push(describeOrgChange(null, orgFacts(unit))!);
+        created++;
+      }
+    }
+  });
+  await audit(ctx, spaceName, 'org.import', { created, updated });
+  if (lines.length) await flagOrgChange(ctx, enterpriseId, `导入组织表：${lines.length > 4 ? `${lines.slice(0, 4).join('；')} 等 ${lines.length} 处` : lines.join('；')}`);
+  return { created, updated, changes: lines.length };
+}
+
+/**
+ * 成员所属部门：the enterprise admin (or ops) puts a member in a department for every project of
+ * the enterprise at once — members belong to one department, whichever project they work on.
+ */
+export async function setMemberDepartment(ctx: Context, input: { enterpriseId: number; userId: number; orgUnitId: number | null }) {
+  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
+  const enterpriseId = enterprise.get('id');
+  const userId = positiveId(input.userId, '成员');
+  const orgUnitId = input.orgUnitId ? positiveId(input.orgUnitId, '部门') : null;
+  if (orgUnitId && !(await ctx.db.getRepository('dz_org_units').findOne({ filter: { id: orgUnitId, enterpriseId } }))) {
+    throw new HttpError(400, '部门不属于本企业');
+  }
+  const projectIds = (await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId }, fields: ['id'] })).map((p: any) => p.get('id'));
+  if (!projectIds.length) return { updated: 0 };
+  const rows = await ctx.db.getRepository('dz_project_members').find({ filter: { userId, projectId: { $in: projectIds } } });
+  for (const row of rows) await row.update({ orgUnitId });
+  await audit(ctx, spaceName, 'member.setDepartment', { userId, orgUnitId, projects: rows.length });
+  return { updated: rows.length };
 }
 
 export async function deleteOrgUnit(ctx: Context, input: { enterpriseId: number; id: number }) {
@@ -334,7 +470,9 @@ export async function deleteOrgUnit(ctx: Context, input: { enterpriseId: number;
   if (await ctx.db.getRepository('dz_project_members').count({ filter: { orgUnitId: id } })) {
     throw new HttpError(409, '还有项目成员归属这个部门，请先调整成员的部门');
   }
+  const unit = await repo.findOne({ filter: { id, enterpriseId } });
   await repo.destroy({ filter: { id, enterpriseId } });
+  if (unit) await flagOrgChange(ctx, enterpriseId, describeOrgChange(orgFacts(unit), null));
   return { ok: true };
 }
 

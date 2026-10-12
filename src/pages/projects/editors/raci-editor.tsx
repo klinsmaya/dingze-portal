@@ -70,13 +70,13 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
     });
 
   const depts = orgUnits.filter((o) => o.kind === "department");
-  const headless = depts.filter((d) => !d.headId).map((d) => d.name);
+  const headless = depts.filter((d) => !d.headId && !d.headName).map((d) => d.name);
   return (
     <section aria-label="RACI 责任分解矩阵" className="flex flex-col gap-4">
       <SourceNote to={`/projects/${project.id}/materials#org`} linkLabel="看组织与职责" warn={!depts.length}>
         {!depts.length
           ? "组织里还没有部门：责任者列只能手动加。请企业管理员先在「本企业 › 组织部门」建好部门和负责人。"
-          : `责任者列取自组织部门（${depts.length} 个）${headless.length ? `；${headless.join("、")} 没有在系统里指定负责人，A 要由人确认` : ""}。组织之外的责任者可以加自定义列；定版后组织再变，这里只提示、不自动改。`}
+          : `责任者列取自组织部门（${depts.length} 个）${headless.length ? `；${headless.join("、")} 还没写负责人` : ""}，表头小字是部门职责，定 A、R 时对照着看。组织之外的责任者可以加自定义列；定版后组织再变，这里只提示、不自动改。`}
       </SourceNote>
       <EditorToolbar hint="R 执行者、A 最终负责者、C 咨询协同、I 知情。每行 A 必须唯一、至少一个 R；点 A 会自动从同行其他部门移走。">
         <ImportButton label="带入组织部门" count={deptSeed.length} readOnly={readOnly} onClick={() => onChange({ ...value, columns: [...columns, ...deptSeed] })} />
@@ -113,18 +113,27 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
           <thead className="bg-muted text-xs text-muted-foreground">
             <tr>
               <th className="sticky left-0 min-w-56 bg-muted px-2 py-2 text-left font-semibold">关键项目 / 路径</th>
-              {columns.map((c) => (
-                <th data-anchor={c.id} key={c.id} className={cn("min-w-32 px-2 py-2 text-center font-semibold", invalid.has(c.id) && "text-destructive")}>
-                  <div className="flex items-center justify-center gap-1">
-                    {c.name}
-                    {!readOnly ? (
-                      <button type="button" aria-label={`删除列 ${c.name}`} onClick={() => removeColumn(c.id)} className="text-muted-foreground hover:text-destructive">
-                        <X className="size-3" />
-                      </button>
+              {columns.map((c) => {
+                // 部门职责作参考（闭环第二批）：取当前组织里的职责，表里只存部门名。
+                const unit = c.id.startsWith("org-") ? orgUnits.find((o) => `org-${o.id}` === c.id) : undefined;
+                return (
+                  <th data-anchor={c.id} key={c.id} className={cn("min-w-32 px-2 py-2 text-center align-top font-semibold", invalid.has(c.id) && "text-destructive")}>
+                    <div className="flex items-center justify-center gap-1">
+                      {c.name}
+                      {!readOnly ? (
+                        <button type="button" aria-label={`删除列 ${c.name}`} onClick={() => removeColumn(c.id)} className="text-muted-foreground hover:text-destructive">
+                          <X className="size-3" />
+                        </button>
+                      ) : null}
+                    </div>
+                    {unit?.duty ? (
+                      <div className="mx-auto mt-0.5 line-clamp-2 max-w-40 text-[10px] font-normal" title={`职责：${unit.duty}`}>
+                        {unit.duty}
+                      </div>
                     ) : null}
-                  </div>
-                </th>
-              ))}
+                  </th>
+                );
+              })}
               <th className="w-20 px-2 py-2 text-center font-semibold">A / R</th>
               <th className="w-24" />
             </tr>

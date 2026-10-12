@@ -48,7 +48,9 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
                   <span className="font-medium">{node.name}</span>
                   <Badge variant="outline">{KIND[node.kind]}</Badge>
                 </span>
-                <span className="text-xs text-muted-foreground">负责人：{head ?? (node.headId ? "（不在本项目）" : <span className="text-[color:var(--dz-warn)]">未设</span>)}</span>
+                <span className="text-xs text-muted-foreground">
+                  负责人：{head ?? (node.headId ? "（不在本项目）" : node.headName ? `${node.headName}（无账号）` : "未设")}
+                </span>
                 {members.length ? (
                   <span className="ml-auto flex flex-wrap gap-1">
                     {members.map((m) => (
@@ -57,6 +59,11 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
                       </Badge>
                     ))}
                   </span>
+                ) : null}
+                {node.duty ? (
+                  <p className="w-full text-xs text-muted-foreground" style={{ paddingLeft: `${node.depth * 1.5 + 1.5}rem` }}>
+                    职责：{node.duty}
+                  </p>
                 ) : null}
               </li>
             );
