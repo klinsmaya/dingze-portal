@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, Import, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleHelp, Import, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -60,10 +61,23 @@ export function TextCell({
   );
 }
 
+/** The editor's own small row: a 怎么填 tip (kept out of the way) and table-specific buttons. */
 export function EditorToolbar({ children, hint }: { children?: ReactNode; hint?: ReactNode }) {
+  if (!children && !hint) return null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      {hint ? (
+        <Popover>
+          <PopoverTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <CircleHelp className="size-3.5" /> 怎么填
+          </PopoverTrigger>
+          <PopoverContent align="start" className="max-w-md text-sm leading-relaxed">
+            {hint}
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <span />
+      )}
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );

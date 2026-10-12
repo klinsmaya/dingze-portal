@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { Ellipsis, History, MessageSquarePlus } from "lucide-react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AIChatWindow,
   AIToolRendererProvider,
-  ChatInline,
   type AIToolRendererMap,
   type AIToolRendererProps,
 } from "@/extensions/nocobase-ai/components";
@@ -19,6 +19,7 @@ import type { StageKey } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { getAt, preview } from "@/lib/dingze/edit-log";
@@ -275,10 +276,21 @@ function CoachBridge() {
 }
 
 /** Cold start: three first sentences a newcomer can click (design 10 / usability #6). */
-function StarterPrompts() {
+function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
   const { messages } = useAIChatMessages();
   const { messagesLoading } = useAIChatBase();
   const session = useEditSession();
+  // Sit in the empty message area, just above the composer (which keeps its own height).
+  const [bottom, setBottom] = useState(140);
+  useEffect(() => {
+    const composer = host.current?.querySelector<HTMLElement>(".ai-chat-window > div > :last-child");
+    if (!composer) return;
+    const measure = () => setBottom(composer.offsetHeight + 12);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, [host, messages.length]);
   if (messages.length || messagesLoading) return null;
   const cell = session?.focusAnchor ? session.nameOf(session.focusAnchor) : null;
   const prompts: [string, string][] = [
@@ -287,7 +299,7 @@ function StarterPrompts() {
     ["建议怎么填", "结合我们企业的资料，建议这张表怎么填；先给思路，我同意后再出修改卡。"],
   ];
   return (
-    <div className="flex flex-col gap-1.5" aria-label="可以这样开始">
+    <div className="absolute inset-x-3 z-10 flex flex-col gap-1.5 rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur" style={{ bottom }} aria-label="可以这样开始">
       <span className="text-xs text-muted-foreground">第一次用？点一句开始：</span>
       {prompts.map(([label, text]) => (
         <Button key={label} variant="outline" size="sm" className="justify-start whitespace-normal text-left" onClick={() => askCoach(text)}>
@@ -295,6 +307,26 @@ function StarterPrompts() {
         </Button>
       ))}
     </div>
+  );
+}
+
+/** 新对话 / 历史对话 (the chat header row is hidden under the panel tabs). */
+function ChatMenu() {
+  const { startNewConversation, setConversationListOpen } = useAIChatBase();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-20" aria-label="对话菜单" />}>
+        <Ellipsis />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        <DropdownMenuItem onClick={() => startNewConversation()}>
+          <MessageSquarePlus /> 新对话
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setConversationListOpen(true)}>
+          <History /> 历史对话
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -308,6 +340,7 @@ export function CoachPanel({
 }) {
   const ai = useAI();
   const controller = useAIChatController();
+  const host = useRef<HTMLDivElement>(null);
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(
     () => ai.employees.some((e) => e.username === employee),
@@ -334,16 +367,19 @@ export function CoachPanel({
       >
         <AttachPageContext />
         <CoachBridge />
-        <StarterPrompts />
-        <ChatInline className="h-[calc(100svh-9rem)] min-h-[520px] rounded-xl bg-card">
+        {/* Messages scroll; the composer stays at the bottom of the panel (design 10). */}
+        <div ref={host} data-dingze-chat className="relative flex min-h-0 flex-1 flex-col">
+          <ChatMenu />
           <AIChatWindow
+            className="min-h-0 flex-1 bg-card"
             showConversationToggle
             showEmployeeSelector={false}
             showModelSelector={false}
-            disclaimer="建议需你确认后才写入成果"
+            disclaimer="Enter 发送 · Shift+Enter 换行 · 修改卡确认后才写入成果"
             placeholder="回答数字咨询师，或直接说你的想法…"
           />
-        </ChatInline>
+          <StarterPrompts host={host} />
+        </div>
       </AIChatProvider>
     </AIToolRendererProvider>
   );

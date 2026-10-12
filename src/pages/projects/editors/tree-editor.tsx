@@ -46,7 +46,7 @@ import {
   subtree,
 } from "@/lib/dingze/tree-ops";
 import { cn } from "@/lib/utils";
-import { useEditSession } from "@/pages/projects/components/edit-session";
+import { type EditorChrome, useEditSession, useEditorChrome } from "@/pages/projects/components/edit-session";
 
 // 调结构 UI shared by the path systems (S2-03 / S2-06) and WBS (S3-02): the same operations in the
 // 思维导图 (node toolbar, drag, keyboard) and in the 表格 (row menu). Every operation is one
@@ -328,10 +328,12 @@ type MindProps<T extends TreeItem> = {
   rootCards: { root: TreeRoot; nodes: T[]; onAdd?: () => void; badge?: string }[];
   emptyHint?: ReactNode;
   side?: ReactNode;
+  /** The editor's header chrome (title, views …); the map adds its toolbar and zoom to it. */
+  chrome?: EditorChrome;
 };
 
 /** 思维导图: a left-to-right tree of the same nodes as the table (role=tree). */
-export function TreeMindMap<T extends TreeItem>({ cfg, readOnly, invalid, fields, patch, detail, tag, rollUp, rootCards, emptyHint, side }: MindProps<T>) {
+export function TreeMindMap<T extends TreeItem>({ cfg, readOnly, invalid, fields, patch, detail, tag, rollUp, rootCards, emptyHint, side, chrome }: MindProps<T>) {
   const actions = useTreeActions(cfg);
   const session = useEditSession();
   const [selected, setSelected] = useState<string | null>(null);
@@ -341,6 +343,8 @@ export function TreeMindMap<T extends TreeItem>({ cfg, readOnly, invalid, fields
   const [drag, setDrag] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ key: string; ok: boolean; text: string } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const tree = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
 
   const visible = useMemo(() => {
     const out: T[] = [];
@@ -430,6 +434,51 @@ export function TreeMindMap<T extends TreeItem>({ cfg, readOnly, invalid, fields
       setDrop(null);
     },
   });
+
+  // The header toolbar acts on the selected node (design 10: one toolbar for map and table).
+  const sel = selected && cfg.nodes.some((n) => n.id === selected) ? selected : null;
+  const selNode = sel ? cfg.nodes.find((n) => n.id === sel)! : null;
+  const visibleIndex = sel ? visible.findIndex((x) => x.id === sel) : -1;
+  useEditorChrome(
+    chrome
+      ? {
+          ...chrome,
+          tools: {
+            selected: sel,
+            selectedLabel: selNode ? cfg.title(selNode) || "（未命名）" : undefined,
+            ...(sel && !readOnly
+              ? {
+                  child: selNode && selNode.level < cfg.maxLevel ? () => after(actions.child(sel), true) : undefined,
+                  sibling: () => after(actions.sibling(sel), true),
+                  indent: cfg.maxLevel > 1 ? () => after(actions.indent(sel)) : undefined,
+                  outdent: cfg.maxLevel > 1 ? () => after(actions.outdent(sel)) : undefined,
+                  up: () => after(actions.up(sel)),
+                  down: () => after(actions.down(sel)),
+                  moveTo: () => setMoving(sel),
+                  split: () => after(actions.split(sel)),
+                  merge: () => after(actions.merge(sel)),
+                  remove: () => {
+                    const fallback = visible[visibleIndex - 1]?.id ?? visible[visibleIndex + 1]?.id ?? null;
+                    if (actions.remove(sel) !== null) setSelected(fallback);
+                  },
+                }
+              : {}),
+          },
+          zoom: {
+            value: zoom,
+            set: setZoom,
+            fit: () => {
+              const host = box.current;
+              const content = tree.current;
+              if (!host || !content) return;
+              const ratio = (host.clientWidth - 48) / (content.scrollWidth || 1);
+              setZoom(Math.max(0.5, Math.min(1, Math.round(ratio * 10) / 10)));
+            },
+          },
+        }
+      : null,
+    !!chrome,
+  );
 
   const renderNode = (n: T): ReactNode => {
     const kids = childrenOf(cfg.nodes, n.id);
@@ -536,8 +585,8 @@ export function TreeMindMap<T extends TreeItem>({ cfg, readOnly, invalid, fields
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-      <div ref={box} className="dz-mm min-w-0 flex-1 overflow-auto rounded-xl border bg-muted/30 p-4 pt-12">
-        <div role="tree" aria-label="思维导图" className="flex flex-col gap-8">
+      <div ref={box} className="dz-mm dz-dots min-w-0 flex-1 overflow-auto rounded-lg p-6 pt-12">
+        <div ref={tree} role="tree" aria-label="思维导图" className="flex w-max flex-col gap-8" style={zoom === 1 ? undefined : { zoom }}>
           {rootCards.map(({ root, nodes, onAdd, badge }) => (
             <div key={root.id ?? "root"} data-mm-root={root.id ?? ""} className="flex items-center">
               <div

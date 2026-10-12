@@ -13,6 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useEditorChrome } from "@/pages/projects/components/edit-session";
+
+import { EditorToolbar } from "./kit";
 
 const MAX_BATTLEFIELDS = 4;
 
@@ -247,33 +250,20 @@ export function StrategyContentEditor(props: EditorProps) {
   const { value } = props;
   // 六分法 is the P0 table; the strategy house is an optional (P1) expression of the same data.
   const [view, setView] = useState<StrategyExpression>("sixfold");
+  useEditorChrome({
+    title: view === "house" ? "战略屋" : "战略简约六分法表",
+    chip: view === "house" ? "S1-01 · 图 2-3 · 可选" : "S1-01 · 表 2-1 · 必做",
+    views: [
+      { key: "sixfold", label: "六分法" },
+      { key: "house", label: "战略屋（可选）" },
+    ],
+    view,
+    setView: (k) => setView(k as StrategyExpression),
+  });
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div role="tablist" aria-label="表达方式" className="flex overflow-hidden rounded-lg border">
-          {(["sixfold", "house"] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={view === key}
-              onClick={() => setView(key)}
-              className={cn(
-                "min-h-9 px-4 text-sm",
-                view === key ? "bg-brand font-bold text-brand-foreground" : "bg-card text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {key === "house" ? "战略屋" : "战略简约六分法"}
-              <span className="ml-1 text-xs opacity-80">{key === "house" ? "（可选）" : "（必做）"}</span>
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-muted-foreground">
-          六个方面全部填齐（写“待补”不算）才能“本步完成”；战略屋是可选的另一种表达，使命、愿景两处共用。
-          {houseStarted(value) ? "" : " 战略屋尚未填写。"}
-        </span>
-      </div>
+      <EditorToolbar hint={`六个方面全部填齐（写“待补”不算）才能“本步完成”；战略屋是可选的另一种表达，使命、愿景两处共用。${houseStarted(value) ? "" : "战略屋尚未填写。"}`} />
 
       {view === "house" ? <HouseView {...props} /> : <SixfoldView {...props} />}
 

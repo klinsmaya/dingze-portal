@@ -1,4 +1,4 @@
-import { ArrowRight, History, Lock, Redo2, Save, Undo2 } from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { useGetIdentity } from "@refinedev/core";
@@ -12,6 +12,7 @@ import {
   isArtifactCode,
   validateArtifact,
   ARTIFACTS,
+  STAGES,
   profileBrief,
 } from "@dingze/shared";
 
@@ -21,7 +22,6 @@ import {
   defineAIFrontendTool,
 } from "@/extensions/nocobase-ai/providers";
 
-import { StatusBadge } from "@/components/dingze/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,8 @@ import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
 import { useArtifactHistory, useRecordExport } from "@/lib/dingze/records-queries";
 import { formatTime } from "@/lib/dingze/records";
+import { locateAnchor } from "@/lib/dingze/locate";
+import { buildRoute, topbarItems } from "@/lib/dingze/route";
 import { cn } from "@/lib/utils";
 
 import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
@@ -48,29 +50,23 @@ import { CoachPanel } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
-import { StepBar } from "./components/step-bar";
+import { type RailLink, RouteRail } from "./components/route-rail";
+import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, TitleRow, TopbarTitle, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { BookMethod } from "./components/book-method";
 import { ChangesPanel } from "./components/changes-panel";
 import { CommentsPanel, circled } from "./components/comments-panel";
 import { CommentPins, EditMarkers } from "./components/edit-markers";
-import { type EditSession, EditSessionContext, type RevisionState, pathNamer } from "./components/edit-session";
+import { type EditSession, EditSessionContext, type EditorChrome, type RevisionState, pathNamer } from "./components/edit-session";
 import { ShortcutsDialog, StatusBar } from "./components/status-bar";
 import { GuidanceGapButton } from "./components/guidance-gap-dialog";
 import { ArtifactEditor } from "./editors/artifact-editor";
 import { useProjectContext } from "./project-context";
 
-type AsideTab = "coach" | "comments" | "changes";
+type AsideTab = "coach" | "comments" | "changes" | "book";
 type EditState = { payload: unknown; log: Command[]; redo: Command[]; saved: Command[] };
 const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: [], saved: [] });
 
-const TONE_CLASS: Record<string, string> = {
-  act: "border-gold bg-gold/15 text-foreground",
-  wait: "border-border bg-muted text-muted-foreground",
-  done: "border-brand/30 bg-brand/10 text-brand",
-  warn: "border-destructive/30 bg-status-stale text-status-stale-foreground",
-  neutral: "border-border text-muted-foreground",
-};
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
 const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
@@ -105,7 +101,7 @@ export default function WorkspacePage() {
 }
 
 function Workspace({ code }: { code: string }) {
-  const { project, overview } = useProjectContext();
+  const { project, overview, topbar } = useProjectContext();
   const def = getArtifactDef(code);
   const detail = useArtifactDetail(project, code);
   const save = useSaveArtifact(project, code);
@@ -344,6 +340,9 @@ function Workspace({ code }: { code: string }) {
     setAsideTab("changes");
     compareWith(revision.baseRev, !revision.on).catch(() => toast.error("读取对比版本失败"));
   };
+  // What the open editor puts in the header (views, title, toolbar); re-render when it changes.
+  const chromeRef = useRef<EditorChrome | null>(null);
+  const [, setChromeSig] = useState("");
   const validate = useCallback((payload: unknown) => (payload ? validateArtifact(code, payload, upstream) : []), [code, upstream]);
   const session: EditSession = useMemo(
     () => ({
@@ -377,10 +376,12 @@ function Workspace({ code }: { code: string }) {
         pendingMeta.current = meta;
       },
       commentOn: (anchor: string) => {
-        setFocusAnchor(anchor);
+        if (anchor) setFocusAnchor(anchor);
         setAsideTab("comments");
         setComposeSignal((n) => n + 1);
       },
+      chrome: chromeRef,
+      publishChrome: setChromeSig,
     }),
     [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
   );
@@ -422,6 +423,20 @@ function Workspace({ code }: { code: string }) {
   }, [edit.log, undoCommand]);
 
   const progress = overview.artifacts.find((a) => a.code === code);
+
+  // 项目路线: where this table sits in the stage, and how far its sub-steps are.
+  const routeCodes = def.stage === "goal" ? ["S2-01", "S2-03"] : def.stage === "strategy" ? ["S1-01"] : [];
+  const routeUpstream = useUpstreamPayloads(project, routeCodes.filter((c) => c !== code)).payloads;
+  const route = useMemo(
+    () =>
+      buildRoute(
+        def.stage,
+        overview.artifacts,
+        { code, zone: searchParams.get("zone"), sub: Number(searchParams.get("sub")) || null },
+        { ...routeUpstream, [code]: draft },
+      ),
+    [def.stage, overview.artifacts, code, searchParams, routeUpstream, draft],
+  );
   const collab = progress ? collaborationStatus({ ...progress, unlocked }, role) : null;
 
   // The digital consultant reads the live draft and proposes changes through a frontend
@@ -540,342 +555,369 @@ function Workspace({ code }: { code: string }) {
     }),
   });
 
+  // Sub-steps that are fields (六分法) jump to the field: ?field=strategicGoals.
+  const field = searchParams.get("field");
+  useEffect(() => {
+    if (!field || !detail.data) return;
+    const timer = window.setTimeout(() => locateAnchor(field), 150);
+    return () => window.clearTimeout(timer);
+  }, [field, detail.data]);
+
+  // ── Shell (design 10): route rail · header + canvas + status bar · four-tab panel ──
+  const narrowRail = useMediaQuery("(max-width: 1279px)");
+  const narrowPanel = useMediaQuery("(max-width: 1099px)");
+  const [railPref, setRailPref] = useState<boolean | null>(null);
+  const railCollapsed = railPref ?? narrowRail;
+  const [panelPref, setPanelPref] = useState<boolean | null>(null);
+  const panelOpen = panelPref ?? !narrowPanel;
+  useEffect(() => {
+    if (highlightComment && narrowPanel) setPanelPref(true);
+  }, [highlightComment, narrowPanel]);
+  const chrome = chromeRef.current;
+  const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
+  const base = `/projects/${project.id}`;
+  const railLinks: RailLink[] = isEnterprise || role === "readonly"
+    ? [
+        { to: `${base}/overview`, label: "今天要做的", icon: "today" },
+        { to: `${base}/materials`, label: "资料", icon: "materials" },
+        { to: `${base}/delivery`, label: "导出", icon: "export" },
+      ]
+    : [
+        { to: `${base}/overview`, label: "工作台", icon: "today" },
+        { to: `${base}/materials`, label: "资料与画像", icon: "materials" },
+        { to: `${base}/artifacts`, label: "成果与定版", icon: "artifacts" },
+        { to: `${base}/delivery`, label: "交付", icon: "export" },
+        { to: `${base}/expert`, label: "专家咨询", icon: "expert" },
+      ];
+  const stageLinks = STAGES.map((st) => {
+    const first = ARTIFACTS.find((a) => a.stage === st.key && a.priority !== "method")!;
+    return { key: st.key, to: workspacePath(project.id, first.code), open: !!overview.artifacts.find((a) => a.code === first.code)?.unlock.unlocked };
+  });
+  const currentSub = route.current?.subs.find((x) => x.current);
+  const crumbs = [route.stageName, route.current?.label ?? def.step, ...(currentSub ? [currentSub.label] : [])];
+  const returned = progress?.status === "in_progress" && progress.lastEvent && ["returnToEdit", "forceReturn"].includes(progress.lastEvent.action);
+  const headerStates: HeaderState[] = [];
+  if (returned) headerStates.push({ tone: "warn", text: "已退回", detail: progress?.lastEvent?.reason || "顾问退回了这张表，请按批注修改后重新提交。" });
+  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: "修改需由主咨询师解锁重开，下游会标“上游已变更”。", detailLabel: "说明" });
+  else if (collab) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
+  else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
+  if (artifact?.stale) headerStates.push({ tone: "warn", text: "上游已变更", detail: `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。` });
+  if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
+  const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
+  const hints: [string, string][] = chrome?.tools
+    ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
+    : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Ctrl+Alt+M", "批注"]];
+
+  const tabs: [AsideTab, string, number][] = [
+    ["coach", "对话", 0],
+    ["comments", "批注", openThreads.length],
+    ["changes", "修改", edit.log.length],
+    ["book", "书中方法", 0],
+  ];
+
   return (
     <EditSessionContext.Provider value={session}>
     <AIPageContextScope context={page.context}>
-      <div className="flex flex-1 flex-wrap items-stretch">
-        <aside className="w-full border-b bg-card md:w-[300px] md:border-r md:border-b-0">
-          <details className="md:hidden">
-            <summary className="flex min-h-12 cursor-pointer items-center gap-2 px-4 text-sm">
-              <span className="text-muted-foreground">步骤</span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{def.specId} {def.name}</span>
-              <span className="text-xs text-muted-foreground">展开 ▾</span>
-            </summary>
-            <div className="px-4 pb-4">
-              <StepBar projectId={project.id} artifacts={overview.artifacts} stage={def.stage} activeCode={code} />
-            </div>
-          </details>
-          <div className="hidden p-4 md:block">
-            <StepBar projectId={project.id} artifacts={overview.artifacts} stage={def.stage} activeCode={code} />
-          </div>
+      <TopbarTitle
+        slot={topbar?.main ?? null}
+        projectId={project.id}
+        title={`${route.current?.short ?? def.plain} · ${project.name}`}
+        subtitle={`${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} › ${route.stageName}`}
+        items={topbarItems(route)}
+      />
+      <PanelToggle slot={topbar?.actions ?? null} open={panelOpen} onToggle={() => setPanelPref(!panelOpen)} count={openThreads.length} />
+      <div className="flex min-h-0 flex-1">
+        <aside className={cn("shrink-0 border-r bg-card", railCollapsed ? "w-14" : "w-[248px]")}>
+          <RouteRail
+            projectId={project.id}
+            route={route}
+            stages={stageLinks}
+            links={railLinks}
+            collapsed={railCollapsed}
+            onToggle={() => setRailPref(!railCollapsed)}
+          />
         </aside>
 
-        <main
-          ref={page.ref}
-          data-dingze-main
-          data-dz-selecting={selecting || undefined}
-          onFocusCapture={(event) => {
-            const target = event.target as HTMLElement;
-            if (target.matches?.("input, textarea, select")) lastField.current = target;
-            const anchor = target.closest?.("[data-anchor]")?.getAttribute("data-anchor");
-            if (anchor) setFocusAnchor(anchor);
-          }}
-          onClickCapture={(event) => {
-            if (!selecting) return;
-            const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
-            if (!anchor) return;
-            event.preventDefault();
-            event.stopPropagation();
-            session.toggleSelection(anchor);
-          }}
-          className="relative flex min-w-0 flex-[999_1_560px] flex-col gap-4 p-4 md:p-6"
-        >
-          <EditMarkers
-            changed={marks.changed}
-            added={marks.added}
-            before={marks.before}
-            comments={openThreads.flatMap(threadAnchors)}
-            preview={previewAnchors}
-            selection={selection}
-          />
-          <CommentPins
-            pins={pins}
-            activeId={activeComment ?? highlightComment}
-            onOpen={(id) => {
-              setAsideTab("comments");
-              window.setTimeout(() => document.getElementById(`comment-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 50);
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="shrink-0 border-b bg-background px-4 pt-1.5 md:px-5">
+            <WhereRow
+              crumbs={crumbs}
+              states={headerStates}
+              savedAt={artifact?.currentVersion?.createdAt ?? null}
+              rev={artifact?.currentRev ?? 0}
+              unsaved={unsaved}
+              saving={save.isPending}
+              canSave={canSave}
+              onSave={onSave}
+            />
+            <div className="py-1.5">
+              <TitleRow
+                title={chrome?.title ?? def.name}
+                chip={chrome?.chip ?? `${def.specId} · ${def.bookRef}`}
+                chrome={chrome}
+                revisionOn={revision.on}
+                canRevise={versions.length > 0}
+                onRevision={() => revisionToggle.current()}
+                openComments={openThreads.length}
+                onComments={() => {
+                  setPanelPref(true);
+                  setAsideTab("comments");
+                }}
+                exportMenu={
+                  <ExportMenu>
+                    <ExportButton
+                      code={code}
+                      name={def.name}
+                      payload={artifact?.currentVersion?.payload}
+                      rev={artifact?.currentRev ?? 0}
+                      status={status}
+                      enterprise={project.enterprise?.shortName ?? "企业"}
+                      projectName={project.name}
+                      upstream={upstream}
+                      dirty={dirty}
+                      onExported={recordExport}
+                      variant="ghost"
+                    />
+                    <DiagramExportButton
+                      code={code}
+                      name={def.name}
+                      payload={artifact?.currentVersion?.payload}
+                      rev={artifact?.currentRev ?? 0}
+                      status={status}
+                      enterprise={project.enterprise?.shortName ?? "企业"}
+                      dirty={dirty}
+                      onExported={recordExport}
+                      variant="ghost"
+                    />
+                    <PlanBookExportButton
+                      code={code}
+                      payload={artifact?.currentVersion?.payload}
+                      rev={artifact?.currentRev ?? 0}
+                      status={status}
+                      enterprise={project.enterprise?.name ?? "企业"}
+                      year={project.year}
+                      upstream={upstream}
+                      dirty={dirty}
+                      onExported={recordExport}
+                      variant="ghost"
+                    />
+                  </ExportMenu>
+                }
+                actions={
+                  detail.data ? (
+                    <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} />
+                  ) : null
+                }
+              />
+            </div>
+            {EDITABLE_CODES.has(code) && unlocked ? (
+              <div className="-mx-4 border-t px-3 md:-mx-5">
+                <StructureToolbar
+                  chrome={chrome}
+                  readOnly={!canSave}
+                  canUndo={edit.log.length > 0 || edit.saved.length > 0}
+                  canRedo={edit.redo.length > 0}
+                  onUndo={undo}
+                  onRedo={redo}
+                  onComment={() => {
+                    setPanelPref(true);
+                    session.commentOn(chrome?.tools?.selected ?? focusAnchor ?? "");
+                  }}
+                  selecting={selecting}
+                  onLasso={() => {
+                    setPanelPref(true);
+                    session.setSelecting(!selecting);
+                  }}
+                  onShortcuts={() => setShortcutsOpen(true)}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <main
+            ref={page.ref}
+            data-dingze-main
+            data-dz-selecting={selecting || undefined}
+            onFocusCapture={(event) => {
+              const target = event.target as HTMLElement;
+              if (target.matches?.("input, textarea, select")) lastField.current = target;
+              const anchor = target.closest?.("[data-anchor]")?.getAttribute("data-anchor");
+              if (anchor) setFocusAnchor(anchor);
             }}
-          />
-          <div className="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-1 border-b bg-background/95 px-4 pt-3 pb-3 backdrop-blur md:-mx-6 md:-mt-6 md:px-6 md:pt-4">
-          <div className="text-xs text-muted-foreground">
-            {def.task} › {def.step}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="font-heading text-2xl font-bold text-brand">{def.plain}</h1>
-            <span className="text-xs text-muted-foreground" title={`书中名称《${def.name}》，出处 ${def.bookRef}`}>
-              {def.plain !== def.name ? `《${def.name}》 · ` : ""}
-              {def.specId} · {def.bookRef}
-            </span>
-            {artifact ? (
-              <StatusBadge status={status} stale={artifact.stale} />
-            ) : null}
-            {collab ? (
-              <span role="status" className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", TONE_CLASS[collab.tone])}>
-                {collab.text}
-              </span>
-            ) : null}
-            {artifact?.currentRev ? (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <History className="size-3.5" /> 当前 v{artifact.currentRev}
-                {artifact.lockedVersion
-                  ? ` · 定版 v${artifact.lockedVersion.rev}`
-                  : ""}
-              </span>
-            ) : null}
-            <div className="ml-auto flex flex-wrap gap-2">
-              <ExportButton
-                code={code}
-                name={def.name}
-                payload={artifact?.currentVersion?.payload}
-                rev={artifact?.currentRev ?? 0}
-                status={status}
-                enterprise={project.enterprise?.shortName ?? "企业"}
-                projectName={project.name}
-                upstream={upstream}
-                dirty={dirty}
-                onExported={recordExport}
-              />
-              <DiagramExportButton
-                code={code}
-                name={def.name}
-                payload={artifact?.currentVersion?.payload}
-                rev={artifact?.currentRev ?? 0}
-                status={status}
-                enterprise={project.enterprise?.shortName ?? "企业"}
-                dirty={dirty}
-                onExported={recordExport}
-              />
-              <PlanBookExportButton
-                code={code}
-                payload={artifact?.currentVersion?.payload}
-                rev={artifact?.currentRev ?? 0}
-                status={status}
-                enterprise={project.enterprise?.name ?? "企业"}
-                year={project.year}
-                upstream={upstream}
-                dirty={dirty}
-                onExported={recordExport}
-              />
-              {canSave ? (
-                <div className="flex">
-                  <Button variant="ghost" size="icon" aria-label="撤销" title={edit.log.length ? `撤销：${edit.log[edit.log.length - 1].label}（Ctrl / ⌘ + Z）` : "撤销（Ctrl / ⌘ + Z）"} disabled={!edit.log.length && !edit.saved.length} onClick={undo}>
-                    <Undo2 />
-                  </Button>
-                  <Button variant="ghost" size="icon" aria-label="重做" title="重做（Ctrl / ⌘ + Shift + Z）" disabled={!edit.redo.length} onClick={redo}>
-                    <Redo2 />
-                  </Button>
-                </div>
-              ) : null}
-              {canSave ? (
-                <Button
-                  variant={dirty ? "default" : "outline"}
-                  onClick={onSave}
-                  disabled={!dirty || save.isPending}
-                  title="Ctrl / ⌘ + S"
-                >
-                  <Save /> {save.isPending ? "保存中…" : dirty ? "保存" : "已保存"}
+            onClickCapture={(event) => {
+              if (!selecting) return;
+              const anchor = (event.target as HTMLElement).closest?.("[data-anchor]")?.getAttribute("data-anchor");
+              if (!anchor) return;
+              event.preventDefault();
+              event.stopPropagation();
+              session.toggleSelection(anchor);
+            }}
+            className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-[color:var(--dz-canvas)] p-4 md:p-5"
+          >
+            <EditMarkers
+              changed={marks.changed}
+              added={marks.added}
+              before={marks.before}
+              comments={openThreads.flatMap(threadAnchors)}
+              preview={previewAnchors}
+              selection={selection}
+            />
+            <CommentPins
+              pins={pins}
+              activeId={activeComment ?? highlightComment}
+              onOpen={(id) => {
+                setPanelPref(true);
+                setAsideTab("comments");
+                window.setTimeout(() => document.getElementById(`comment-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 50);
+              }}
+            />
+
+            {detail.isLoading ? (
+              <Skeleton className="h-96 rounded-xl" />
+            ) : detail.error ? (
+              <Alert variant="destructive">
+                <AlertTitle>成果加载失败</AlertTitle>
+                <AlertDescription>{errorMessage(detail.error)}</AlertDescription>
+              </Alert>
+            ) : !unlocked ? (
+              <Alert>
+                <Lock />
+                <AlertTitle>这一步还没解锁</AlertTitle>
+                <AlertDescription className="flex flex-col gap-1">
+                  <span>{detail.data?.unlock.waitingFor}</span>
+                  <span className="flex flex-wrap gap-x-3">
+                    {def.unlockAfter
+                      .filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(overview.artifacts.find((a) => a.code === c)?.status ?? ""))
+                      .map((c) => (
+                        <Link key={c} to={workspacePath(project.id, c)} className="inline-flex items-center gap-1 font-medium text-brand underline">
+                          去做 {getArtifactDef(c).specId} 《{getArtifactDef(c).name}》 <ArrowRight className="size-3.5" />
+                        </Link>
+                      ))}
+                  </span>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                {["step_done", "in_review", "pending_confirm", "locked"].includes(status) ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed bg-background px-3 py-1.5 text-sm">
+                    {next ? (
+                      <>
+                        <span className="text-muted-foreground">这一步{status === "locked" ? "已定版" : "已交出去"}，可以接着做：</span>
+                        <Link to={workspacePath(project.id, next.code)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
+                          《{next.name}》 <ArrowRight className="size-4" />
+                        </Link>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked") ? (
+                          <>
+                            全部 P0 成果都已定版，可以到
+                            <Link to={`${base}/delivery`} className="mx-1 font-semibold text-brand underline">
+                              导出
+                            </Link>
+                            页下载正式交付物。
+                          </>
+                        ) : (
+                          "本阶段已解锁的表都做完了；下一阶段在本阶段 P0 全部定版后开启。"
+                        )}
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+
+                {EDITABLE_CODES.has(code) ? (
+                  <ArtifactEditor
+                    code={code}
+                    value={draft}
+                    onChange={setDraft}
+                    readOnly={readOnly}
+                    issues={issues}
+                    upstream={upstream}
+                    projectYear={project.year}
+                    keyProjectLevel={project.keyProjectLevel}
+                    orgUnits={overview.orgUnits ?? []}
+                    team={overview.team ?? []}
+                    scheduleScale={project.scheduleScale}
+                    enterprise={project.enterprise?.name ?? "企业"}
+                  />
+                ) : (
+                  <Alert>
+                    <AlertTitle>这张表暂无在线编辑器</AlertTitle>
+                    <AlertDescription>请按方法手册在线下完成，成果以附件形式由咨询师归档。</AlertDescription>
+                  </Alert>
+                )}
+
+                {EDITABLE_CODES.has(code) ? <ValidationBar issues={issues} hasRules /> : null}
+                {detail.data && (status === "pending_confirm" || status === "locked" || detail.data.dissents.length > 0) ? (
+                  <DissentList detail={detail.data} project={project} code={code} />
+                ) : null}
+              </>
+            )}
+            {activeComment ? (
+              <div className="sticky bottom-2 z-20 flex flex-wrap items-center gap-2 self-start rounded-full border px-3 py-1 text-xs shadow-sm" style={{ borderColor: "var(--dz-comment)", background: "color-mix(in oklab, var(--dz-comment) 10%, var(--background))" }}>
+                正在按批注 {circled(numberOf(activeComment) ?? 0)} 修改：改动会关联到这条批注，保存后自动回复
+                <Button size="xs" variant="ghost" onClick={() => setActiveComment(null)}>
+                  结束
                 </Button>
-              ) : null}
-              {detail.data ? (
-                <ArtifactActions
-                  project={project}
-                  code={code}
-                  title={def.name}
-                  detail={detail.data}
-                  actor={actor}
-                  dirty={dirty}
-                  blocking={blocking}
-                />
-              ) : null}
-            </div>
-          </div>
-          </div>
-
-          {detail.isLoading ? (
-            <Skeleton className="h-96 rounded-xl" />
-          ) : detail.error ? (
-            <Alert variant="destructive">
-              <AlertTitle>成果加载失败</AlertTitle>
-              <AlertDescription>{errorMessage(detail.error)}</AlertDescription>
-            </Alert>
-          ) : !unlocked ? (
-            <Alert>
-              <Lock />
-              <AlertTitle>这一步还没解锁</AlertTitle>
-              <AlertDescription className="flex flex-col gap-1">
-                <span>{detail.data?.unlock.waitingFor}</span>
-                <span className="flex flex-wrap gap-x-3">
-                  {def.unlockAfter
-                    .filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(overview.artifacts.find((a) => a.code === c)?.status ?? ""))
-                    .map((c) => (
-                      <Link key={c} to={workspacePath(project.id, c)} className="inline-flex items-center gap-1 font-medium text-brand underline">
-                        去做 {getArtifactDef(c).specId} 《{getArtifactDef(c).name}》 <ArrowRight className="size-3.5" />
-                      </Link>
-                    ))}
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <>
-              {artifact?.stale ? (
-                <Alert className="border-destructive/30 bg-status-stale text-status-stale-foreground">
-                  <AlertTitle>上游已变更</AlertTitle>
-                  <AlertDescription className="text-status-stale-foreground">
-                    {artifact.staleReason}
-                    。核对后保存一次，即视为已按新版本更新。
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              {status === "locked" ? (
-                <Alert className="border-brand bg-brand text-brand-foreground">
-                  <Lock />
-                  <AlertTitle>
-                    已定版 v{artifact?.lockedVersion?.rev}
-                  </AlertTitle>
-                  <AlertDescription className="text-brand-foreground/85">
-                    只读。修改需由主咨询师解锁重开，下游会标“上游已变更”。
-                  </AlertDescription>
-                </Alert>
-              ) : status === "pending_confirm" && !readOnly ? (
-                <Alert>
-                  <AlertTitle>正在等企业确认</AlertTitle>
-                  <AlertDescription>
-                    现在修改会生成新版本，需要重新提交复核。
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              {["step_done", "in_review", "pending_confirm", "locked"].includes(status) ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed px-4 py-2 text-sm">
-                  {next ? (
-                    <>
-                      <span className="text-muted-foreground">这一步{status === "locked" ? "已定版" : "已交出去"}，可以接着做：</span>
-                      <Link to={workspacePath(project.id, next.code)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
-                        {next.specId} 《{next.name}》 <ArrowRight className="size-4" />
-                      </Link>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked") ? (
-                        <>
-                          全部 P0 成果都已定版，可以到
-                          <Link to={`/projects/${project.id}/delivery`} className="mx-1 font-semibold text-brand underline">
-                            交付
-                          </Link>
-                          页导出正式交付物。
-                        </>
-                      ) : (
-                        "本阶段已解锁的表都做完了；下一阶段在本阶段 P0 全部定版后开启。"
-                      )}
-                    </span>
-                  )}
-                </div>
-              ) : null}
-
-              {EDITABLE_CODES.has(code) ? (
-                <ArtifactEditor
-                  code={code}
-                  value={draft}
-                  onChange={setDraft}
-                  readOnly={readOnly}
-                  issues={issues}
-                  upstream={upstream}
-                  projectYear={project.year}
-                  keyProjectLevel={project.keyProjectLevel}
-                  orgUnits={overview.orgUnits ?? []}
-                  team={overview.team ?? []}
-                  scheduleScale={project.scheduleScale}
-                  enterprise={project.enterprise?.name ?? "企业"}
-                />
-              ) : (
-                <Alert>
-                  <AlertTitle>这张表暂无在线编辑器</AlertTitle>
-                  <AlertDescription>请按方法手册在线下完成，成果以附件形式由咨询师归档。</AlertDescription>
-                </Alert>
-              )}
-
-              {EDITABLE_CODES.has(code) ? (
-                <ValidationBar issues={issues} hasRules />
-              ) : null}
-              {detail.data &&
-              (status === "pending_confirm" ||
-                status === "locked" ||
-                detail.data.dissents.length > 0) ? (
-                <DissentList
-                  detail={detail.data}
-                  project={project}
-                  code={code}
-                />
-              ) : null}
-            </>
-          )}
-          {activeComment ? (
-            <div className="sticky bottom-10 z-20 flex flex-wrap items-center gap-2 self-start rounded-full border px-3 py-1 text-xs shadow-sm" style={{ borderColor: "var(--dz-comment)", background: "color-mix(in oklab, var(--dz-comment) 10%, var(--background))" }}>
-              正在按批注 {circled(numberOf(activeComment) ?? 0)} 修改：改动会关联到这条批注，保存后自动回复
-              <Button size="xs" variant="ghost" onClick={() => setActiveComment(null)}>
-                结束
-              </Button>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </main>
           {EDITABLE_CODES.has(code) && unlocked ? (
             <StatusBar
               errors={blocking}
               warnings={issues.length - blocking}
               openComments={openThreads.length}
-              saving={save.isPending}
-              dirty={dirty}
-              savedLabel={artifact?.currentRev ? `已保存 v${artifact.currentRev}` : "还没保存过"}
               revisionOn={revision.on}
-              selected={focusAnchor ? nameOf(focusAnchor) : null}
+              revisionLabel={revision.baseRev ? `v${revision.baseRev}` : undefined}
+              selected={chrome?.tools?.selectedLabel ?? (focusAnchor ? nameOf(focusAnchor) : null)}
+              hints={hints}
               onIssues={() => document.querySelector("[data-dingze-validation]")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              onComments={() => setAsideTab("comments")}
+              onComments={() => {
+                setPanelPref(true);
+                setAsideTab("comments");
+              }}
               onRevision={() => revisionToggle.current()}
               onShortcuts={() => setShortcutsOpen(true)}
             />
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-        </main>
+        </div>
 
         <aside
-          aria-label="数字咨询师、批注与修改"
+          aria-label="对话、批注、修改与书中方法"
           data-dingze-coach
-          className="flex w-full flex-col gap-3 border-t bg-card p-4 lg:w-[400px] lg:border-t-0 lg:border-l"
+          className={cn(
+            "flex min-h-0 w-[380px] shrink-0 flex-col border-l bg-card",
+            narrowPanel && "fixed top-14 right-0 bottom-0 z-40 max-w-[92vw] shadow-2xl",
+            !panelOpen && "hidden",
+          )}
         >
-          <details className="rounded-xl border border-book-border bg-book px-4 py-3 text-sm text-book-foreground">
-            <summary className="cursor-pointer font-heading text-base font-bold">
-              书中方法
-            </summary>
-            <BookMethod def={def} />
-          </details>
-          <div role="tablist" aria-label="右侧面板" className="flex gap-0.5 rounded-xl bg-muted p-1 text-sm">
-            {(
-              [
-                ["coach", "数字咨询师"],
-                ["comments", `批注${openThreads.length ? ` · ${openThreads.length}` : ""}`],
-                ["changes", `修改${edit.log.length ? ` · ${edit.log.length}` : ""}`],
-              ] as const
-            ).map(([key, label]) => (
+          <div role="tablist" aria-label="右栏" className="flex shrink-0 items-end gap-1 border-b px-3 pt-2">
+            {tabs.map(([key, label, count]) => (
               <button
                 key={key}
                 type="button"
                 role="tab"
                 aria-selected={asideTab === key}
                 onClick={() => setAsideTab(key)}
-                className={cn("flex min-h-9 flex-1 items-center justify-center rounded-lg", asideTab === key ? "bg-card font-semibold shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                className={cn(
+                  "flex items-center gap-1 border-b-2 px-2.5 pb-2 text-sm",
+                  asideTab === key ? "border-brand font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
               >
                 {label}
+                {count ? (
+                  <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: key === "comments" ? "var(--dz-comment)" : "var(--dz-changed)" }}>
+                    {count}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
-          <div className={cn("flex flex-1 flex-col", asideTab !== "coach" && "hidden")}>
-            <CoachPanel
-              stage={def.stage}
-              chatId={`dingze-${project.id}-${code}`}
-            />
-            {overview.isConsultAdmin || (!!role && CONSULTANT_ROLES.includes(role)) ? (
-              <GuidanceGapButton project={project} code={code} artifactName={def.name} />
-            ) : null}
+          <div className={cn("flex min-h-0 flex-1 flex-col", asideTab !== "coach" && "hidden")}>
+            <CoachPanel stage={def.stage} chatId={`dingze-${project.id}-${code}`} />
           </div>
-          <div className={cn(asideTab !== "comments" && "hidden")}>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", asideTab !== "comments" && "hidden")}>
             <CommentsPanel
               project={project}
               code={code}
@@ -890,8 +932,16 @@ function Workspace({ code }: { code: string }) {
               composeSignal={composeSignal}
             />
           </div>
-          <div className={cn(asideTab !== "changes" && "hidden")}>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", asideTab !== "changes" && "hidden")}>
             <ChangesPanel project={project} code={code} commentNo={numberOf} />
+          </div>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto bg-book p-4 text-sm text-book-foreground", asideTab !== "book" && "hidden")}>
+            <BookMethod def={def} />
+            {overview.isConsultAdmin || (!!role && CONSULTANT_ROLES.includes(role)) ? (
+              <div className="mt-4 border-t border-book-border pt-3">
+                <GuidanceGapButton project={project} code={code} artifactName={def.name} />
+              </div>
+            ) : null}
           </div>
         </aside>
       </div>

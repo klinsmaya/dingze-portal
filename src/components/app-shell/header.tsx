@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NotificationBell } from "@/components/dingze/notification-bell";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { ThemeModeSwitch } from "@/components/dingze/theme-mode-switch";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -76,7 +76,7 @@ function DesktopHeader() {
       <div className="flex items-center gap-2">
         <SettingsLink />
         <NotificationBell />
-        <ThemeToggle />
+        <ThemeModeSwitch tone="surface" />
         <UserDropdown />
       </div>
     </header>
@@ -115,7 +115,7 @@ function MobileHeader() {
       <div className="flex shrink-0 items-center gap-1">
         <SettingsLink className="size-9" />
         <NotificationBell className="size-9" />
-        <ThemeToggle className="size-9" />
+        <ThemeModeSwitch tone="surface" compact />
         <UserDropdown />
       </div>
     </header>

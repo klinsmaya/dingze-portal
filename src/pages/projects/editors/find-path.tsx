@@ -94,7 +94,7 @@ export function Figure37Card({
   return (
     <aside aria-label="图 3-7 增长战略参考卡" className={cn("w-full shrink-0 rounded-xl border border-book-border bg-book p-3 text-sm text-book-foreground", open ? "lg:w-56" : "lg:w-auto")}>
       <button type="button" className="flex w-full items-center justify-between font-heading font-bold" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className={cn(!open && "lg:[writing-mode:vertical-rl]")}>图 3-7 · 一级路径按两组想</span>
+        <span>{open ? "图 3-7 · 一级路径按两组想" : "图 3-7"}</span>
         {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
       </button>
       {open ? (

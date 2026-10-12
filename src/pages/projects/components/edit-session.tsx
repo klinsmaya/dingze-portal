@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useRef } from "react";
 
 import type { Issue } from "@dingze/shared";
 
@@ -46,7 +46,93 @@ export type EditSession = {
   nextMeta: (meta: CommandMeta) => void;
   /** Open the comment composer on a row / node / cell. */
   commentOn: (anchor: string) => void;
+  /** What the open editor contributes to the workspace header (views, title, toolbar). */
+  chrome: { current: EditorChrome | null };
+  publishChrome: (signature: string) => void;
 };
+
+export type EditorView = { key: string; label: string; icon?: ReactNode };
+
+/** Structure actions on the selected node / row; missing ones show disabled. */
+export type EditorTools = {
+  selected: string | null;
+  selectedLabel?: string;
+  child?: () => void;
+  sibling?: () => void;
+  indent?: () => void;
+  outdent?: () => void;
+  up?: () => void;
+  down?: () => void;
+  moveTo?: () => void;
+  split?: () => void;
+  merge?: () => void;
+  remove?: () => void;
+};
+
+export type EditorChrome = {
+  /** Book title for the current view, without 《》. */
+  title?: string;
+  /** Small chip next to the title, e.g. “S2-02 · 思维导图”. */
+  chip?: string;
+  views?: EditorView[];
+  view?: string;
+  setView?: (key: string) => void;
+  /** Secondary layout choice inside a view, e.g. 表 3-10 / 表 3-9. */
+  variants?: { key: string; label: string }[];
+  variant?: string;
+  setVariant?: (key: string) => void;
+  tools?: EditorTools;
+  zoom?: { value: number; set: (value: number) => void; fit: () => void };
+  /** Extra buttons at the right end of the toolbar (e.g. 从 Excel 粘贴). */
+  extra?: ReactNode;
+};
+
+/**
+ * Editors call this every render with their current chrome; the header re-renders only when
+ * the visible part (views, selection, zoom …) changes.
+ */
+export function useEditorChrome(chrome: EditorChrome | null, enabled = true) {
+  const session = useContext(EditSessionContext);
+  const mine = useRef<EditorChrome | null>(null);
+  const signature = chrome
+    ? JSON.stringify({
+        t: chrome.title,
+        c: chrome.chip,
+        v: chrome.views?.map((x) => x.key),
+        cv: chrome.view,
+        va: chrome.variants?.map((x) => x.key),
+        cva: chrome.variant,
+        s: chrome.tools?.selected,
+        sl: chrome.tools?.selectedLabel,
+        tk: chrome.tools ? Object.keys(chrome.tools).filter((k) => typeof (chrome.tools as Record<string, unknown>)[k] === "function") : null,
+        z: chrome.zoom?.value,
+        x: !!chrome.extra,
+      })
+    : "";
+  if (session && enabled) {
+    session.chrome.current = chrome;
+    mine.current = chrome;
+  }
+  useEffect(() => {
+    if (enabled) session?.publishChrome(signature);
+  }, [session, signature, enabled]);
+  // Leaving (or handing over to a child view): clear only what this editor put there.
+  useEffect(() => {
+    if (enabled) return;
+    if (session && mine.current && session.chrome.current === mine.current) session.chrome.current = null;
+    mine.current = null;
+  }, [enabled, session]);
+  useEffect(
+    () => () => {
+      if (session && mine.current && session.chrome.current === mine.current) {
+        session.chrome.current = null;
+        session.publishChrome("");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+}
 
 export const EditSessionContext = createContext<EditSession | null>(null);
 

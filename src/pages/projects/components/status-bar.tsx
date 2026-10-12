@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText, Save } from "lucide-react";
+import { CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,11 +10,10 @@ export function StatusBar({
   errors,
   warnings,
   openComments,
-  saving,
-  dirty,
-  savedLabel,
   revisionOn,
+  revisionLabel,
   selected,
+  hints,
   onIssues,
   onComments,
   onRevision,
@@ -23,10 +22,10 @@ export function StatusBar({
   errors: number;
   warnings: number;
   openComments: number;
-  saving: boolean;
-  dirty: boolean;
-  savedLabel: string;
   revisionOn: boolean;
+  revisionLabel?: string;
+  /** The two or three shortcuts that matter here. */
+  hints: [string, string][];
   selected: string | null;
   onIssues: () => void;
   onComments: () => void;
@@ -37,7 +36,7 @@ export function StatusBar({
     <div
       role="status"
       aria-live="polite"
-      className="sticky bottom-0 z-20 -mx-4 -mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t bg-background/95 px-4 py-1.5 text-xs backdrop-blur md:-mx-6 md:-mb-6 md:px-6"
+      className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-card px-4 py-1.5 text-xs"
     >
       <button type="button" onClick={onIssues} className={cn("flex items-center gap-1", errors ? "text-destructive" : "text-status-done-foreground")}>
         {errors ? <CircleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
@@ -49,15 +48,18 @@ export function StatusBar({
         批注 {openComments} 未解决
       </button>
       <button type="button" onClick={onRevision} className={cn("flex items-center gap-1", revisionOn ? "font-semibold" : "text-muted-foreground hover:text-foreground")} style={revisionOn ? { color: "var(--dz-changed)" } : undefined}>
-        <GitCompareArrows className="size-3.5" /> 修订 {revisionOn ? "开" : "关"}
+        <GitCompareArrows className="size-3.5" /> 修订 {revisionOn ? `开${revisionLabel ? ` · 对比 ${revisionLabel}` : ""}` : "关"}
       </button>
-      {selected ? <span className="hidden truncate text-muted-foreground sm:inline">选中：{selected}</span> : null}
-      <span className="ml-auto flex items-center gap-1 text-muted-foreground">
-        <Save className="size-3.5" />
-        {saving ? "保存中…" : dirty ? "有未保存的修改" : savedLabel}
+      {selected ? <span className="hidden max-w-64 truncate text-muted-foreground sm:inline">选中：{selected}</span> : null}
+      <span className="ml-auto hidden items-center gap-2 text-muted-foreground md:flex">
+        {hints.map(([keys, what]) => (
+          <span key={keys} className="flex items-center gap-1">
+            <Kbd>{keys}</Kbd> {what}
+          </span>
+        ))}
       </span>
-      <Button size="xs" variant="ghost" onClick={onShortcuts} aria-label="快捷键（?）">
-        <Keyboard /> ?
+      <Button size="xs" variant="ghost" onClick={onShortcuts} aria-label="全部快捷键（?）">
+        <Keyboard /> ? 全部快捷键
       </Button>
     </div>
   );

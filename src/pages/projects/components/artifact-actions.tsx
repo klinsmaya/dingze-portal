@@ -1,3 +1,4 @@
+import { Ellipsis } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -11,6 +12,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -90,32 +92,48 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
       }
     );
 
+  const disabledReasonOf = (spec: ActionSpec) => {
+    const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "confirm" || spec.action === "forceLock";
+    return dirty && needsCleanDraft
+      ? "请先保存修改"
+      : blocking > 0 && needsCleanDraft && validationApplies(spec.action, !!detail.artifact?.exception)
+        ? `还有 ${blocking} 处未通过校验`
+        : undefined;
+  };
+  const trigger = (spec: ActionSpec) => {
+    if (spec.reason) setReasonFor(spec);
+    else if (spec.action === "confirm") setConfirming(true);
+    else if (spec.action === "stepDone" && !flowIntroSeen()) setIntroFor(spec);
+    else run(spec);
+  };
+  // One clear next action (design 10 header); the rest under “⋯”.
+  const primary = visible.find((a) => !a.variant || a.variant === "default") ?? visible[0];
+  const rest = visible.filter((a) => a !== primary);
+  const primaryReason = disabledReasonOf(primary);
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {visible.map((spec) => {
-        const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "confirm" || spec.action === "forceLock";
-        const disabledReason = dirty && needsCleanDraft
-          ? "请先保存修改"
-          : blocking > 0 && needsCleanDraft && validationApplies(spec.action, !!detail.artifact?.exception)
-            ? `还有 ${blocking} 处未通过校验`
-            : undefined;
-        return (
-          <Button
-            key={spec.action}
-            variant={spec.variant ?? "default"}
-            disabled={transition.isPending || !!disabledReason}
-            title={disabledReason}
-            onClick={() => {
-              if (spec.reason) setReasonFor(spec);
-              else if (spec.action === "confirm") setConfirming(true);
-              else if (spec.action === "stepDone" && !flowIntroSeen()) setIntroFor(spec);
-              else run(spec);
-            }}
-          >
-            {spec.label}
-          </Button>
-        );
-      })}
+    <div className="flex items-center gap-1">
+      <Button disabled={transition.isPending || !!primaryReason} title={primaryReason} onClick={() => trigger(primary)} size="sm">
+        {primary.label}
+      </Button>
+      {rest.length ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="更多流转操作" />}>
+            <Ellipsis />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            {rest.map((spec) => {
+              const reason = disabledReasonOf(spec);
+              return (
+                <DropdownMenuItem key={spec.action} disabled={transition.isPending || !!reason} onClick={() => trigger(spec)} title={reason}>
+                  {spec.label}
+                  {reason ? <span className="ml-auto text-[11px] text-muted-foreground">{reason}</span> : null}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
 
       <FlowIntroDialog
         open={!!introFor}

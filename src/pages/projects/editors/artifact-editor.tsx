@@ -121,6 +121,7 @@ export function ArtifactEditor({
           value={value as GoalPathSystem}
           goalWord="部门目标"
           viewKey="S2-06"
+          titles={{ map: "部门级目标路径系统图", mapChip: "S2-06 · 思维导图", table: "部门级目标路径系统表", tableSpec: "S2-06" }}
           goals={rows.map((r) => ({ id: r.id, label: r.task, metric: r.metric, value: r.value, group: r.deptName }))}
         />
       );

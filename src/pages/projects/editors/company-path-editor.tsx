@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router";
 
 import { type DecodeMap, type GoalPathSystem, type GoalTargets, type Issue, type KpiBreakdown, emptyGoalTargets, pathsFromDecodeMap, targetsOf } from "@dingze/shared";
 
 import { cn } from "@/lib/utils";
 
 import { GoalTargetsEditor } from "./goal-targets-editor";
-import { FindPathSteps } from "./find-path";
+import { useEditorChrome } from "@/pages/projects/components/edit-session";
 import { PathSystemEditor } from "./path-system-editor";
 
 type Props = {
@@ -24,41 +25,30 @@ type Props = {
 export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream, projectYear }: Props) {
   const targets: GoalTargets = targetsOf(value) ?? emptyGoalTargets(projectYear);
   const hasGoals = (targets.goals ?? []).length > 0;
-  const [zone, setZone] = useState<"targets" | "paths">(hasGoals && (value.nodes ?? []).length ? "paths" : "targets");
+  // Which step is open lives in the URL (?zone=), so the route rail and top bar can point at it.
+  const [params, setParams] = useSearchParams();
+  const zone: "targets" | "paths" = params.get("zone") === "paths" ? "paths" : params.get("zone") === "targets" ? "targets" : hasGoals && (value.nodes ?? []).length ? "paths" : "targets";
+  const setZone = (z: "targets" | "paths") => {
+    const next = new URLSearchParams(params);
+    next.set("zone", z);
+    setParams(next, { replace: true });
+  };
+  useEffect(() => {
+    if (!params.get("zone")) setZone(zone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const map = upstream["S2-01"] as DecodeMap | undefined;
   const imported = pathsFromDecodeMap(map, targets, value);
   const zoneIssues = (prefix: string) => issues.filter((i) => i.message.startsWith(prefix));
-
-  const steps = [
-    { key: "targets" as const, no: "第一步", title: "定目标", hint: "往上看、往回看，确定公司年度目标", count: zoneIssues("定目标").filter((i) => i.level === "error").length },
-    { key: "paths" as const, no: "第二步", title: "找路径", hint: "先做 S2-01 解码地图，再导入并分解到三、四级", count: zoneIssues("找路径").filter((i) => i.level === "error").length },
-  ];
+  useEditorChrome({ title: "公司级目标路径系统表", chip: "S2-03 · 定目标 · 表 3-4、3-5" }, zone === "targets");
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="tablist" aria-label="公司级目标路径系统表的两步" className="grid gap-2 sm:grid-cols-2">
-        {steps.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            role="tab"
-            aria-selected={zone === s.key}
-            data-zone-tab={s.key}
-            onClick={() => setZone(s.key)}
-            className={cn(
-              "flex flex-col items-start rounded-xl border px-4 py-2.5 text-left transition-colors",
-              zone === s.key ? "border-brand bg-brand/5" : "bg-card hover:border-brand/40"
-            )}
-          >
-            <span className="flex items-center gap-2 text-sm font-bold text-brand">
-              <span className="text-xs font-normal text-muted-foreground">{s.no}</span> {s.title}
-              {s.count ? <span className="rounded-full bg-destructive/10 px-1.5 text-xs text-destructive">{s.count}</span> : null}
-            </span>
-            <span className="text-xs text-muted-foreground">{s.hint}</span>
-          </button>
-        ))}
+      {/* Issue locating (locate.ts) switches steps through these; people use the route rail. */}
+      <div hidden>
+        <button type="button" data-zone-tab="targets" onClick={() => setZone("targets")} />
+        <button type="button" data-zone-tab="paths" onClick={() => setZone("paths")} />
       </div>
-
       <div data-zone="targets" className={cn(zone !== "targets" && "hidden")}>
         <GoalTargetsEditor
           value={targets}
@@ -74,9 +64,7 @@ export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream,
           <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
             先在“第一步 定目标”里确定至少一个年度目标，再来找路径。
           </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-          <FindPathSteps active={5} map={map} paths={value} />
+        ) : zone === "paths" ? (
           <PathSystemEditor
             value={value}
             onChange={onChange}
@@ -87,11 +75,11 @@ export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream,
             importFromMap={{ count: imported.nodes.length - (value.nodes ?? []).length, run: () => onChange(imported) }}
             decodeLayout
             graphSpecId="S2-02"
+            titles={{ map: "公司级目标路径系统图", mapChip: "S2-02 · 思维导图", table: "公司级目标路径系统表", tableSpec: "S2-03" }}
             viewKey="S2-03"
             defaultView="t310"
           />
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

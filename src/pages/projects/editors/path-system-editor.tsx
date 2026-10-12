@@ -1,5 +1,5 @@
-import { Columns3, CornerDownRight, LayoutPanelLeft, Network, Plus, Table2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CornerDownRight, Network, Plus, Table2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   type GoalPathSystem,
@@ -16,10 +16,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { pathSystemSheets } from "@/lib/dingze/export/sheets";
 import { FIGURE_3_7, type Figure37Item, figureTag } from "@/lib/dingze/figure-3-7";
+import { anchorCandidates } from "@/lib/dingze/locate";
 import { errorAnchors } from "@/lib/dingze/rows";
+import { type EditorChrome, useEditSession, useEditorChrome } from "@/pages/projects/components/edit-session";
 import { normalize } from "@/lib/dingze/tree-ops";
 import { SheetTable } from "@/pages/projects/components/sheet-table";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,8 @@ type Props = {
   decodeLayout?: boolean;
   /** Spec ID of the mind-map view: S2-02 for the company system. */
   graphSpecId?: string;
+  /** Book titles of the two views, e.g. 《公司级目标路径系统图》 / 《…系统表》. */
+  titles?: { map: string; mapChip: string; table: string; tableSpec: string };
   /** Key under which the person's last view is remembered. */
   viewKey?: string;
   defaultView?: "table" | "mind" | "t310";
@@ -76,7 +79,8 @@ function rollUp(node: Node, nodes: Node[]): { sum: number; ok: boolean } | null 
 const amountOf = (n: Node) => (typeof n.amount === "number" ? n.amount : parseAmount(n.value));
 
 /** S2-03 / S2-06: goal → 1st … 4th level paths, each with metric and value (分得下去、推得回来). */
-export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap, decodeLayout, graphSpecId, viewKey, defaultView = "table" }: Props) {
+export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goalWord, importFromMap, decodeLayout, graphSpecId, viewKey, defaultView = "table", titles }: Props) {
+  const session = useEditSession();
   const [view, setViewState] = useState<View>(() => rememberedView(viewKey, defaultView));
   const setView = (v: View) => {
     setViewState(v);
@@ -183,26 +187,55 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
     </div>
   );
 
+  // Header chrome (design 10): 思维导图 | 表格, and the table's 版式; the toolbar acts on the
+  // node of the focused row in the table, on the selected node in the map.
+  const tableVariants = [
+    { key: "table", label: "逐条填写" },
+    ...(decodeLayout ? [{ key: "t310", label: "按层面（表 3-10）" }] : []),
+    { key: "t39", label: "横排（表 3-9，只读）" },
+  ];
+  const lastTable = useRef<View>(view === "mind" ? (decodeLayout ? "t310" : "table") : view);
+  if (view !== "mind") lastTable.current = view;
+  const tableSpec = view === "t39" ? "表 3-9" : view === "t310" ? "表 3-10" : "逐条填写";
+  const focused = session?.focusAnchor ? anchorCandidates(session.focusAnchor).find((c) => nodes.some((n) => n.id === c)) ?? null : null;
+  const focusedNode = focused ? nodes.find((n) => n.id === focused) ?? null : null;
+  const baseChrome: EditorChrome = {
+    title: view === "mind" ? titles?.map : titles?.table,
+    chip: view === "mind" ? (titles?.mapChip ?? (graphSpecId ? `${graphSpecId} · 思维导图` : undefined)) : titles ? `${titles.tableSpec} · ${tableSpec}` : undefined,
+    views: [
+      { key: "mind", label: "思维导图", icon: <Network className="size-4" /> },
+      { key: "table", label: "表格", icon: <Table2 className="size-4" /> },
+    ],
+    view: view === "mind" ? "mind" : "table",
+    setView: (k) => setView(k === "mind" ? "mind" : lastTable.current),
+    variants: view === "mind" ? undefined : tableVariants,
+    variant: view === "mind" ? undefined : view,
+    setVariant: (k) => setView(k as View),
+  };
+  const tableTools: EditorChrome["tools"] = {
+    selected: focused,
+    selectedLabel: focusedNode ? focusedNode.path || LEVEL_LABELS[focusedNode.level] : undefined,
+    ...(focused && !readOnly && view !== "t39"
+      ? {
+          child: () => actions.child(focused),
+          sibling: () => actions.sibling(focused),
+          indent: () => actions.indent(focused),
+          outdent: () => actions.outdent(focused),
+          up: () => actions.up(focused),
+          down: () => actions.down(focused),
+          moveTo: () => setMoving(focused),
+          split: () => actions.split(focused),
+          merge: () => actions.merge(focused),
+          remove: () => actions.remove(focused),
+        }
+      : {}),
+  };
+  useEditorChrome({ ...baseChrome, tools: tableTools }, view !== "mind");
+
   return (
     <section aria-label="路径系统" className="flex flex-col gap-4">
       <EditorToolbar hint={`先 How 后 Who：每个${goalWord}拆出一级路径，再逐级分解到二、三级（标准图到四级）；每条路径都要有衡量指标和指标值，下级合计要推得回本级。思维导图和表格是同一份数据。`}>
         {importFromMap ? <ImportButton label="子步骤 5 · 从解码地图导入" count={importFromMap.count} readOnly={readOnly} onClick={importFromMap.run} /> : null}
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as View)} variant="outline" size="sm" className="flex-wrap" aria-label="展示方式">
-          <ToggleGroupItem value="mind" title="思维导图：共创、发散、调整结构（拖动、下级 / 同级、升降级、移动到…）">
-            <Network /> 思维导图 {graphSpecId ? <span className="text-[10px] opacity-70">{graphSpecId}</span> : null}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="table" title="表格：逐格核数字、整理定稿">
-            <Table2 /> 表格
-          </ToggleGroupItem>
-          {decodeLayout ? (
-            <ToggleGroupItem value="t310" title="书中表 3-10：按财务、客户、内部流程、学习与成长四个层面排列；合并单元格按层级自动生成，可直接改">
-              <LayoutPanelLeft /> 按层面 <span className="text-[10px] opacity-70">表 3-10</span>
-            </ToggleGroupItem>
-          ) : null}
-          <ToggleGroupItem value="t39" title="书中表 3-9：目标在左，一、二、三、四级路径向右展开（导出 Excel 的样子）">
-            <Columns3 /> 横排表 <span className="text-[10px] opacity-70">表 3-9</span>
-          </ToggleGroupItem>
-        </ToggleGroup>
       </EditorToolbar>
 
       {goals.length === 0 ? (
@@ -211,6 +244,7 @@ export function PathSystemEditor({ value, onChange, readOnly, issues, goals, goa
         </p>
       ) : view === "mind" ? (
         <TreeMindMap
+          chrome={baseChrome}
           cfg={cfg}
           readOnly={readOnly}
           invalid={invalid}

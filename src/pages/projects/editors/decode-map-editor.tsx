@@ -17,13 +17,13 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { type EditorChrome, useEditorChrome } from "@/pages/projects/components/edit-session";
 import { errorAnchors, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
 import { FIGURE_3_7, type Figure37Item } from "@/lib/dingze/figure-3-7";
 
-import { FIND_PATH_STEPS, Figure37Card, FindPathSteps } from "./find-path";
+import { FIND_PATH_STEPS, Figure37Card } from "./find-path";
 import { AddButton, EditorToolbar, RowActions, TextCell } from "./kit";
 import { MapDiagram } from "./map-diagram";
 import { type TreeConfig, TreeMindMap } from "./tree-editor";
@@ -79,17 +79,14 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
       // Not remembered in private mode.
     }
   };
+  // 子步骤 1–4 come from the URL (?sub=), set by the top bar and the route rail.
   const [params] = useSearchParams();
-  const [sub, setSub] = useState(() => Math.min(4, Math.max(1, Number(params.get("sub")) || 1)));
-  const pick = (no: number) => {
-    setSub(no);
-    const key = FIND_PATH_STEPS[no - 1]?.perspective;
-    window.setTimeout(() => document.querySelector(`[data-mm-root="${key}"], [data-perspective="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-  };
+  const sub = Math.min(4, Math.max(1, Number(params.get("sub")) || 1));
   useEffect(() => {
-    if (params.get("sub")) pick(Math.min(4, Math.max(1, Number(params.get("sub")) || 1)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const key = FIND_PATH_STEPS[sub - 1]?.perspective;
+    const timer = window.setTimeout(() => document.querySelector(`[data-mm-root="${key}"], [data-perspective="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    return () => window.clearTimeout(timer);
+  }, [sub, view]);
   const invalid = errorAnchors(issues);
   const themes = value.themes ?? [];
   const goals = targetsOf(upstream["S2-03"])?.goals ?? [];
@@ -135,27 +132,28 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
   }
   const pickFigure = (item: Figure37Item) => setThemes([...themes, emptyTheme("financial", { category: item.decodeCategory })]);
 
+  const baseChrome: EditorChrome = {
+    title: "年度战略解码地图",
+    chip: view === "diagram" ? "S2-01 · 解码地图版式（图 3-3）" : view === "mind" ? "S2-01 · 思维导图" : "S2-01 · 表格",
+    views: [
+      { key: "mind", label: "思维导图", icon: <Network className="size-4" /> },
+      { key: "table", label: "表格", icon: <Table2 className="size-4" /> },
+      { key: "diagram", label: "版式", icon: <MapIcon className="size-4" /> },
+    ],
+    view,
+    setView: (k) => setView(k as View),
+  };
+  useEditorChrome(baseChrome, view !== "mind");
+
   return (
     <section aria-label="年度战略解码地图" className="flex flex-col gap-4">
-      <FindPathSteps active={sub} map={value} paths={upstream["S2-03"]} onPick={pick} />
-      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。完成后在 S2-03 子步骤 5 一键导入路径系统表。思维导图和表格是同一份数据。">
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as View)} variant="outline" size="sm" aria-label="展示方式">
-          <ToggleGroupItem value="mind" title="思维导图：共创、发散、调整（拖到别的层面、上下移、拆分合并）">
-            <Network /> 思维导图 <span className="text-[10px] opacity-70">S2-01</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem value="table" title="表格：逐项填类别、指标和支撑关系">
-            <Table2 /> 表格
-          </ToggleGroupItem>
-          <ToggleGroupItem value="diagram" title="解码地图版式：汇报用的四层泳道图，只读预览（书中图 3-3）">
-            <MapIcon /> 解码地图版式 <span className="text-[10px] opacity-70">图 3-3</span>
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </EditorToolbar>
+      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。完成后在 S2-03 子步骤 5 一键导入路径系统表。思维导图和表格是同一份数据。" />
 
       {view === "diagram" ? (
         <MapDiagram map={asStrategyMap(value)} label="年度战略解码地图" />
       ) : view === "mind" ? (
         <TreeMindMap
+          chrome={baseChrome}
           cfg={cfg}
           readOnly={readOnly}
           invalid={invalid}

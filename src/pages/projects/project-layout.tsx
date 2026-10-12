@@ -1,9 +1,10 @@
 import { ChevronLeft } from "lucide-react";
-import { Link, NavLink, Outlet, useParams } from "react-router";
+import { useState } from "react";
+import { Link, NavLink, Outlet, useMatch, useParams } from "react-router";
 
 import { UserDropdown } from "@/components/app-shell/header";
 import { NotificationBell } from "@/components/dingze/notification-bell";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { ThemeModeSwitch } from "@/components/dingze/theme-mode-switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PROJECT_ROLE_LABELS } from "@dingze/shared";
@@ -33,6 +34,67 @@ export default function ProjectLayout() {
   const projectId = Number(useParams().projectId);
   const { project, isLoading, error, notFound } = useProject(projectId);
   const overview = useProjectOverview(project);
+  // The workspace fills the screen and puts its own step title and sub-steps in the top bar.
+  const inWorkspace = !!useMatch("/projects/:projectId/workspace/*");
+  const [slotMain, setSlotMain] = useState<HTMLElement | null>(null);
+  const [slotActions, setSlotActions] = useState<HTMLElement | null>(null);
+  const team = overview.data?.team ?? [];
+
+  if (inWorkspace) {
+    return (
+      <div data-dingze-project className="flex h-svh flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-4 border-b-2 border-gold px-3 text-band-foreground md:px-4" style={{ background: "var(--band)" }}>
+          <Link to="/projects" aria-label="返回我的项目" title="我的项目" className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/25 font-heading text-lg font-bold text-gold hover:bg-white/10">
+            责
+          </Link>
+          <div ref={setSlotMain} className="flex min-w-0 flex-1 items-center gap-4" />
+          <div className="flex shrink-0 items-center gap-2.5">
+            <ThemeModeSwitch className="hidden lg:flex" />
+            <ThemeModeSwitch compact className="lg:hidden" />
+            {team.length ? (
+              <div className="hidden -space-x-1.5 md:flex" aria-label="项目成员">
+                {team.slice(0, 5).map((m) => (
+                  <span
+                    key={m.userId}
+                    title={`${m.nickname} · ${PROJECT_ROLE_LABELS[m.projectRole as keyof typeof PROJECT_ROLE_LABELS] ?? ""}`}
+                    className="flex size-7 items-center justify-center rounded-full border-2 border-[#0c3d52] bg-white/90 text-xs font-bold text-[#0c3d52]"
+                  >
+                    {m.nickname.slice(0, 1)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <NotificationBell className="text-band-foreground hover:bg-white/10 hover:text-band-foreground" />
+            <div ref={setSlotActions} className="flex items-center" />
+            <UserDropdown />
+          </div>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col">
+          {error || overview.error || notFound || isLoading || !project || !overview.data ? (
+            <div className="p-6">
+              {error || overview.error ? (
+                <Alert variant="destructive">
+                  <AlertTitle>项目加载失败</AlertTitle>
+                  <AlertDescription>请稍后刷新重试</AlertDescription>
+                </Alert>
+              ) : notFound ? (
+                <Alert>
+                  <AlertTitle>找不到这个项目</AlertTitle>
+                  <AlertDescription>
+                    项目不存在，或者你不是它的成员。<Link to="/projects" className="underline">返回我的项目</Link>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Skeleton className="h-96 rounded-xl" />
+              )}
+            </div>
+          ) : (
+            <Outlet context={{ project, overview: overview.data, topbar: { main: slotMain, actions: slotActions } } satisfies ProjectContextValue} />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-dingze-project className="flex min-h-svh flex-col">
@@ -83,7 +145,7 @@ export default function ProjectLayout() {
             </span>
           ) : null}
           <NotificationBell className="text-band-foreground hover:bg-white/10 hover:text-band-foreground" />
-          <ThemeToggle className="border-white/25 bg-white/10 text-band-foreground hover:bg-white/20" />
+          <ThemeModeSwitch compact />
           <UserDropdown />
         </div>
       </header>
