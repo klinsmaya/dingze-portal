@@ -139,7 +139,7 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
 0. **闭环第二、三批（用户已同意方案，均需改插件）：**
    - 第二批已完成（插件 0.19.1）：`dz_org_units.duty / headName`，`dz_artifacts.orgNotice`；动作 `importOrgUnits`、`setMemberDepartment`、`dismissOrgNotice`；组织变化由 `shared/org.ts` 的 `describeOrgChange` 生成说明，`ops.ts` 的 `flagOrgChange` 只标已定版的部门表（`ORG_DEPENDENT_CODES`）并通知主咨询师和企业项目负责人；定版 / 重开 / 退回时清空。自助项目上线后，“不需要重开”也要开放给企业项目负责人。
    - 第三批：运营侧“训练营批次”（批量开通企业、建项目、分派、批量发账号；营前准备看板；现场看板；结营小结；营后批量转内训并选陪跑 / 自助）。企业侧界面不区分训练营和内训。
-   - 服务方式“陪跑 / 自助”：自助（免费、无人工咨询师）时，复核换成企业项目负责人“自查复核”加数字咨询师按定版门禁逐条出意见；校验和“只有企业项目负责人定版”不变；解锁重开由企业项目负责人自己做（写原因）。这条的具体规则还要用户最后确认。
+   - 服务方式“陪跑 / 自助”已完成（插件 0.20.0）：`dz_projects.service`；`shared/lifecycle.ts` 的规则带 `service` / `selfRoles`（自助禁用提交复核和复核通过，新增 `selfReview`，解锁重开开放给企业项目负责人）；自查清单 `shared/self-review.ts`（定版门禁、常见的坑、校验建议），服务端重建清单并逐条核对答案；`nextAction` / `collaborationStatus` 带服务方式。
    - 邀请码注册（审核制）：码绑定企业，可选再绑定项目、角色和部门，可设人数上限和有效期；注册后待企业管理员或运营审核，审核通过才激活；公开注册保持关闭。
 
 1. **待用户决定：** 实例上钉钉认证器开着“自动注册”，没有改。改了会影响同实例的其他应用，要先问用户。

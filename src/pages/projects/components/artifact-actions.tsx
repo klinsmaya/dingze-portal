@@ -6,7 +6,10 @@ import {
   type Actor,
   type ArtifactStatus,
   type LifecycleAction,
+  type SelfReviewAnswer,
   canPerform,
+  missingSelfReview,
+  selfReviewChecklist,
   validationApplies,
 } from "@dingze/shared";
 
@@ -27,6 +30,8 @@ import type { ArtifactDetail, ProjectSummary } from "@/lib/dingze/api";
 import { errorMessage } from "@/lib/dingze/errors";
 import { useRecordDissent, useTransitionArtifact } from "@/lib/dingze/queries";
 
+import { askCoach } from "./coach-panel";
+
 type Transition = Exclude<LifecycleAction, "save">;
 
 type ActionSpec = {
@@ -40,6 +45,7 @@ type ActionSpec = {
 const ACTIONS: ActionSpec[] = [
   { action: "stepDone", label: "本步完成", from: ["in_progress"] },
   { action: "submitReview", label: "提交复核", from: ["step_done"] },
+  { action: "selfReview", label: "自查复核", from: ["step_done"] },
   { action: "approve", label: "复核通过，提交企业确认", from: ["in_review"] },
   {
     action: "returnToEdit",
@@ -54,7 +60,7 @@ const ACTIONS: ActionSpec[] = [
     label: "解锁重开",
     from: ["locked"],
     variant: "outline",
-    reason: { title: "解锁重开", description: "保留原定版版本；重开后引用它的下游成果会标“上游已变更”。" },
+    reason: { title: "解锁重开", description: "保留原定版版本；重开后引用它的下游成果会标“上游已变更”。原因会记入审计。" },
   },
 ];
 
@@ -66,9 +72,12 @@ type Props = {
   actor: Actor;
   dirty: boolean;
   blocking: number;
+  /** Validation suggestions still open (自查复核 asks about each). */
+  warnings?: string[];
 };
 
-export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking }: Props) {
+export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking, warnings = [] }: Props) {
+  const [selfReviewing, setSelfReviewing] = useState(false);
   const status = detail.artifact?.status ?? "not_started";
   const transition = useTransitionArtifact(project, code);
   const [reasonFor, setReasonFor] = useState<ActionSpec | null>(null);
@@ -78,22 +87,23 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
   const visible = ACTIONS.filter((a) => a.from.includes(status) && canPerform(a.action, actor));
   if (visible.length === 0) return null;
 
-  const run = (spec: ActionSpec, reason?: string) =>
+  const run = (spec: ActionSpec, reason?: string, answers?: SelfReviewAnswer[]) =>
     transition.mutate(
-      { action: spec.action, reason },
+      { action: spec.action, reason, answers },
       {
         onSuccess: (result) => {
           toast.success(`${spec.label}：已完成`);
           if (result.stale.length) toast.info(`已提示下游成果：${result.stale.join("、")}`);
           setReasonFor(null);
           setConfirming(false);
+          setSelfReviewing(false);
         },
         onError: (error) => toast.error(errorMessage(error)),
       }
     );
 
   const disabledReasonOf = (spec: ActionSpec) => {
-    const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "confirm" || spec.action === "forceLock";
+    const needsCleanDraft = spec.action === "stepDone" || spec.action === "approve" || spec.action === "selfReview" || spec.action === "confirm" || spec.action === "forceLock";
     return dirty && needsCleanDraft
       ? "请先保存修改"
       : blocking > 0 && needsCleanDraft && validationApplies(spec.action, !!detail.artifact?.exception)
@@ -101,7 +111,8 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         : undefined;
   };
   const trigger = (spec: ActionSpec) => {
-    if (spec.reason) setReasonFor(spec);
+    if (spec.action === "selfReview") setSelfReviewing(true);
+    else if (spec.reason) setReasonFor(spec);
     else if (spec.action === "confirm") setConfirming(true);
     else if (spec.action === "stepDone" && !flowIntroSeen()) setIntroFor(spec);
     else run(spec);
@@ -144,6 +155,15 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
           if (introFor) run(introFor);
           setIntroFor(null);
         }}
+      />
+      <SelfReviewDialog
+        open={selfReviewing}
+        code={code}
+        title={title}
+        warnings={warnings}
+        pending={transition.isPending}
+        onClose={() => setSelfReviewing(false)}
+        onSubmit={(answers) => run(ACTIONS.find((a) => a.action === "selfReview")!, undefined, answers)}
       />
       <ReasonDialog spec={reasonFor} pending={transition.isPending} onClose={() => setReasonFor(null)} onSubmit={run} />
       <ConfirmDialog
@@ -346,5 +366,96 @@ export function DissentList({ detail, project, code }: { detail: ArtifactDetail;
         )
       ) : null}
     </div>
+  );
+}
+
+const KIND_TITLE = { gate: "书中定版门禁", pitfall: "常见的坑", warning: "还没处理的校验建议" } as const;
+
+/**
+ * 自查复核（自助项目）：企业项目负责人逐条对照；每条要么确认“没问题”，要么写下为什么保持现状。
+ * 服务端会按同一份清单重新核对，漏一条都过不去。
+ */
+function SelfReviewDialog({
+  open,
+  code,
+  title,
+  warnings,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  code: string;
+  title: string;
+  warnings: string[];
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (answers: SelfReviewAnswer[]) => void;
+}) {
+  const items = selfReviewChecklist(code, warnings);
+  const [answers, setAnswers] = useState<Record<string, SelfReviewAnswer>>({});
+  const list = items.map((i) => answers[i.key] ?? { key: i.key, ok: false, note: "" });
+  const missing = missingSelfReview(items, list);
+  const set = (key: string, patch: Partial<SelfReviewAnswer>) => setAnswers((a) => ({ ...a, [key]: { ...(a[key] ?? { key, ok: false, note: "" }), ...patch } }));
+  const askAi = () => {
+    onClose();
+    askCoach(`请按书中定版门禁逐条帮我自查《${title}》，每条说“通过”或“待改”并给理由：\n${items.map((i, n) => `${n + 1}. ${i.text}`).join("\n")}`);
+  };
+  return (
+    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>自查复核：《{title}》</DialogTitle>
+          <DialogDescription>
+            这个项目是自助方式，没有人工咨询师复核。请逐条对照：没问题就勾上；不打算改的写一句理由。全部处理完才能进入待定版，记录会留在审计里。
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          {(["gate", "pitfall", "warning"] as const).map((kind) => {
+            const group = items.filter((i) => i.kind === kind);
+            if (!group.length) return null;
+            return (
+              <section key={kind} className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">{KIND_TITLE[kind]}</h3>
+                {group.map((item) => {
+                  const a = answers[item.key];
+                  return (
+                    <div key={item.key} className="flex flex-col gap-1.5 rounded-lg border p-2.5">
+                      <Label className="flex items-start gap-2 font-normal">
+                        <Checkbox checked={!!a?.ok} onCheckedChange={(v) => set(item.key, { ok: !!v })} aria-label={`已对照：${item.text}`} />
+                        <span className="text-sm leading-snug">{item.text}</span>
+                      </Label>
+                      {!a?.ok ? (
+                        <Textarea
+                          aria-label={`保持现状的理由：${item.text}`}
+                          placeholder="没问题就勾上；不打算改的，写一句为什么"
+                          className="min-h-12 text-sm"
+                          value={a?.note ?? ""}
+                          onChange={(e) => set(item.key, { note: e.target.value })}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })}
+        </div>
+        <DialogFooter className="items-center sm:justify-between">
+          <Button type="button" variant="ghost" onClick={askAi}>
+            请数字咨询师逐条看
+          </Button>
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{missing.length ? `还有 ${missing.length} 条未处理` : "都处理完了"}</span>
+            <Button variant="outline" onClick={onClose}>
+              取消
+            </Button>
+            <Button disabled={pending || missing.length > 0} onClick={() => onSubmit(list)}>
+              完成自查，进入待定版
+            </Button>
+          </span>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -49,6 +49,7 @@ const TRANSITIONS: LifecycleAction[] = [
   'reopen',
   'forceLock',
   'forceReturn',
+  'selfReview',
 ];
 
 const ROLE_DEFINITIONS = [
@@ -140,7 +141,7 @@ export class PluginDingzeServer extends Plugin {
           const v = values(ctx);
           if (!TRANSITIONS.includes(v.action)) throw new HttpError(400, '未知的操作');
           const pc = await loadProjectContext(ctx, v.projectId);
-          return transitionArtifact(ctx, pc, requireArtifactDef(v.code), v.action, v.reason);
+          return transitionArtifact(ctx, pc, requireArtifactDef(v.code), v.action, v.reason, { answers: v.answers });
         }),
         artifactRegistry: action(async (ctx) => artifactRegistry(ctx, await loadProjectContext(ctx, ctx.action.params.projectId))),
         artifactHistory: action(async (ctx) => {

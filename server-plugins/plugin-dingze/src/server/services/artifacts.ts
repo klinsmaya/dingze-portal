@@ -17,6 +17,9 @@ import {
   staleTargets,
   unlockInfo,
   validateArtifact,
+  type SelfReviewAnswer,
+  missingSelfReview,
+  selfReviewChecklist,
 } from '../../shared';
 import { HttpError, type ProjectContext, currentUserId } from './access';
 import { openCommentCounts } from './comments';
@@ -299,8 +302,10 @@ export async function transitionArtifact(
   def: ArtifactDef,
   action: LifecycleAction,
   reason?: string,
+  extra: { answers?: SelfReviewAnswer[] } = {},
 ) {
   if (action === 'save') throw new HttpError(400, '保存请使用 saveArtifact');
+  let selfReview: { items: number; answers: SelfReviewAnswer[] } | null = null;
   const projectId = pc.project.get('id');
 
   return ctx.db.sequelize.transaction(async (transaction: any) => {
@@ -323,6 +328,14 @@ export async function transitionArtifact(
       const issues = validateArtifact(def.code, artifact.get('currentVersion')?.get('payload'), upstream);
       if (hasBlockingIssues(issues)) {
         throw new HttpError(422, '还有未通过的校验', 'VALIDATION_FAILED', { issues });
+      }
+      // 自查复核：清单按书中定版门禁、常见的坑和未处理的校验建议在服务端重建，逐条要有确认或理由。
+      if (action === 'selfReview') {
+        const items = selfReviewChecklist(def.code, issues.filter((i) => i.level !== 'error').map((i) => i.message));
+        const answers = Array.isArray(extra.answers) ? extra.answers : [];
+        const missing = missingSelfReview(items, answers);
+        if (missing.length) throw new HttpError(422, `还有 ${missing.length} 条没有确认或说明理由`, 'SELF_REVIEW_INCOMPLETE', { missing });
+        selfReview = { items: items.length, answers: answers.filter((a) => items.some((i) => i.key === a.key)).map((a) => ({ key: a.key, ok: !!a.ok, note: String(a.note ?? '').slice(0, 500) })) };
       }
     }
 
@@ -371,7 +384,7 @@ export async function transitionArtifact(
     await audit(
       ctx,
       pc,
-      { code: def.code, action, reason, fromStatus: from, toStatus: to, rev: artifact.get('currentRev'), meta: { stale } },
+      { code: def.code, action, reason, fromStatus: from, toStatus: to, rev: artifact.get('currentRev'), meta: { stale, ...(selfReview ? { selfReview } : {}) } },
       transaction,
     );
     await notifyTransition(ctx, pc, def, action, { reason, rev: artifact.get('currentRev'), stale, bundled }, transaction);
@@ -379,7 +392,7 @@ export async function transitionArtifact(
   });
 }
 
-const LIFECYCLE_EVENTS = ['stepDone', 'submitReview', 'approve', 'returnToEdit', 'confirm', 'reopen', 'forceLock', 'forceReturn'];
+const LIFECYCLE_EVENTS = ['stepDone', 'submitReview', 'approve', 'selfReview', 'returnToEdit', 'confirm', 'reopen', 'forceLock', 'forceReturn'];
 
 /** The latest lifecycle event per artifact of the given projects (who returned it and why, …). */
 export async function lastEvents(ctx: Context, projectIds: number[]) {
@@ -513,7 +526,8 @@ export async function grantStepException(ctx: Context, pc: ProjectContext, def: 
  * still holds and clears the notice; the judgement is kept in the audit log.
  */
 export async function dismissOrgNotice(ctx: Context, pc: ProjectContext, code: string, note?: string) {
-  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant')) throw new HttpError(403, '只有主咨询师可以确认不需要重开');
+  const selfLead = pc.actor.service === 'self' && pc.projectRole === 'ent_lead';
+  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || selfLead)) throw new HttpError(403, '只有主咨询师（自助项目为企业项目负责人）可以确认不需要重开');
   const projectId = pc.project.get('id');
   return ctx.db.sequelize.transaction(async (transaction: any) => {
     const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });

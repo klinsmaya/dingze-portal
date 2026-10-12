@@ -494,6 +494,7 @@ export async function updateProject(
     name?: string;
     year?: number;
     scene?: string;
+    service?: string;
     primaryExpression?: string;
     keyProjectLevel?: number;
     scheduleScale?: string;
@@ -509,6 +510,7 @@ export async function updateProject(
     values.year = year;
   }
   if (input.scene !== undefined) values.scene = input.scene === 'inhouse' ? 'inhouse' : 'camp';
+  if (input.service !== undefined) values.service = input.service === 'self' ? 'self' : 'guided';
   if (input.primaryExpression !== undefined) values.primaryExpression = input.primaryExpression === 'sixfold' ? 'sixfold' : 'house';
   if (input.keyProjectLevel !== undefined) values.keyProjectLevel = Number(input.keyProjectLevel) === 1 ? 1 : 2;
   if (input.scheduleScale !== undefined) values.scheduleScale = input.scheduleScale === 'quarter' ? 'quarter' : 'month';

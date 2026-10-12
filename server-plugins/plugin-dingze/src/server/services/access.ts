@@ -104,6 +104,6 @@ export async function loadProjectContext(ctx: Context, projectId: unknown): Prom
     spaceName,
     projectRole,
     access,
-    actor: { projectRole, isConsultAdmin: access.isConsultAdmin },
+    actor: { projectRole, isConsultAdmin: access.isConsultAdmin, service: project.get('service') === 'self' ? 'self' : 'guided' },
   };
 }

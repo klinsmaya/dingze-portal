@@ -13,3 +13,4 @@ export * from './guidance';
 export * from './expert';
 export * from './next-action';
 export * from './org';
+export * from './self-review';

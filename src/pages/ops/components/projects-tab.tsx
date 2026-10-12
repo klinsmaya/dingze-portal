@@ -1,3 +1,4 @@
+import { SERVICE_LABELS } from "@dingze/shared";
 import { ArrowRight, FolderKanban, Pencil, Plus, Trash2, TriangleAlert, Users } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -63,7 +64,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
           <Card key={project.id}>
             <CardHeader>
               <CardDescription>
-                {project.year} 年度 · {SCENE_LABELS[project.scene]} ·
+                {project.year} 年度 · {SCENE_LABELS[project.scene]} · {SERVICE_LABELS[project.service ?? "guided"]} ·
                 重点工作 {project.keyProjectLevel} 级 · 计划{SCHEDULE_LABELS[project.scheduleScale]}
               </CardDescription>
               <CardTitle className="flex items-center gap-2 text-lg text-brand">
@@ -83,7 +84,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
               </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {memberWarnings(project.members).map((w) => (
+              {memberWarnings(project.members, project.service).map((w) => (
                 <p key={w} className="flex items-center gap-1.5 text-xs text-status-stale-foreground">
                   <TriangleAlert className="size-3.5" /> {w}
                 </p>
@@ -107,7 +108,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
   );
 }
 
-type ProjectDraft = Pick<OpsProject, "name" | "year" | "scene" | "primaryExpression" | "keyProjectLevel" | "scheduleScale" | "status">;
+type ProjectDraft = Pick<OpsProject, "name" | "year" | "scene" | "service" | "primaryExpression" | "keyProjectLevel" | "scheduleScale" | "status">;
 
 function draftFor(target: ProjectWithMembers | "new"): ProjectDraft {
   if (target !== "new") return target;
@@ -116,6 +117,7 @@ function draftFor(target: ProjectWithMembers | "new"): ProjectDraft {
     name: `${year} 年度战略落地`,
     year,
     scene: "camp",
+    service: "guided",
     primaryExpression: "sixfold",
     keyProjectLevel: 2,
     scheduleScale: "month",
@@ -189,6 +191,7 @@ function ProjectDialog({
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <SelectField id="project-scene" label="场景" value={draft.scene} options={SCENE_LABELS} onChange={(v) => set("scene", v)} />
+                <SelectField id="project-service" label="服务方式" value={draft.service ?? "guided"} options={SERVICE_LABELS} onChange={(v) => set("service", v)} />
                 <SelectField
                   id="project-level"
                   label="重点工作层级"
@@ -318,7 +321,7 @@ function MembersDialog({
     const user = detail.members.find((m) => m.id === userId);
     return user ? user.nickname || user.username : `#${userId}`;
   };
-  const warnings = memberWarnings(rows);
+  const warnings = memberWarnings(rows, project?.service);
 
   return (
     <Dialog open={!!project} onOpenChange={(open) => (!open ? onClose() : undefined)}>

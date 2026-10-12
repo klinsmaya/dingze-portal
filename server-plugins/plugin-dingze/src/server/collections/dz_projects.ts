@@ -12,6 +12,8 @@ export default defineCollection({
     { type: 'string', name: 'name', allowNull: false },
     { type: 'integer', name: 'year' },
     { type: 'string', name: 'scene', defaultValue: 'camp' },
+    // 服务方式：guided 陪跑（有人工咨询师）/ self 自助（只有数字咨询师）。
+    { type: 'string', name: 'service', defaultValue: 'guided' },
     { type: 'string', name: 'primaryExpression', defaultValue: 'sixfold' },
     { type: 'integer', name: 'keyProjectLevel', defaultValue: 2 },
     { type: 'string', name: 'scheduleScale', defaultValue: 'month' },

@@ -96,6 +96,8 @@ export interface ProjectInput {
   name: string;
   year?: number;
   scene?: 'camp' | 'inhouse';
+  service?: 'guided' | 'self';
+  campId?: number | null;
   primaryExpression?: 'house' | 'sixfold';
   keyProjectLevel?: 1 | 2;
   scheduleScale?: 'month' | 'quarter';
@@ -117,6 +119,8 @@ export async function createProject(ctx: Context, input: ProjectInput) {
         name: text(input.name, '项目名称'),
         year: input.year ? Number(input.year) : new Date().getFullYear(),
         scene: input.scene === 'inhouse' ? 'inhouse' : 'camp',
+        service: input.service === 'self' ? 'self' : 'guided',
+        ...(input.campId ? { campId: Number(input.campId) } : {}),
         // 六分法 is required for every project (spec Q14); the house is optional inside S1-01.
         primaryExpression: 'sixfold',
         keyProjectLevel: input.keyProjectLevel === 1 ? 1 : 2,
@@ -195,7 +199,7 @@ export async function myProjects(ctx: Context) {
   for (const p of projects as any[]) {
     const role = (roleByProject.get(p.get('id')) as ProjectRole | undefined) ?? null;
     const steps = await projectProgress(ctx, p.get('id'));
-    out.push({ ...p.toJSON(), projectRole: role, progress: progress(p.get('id')), next: nextAction(steps, role) });
+    out.push({ ...p.toJSON(), projectRole: role, progress: progress(p.get('id')), next: nextAction(steps, role, p.get('service') === 'self' ? 'self' : 'guided') });
   }
   return out;
 }

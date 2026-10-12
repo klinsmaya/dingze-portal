@@ -116,6 +116,9 @@ export default function ProjectExpertPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold text-brand">专家咨询</h1>
           <p className="mt-1 text-sm text-muted-foreground">战略取舍、路径合理性、责任冲突、资源约束等需要人工判断的问题。年度经营计划质询在线下进行。</p>
+          {(overview.project.service ?? project.service) === "self" ? (
+            <p className="mt-1 text-sm font-medium text-[color:var(--dz-warn)]">这是自助项目：专家咨询需付费，提交后由运营联系你报价，确认后再受理。</p>
+          ) : null}
         </div>
         {canRequest ? (
           <Button onClick={() => setOpen(true)}>

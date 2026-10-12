@@ -29,21 +29,23 @@ export default function ProjectOverviewPage() {
   const byCode = new Map(artifacts.map((a) => [a.code, a]));
   const role = overview.projectRole;
   const steps = progressOf(artifacts);
-  const next = nextAction(steps, role);
+  const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
+  const next = nextAction(steps, role, service);
   const stages = stageProgress(artifacts);
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
   const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
   // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
   const moving = steps
     .filter((a) => a.code !== next.code && getArtifactDef(a.code).priority !== "method")
-    .map((a) => ({ a, status: collaborationStatus(a, role) }))
+    .map((a) => ({ a, status: collaborationStatus(a, role, service) }))
     .filter((x): x is { a: (typeof steps)[number]; status: NonNullable<ReturnType<typeof collaborationStatus>> } => !!x.status && x.status.tone !== "done");
 
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       <div>
         <p className="text-sm text-muted-foreground">
-          {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""} · 往哪打 · 怎么走 · 谁负责
+          {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
+          {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
         <h1 className="font-heading text-3xl font-bold text-brand">今天要做的</h1>
       </div>

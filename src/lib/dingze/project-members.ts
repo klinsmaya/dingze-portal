@@ -16,10 +16,11 @@ export function diffMembers(saved: MemberRow[], edited: MemberRow[]) {
 }
 
 /** Staffing problems the ops admin should see before saving; none of them block saving. */
-export function memberWarnings(rows: MemberRow[]): string[] {
+export function memberWarnings(rows: MemberRow[], service: "guided" | "self" = "guided"): string[] {
   const count = (role: ProjectRole) => rows.filter((m) => m.projectRole === role).length;
   const warnings: string[] = [];
-  if (count("lead_consultant") === 0) warnings.push("还没有主咨询师：复核、定版和重开都需要主咨询师。");
+  // 自助项目没有人工咨询师：复核由企业项目负责人自查。
+  if (service === "guided" && count("lead_consultant") === 0) warnings.push("还没有主咨询师：陪跑项目的复核、定版和重开都需要主咨询师；不配咨询师请把服务方式改为“自助”。");
   if (count("lead_consultant") > 1) warnings.push("有多位主咨询师：复核意见可能不一致，建议只保留一位。");
   if (count("ent_lead") === 0) warnings.push("还没有企业项目负责人：只有企业项目负责人可以确认定版。");
   const ids = rows.map((m) => m.userId);

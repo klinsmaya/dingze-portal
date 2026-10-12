@@ -46,7 +46,16 @@ export type LifecycleAction =
   | 'confirm'
   | 'reopen'
   | 'forceLock'
-  | 'forceReturn';
+  | 'forceReturn'
+  | 'selfReview';
+
+/**
+ * 服务方式 (闭环第三批)：陪跑 = 有人工咨询师复核；自助 = 免费、只有数字咨询师，复核换成企业项目负责人
+ * 的“自查复核”（对照书中定版门禁逐条确认），解锁重开也由企业项目负责人做。校验和“只有企业项目
+ * 负责人能定版”在两种方式下都一样。
+ */
+export type ServiceMode = 'guided' | 'self';
+export const SERVICE_LABELS: Record<ServiceMode, string> = { guided: '陪跑（有咨询师）', self: '自助（数字咨询师）' };
 
 /** Audit and history labels; `grantException` is the consultant's step exception. */
 export const ACTION_LABELS: Record<string, string> = {
@@ -59,6 +68,7 @@ export const ACTION_LABELS: Record<string, string> = {
   reopen: '解锁重开',
   forceLock: '强制定版',
   forceReturn: '强制退回',
+  selfReview: '自查复核',
   grantException: '开例外',
 };
 
@@ -72,6 +82,8 @@ export interface Actor {
   projectRole: ProjectRole | null;
   /** System-level consulting admin may force transitions with a reason. */
   isConsultAdmin: boolean;
+  /** The project's 服务方式; missing means 陪跑. */
+  service?: ServiceMode;
 }
 
 interface TransitionRule {
@@ -81,6 +93,10 @@ interface TransitionRule {
   roles: ProjectRole[];
   consultAdmin?: boolean;
   requiresReason?: boolean;
+  /** Only in this 服务方式. */
+  service?: ServiceMode;
+  /** Extra roles in 自助 projects (no consultant to do it). */
+  selfRoles?: ProjectRole[];
   /** Run hard validation before the transition. */
   validates?: boolean;
 }
@@ -92,11 +108,13 @@ const RULES: Record<LifecycleAction, TransitionRule> = {
     roles: [...ENTERPRISE_EDITORS, ...CONSULTANTS],
   },
   stepDone: { from: ['in_progress'], to: 'step_done', roles: ['ent_lead', 'dept_head'], validates: true },
-  submitReview: { from: ['step_done'], to: 'in_review', roles: ['ent_lead', 'dept_head', ...CONSULTANTS] },
-  approve: { from: ['in_review'], to: 'pending_confirm', roles: ['lead_consultant'], validates: true },
+  submitReview: { from: ['step_done'], to: 'in_review', roles: ['ent_lead', 'dept_head', ...CONSULTANTS], service: 'guided' },
+  approve: { from: ['in_review'], to: 'pending_confirm', roles: ['lead_consultant'], validates: true, service: 'guided' },
+  // 自助：企业项目负责人对照书中定版门禁逐条自查（清单见 self-review.ts），再由他定版。
+  selfReview: { from: ['step_done'], to: 'pending_confirm', roles: ['ent_lead'], validates: true, service: 'self' },
   returnToEdit: { from: ['in_review', 'pending_confirm'], to: 'in_progress', roles: ['lead_consultant', 'ent_lead'], requiresReason: true },
   confirm: { from: ['pending_confirm'], to: 'locked', roles: ['ent_lead'], validates: true },
-  reopen: { from: ['locked'], to: 'in_progress', roles: ['lead_consultant'], consultAdmin: true, requiresReason: true },
+  reopen: { from: ['locked'], to: 'in_progress', roles: ['lead_consultant'], selfRoles: ['ent_lead'], consultAdmin: true, requiresReason: true },
   // 强制定版 skips review and enterprise confirmation, never the content checks (定版门禁).
   forceLock: {
     from: ['in_progress', 'step_done', 'in_review', 'pending_confirm'],
@@ -119,8 +137,11 @@ export class LifecycleError extends Error {
 
 export function canPerform(action: LifecycleAction, actor: Actor): boolean {
   const rule = RULES[action];
+  const service = actor.service ?? 'guided';
+  if (rule.service && rule.service !== service) return false;
   if (rule.consultAdmin && actor.isConsultAdmin) return true;
-  return actor.projectRole !== null && rule.roles.includes(actor.projectRole);
+  const roles = service === 'self' && rule.selfRoles ? [...rule.roles, ...rule.selfRoles] : rule.roles;
+  return actor.projectRole !== null && roles.includes(actor.projectRole);
 }
 
 /**

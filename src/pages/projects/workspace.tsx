@@ -228,9 +228,11 @@ function Workspace({ code }: { code: string }) {
   const blocking = issues.filter((i) => i.level === "error").length;
 
   const role = overview.projectRole;
+  const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
   const actor: Actor = {
     projectRole: role,
     isConsultAdmin: overview.isConsultAdmin,
+    service,
   };
   const status = artifact?.status ?? "not_started";
   const unlocked = detail.data?.unlock.unlocked ?? false;
@@ -502,7 +504,7 @@ function Workspace({ code }: { code: string }) {
       ),
     [def.stage, overview.artifacts, code, searchParams, routeUpstream, draft],
   );
-  const collab = progress ? collaborationStatus({ ...progress, unlocked }, role) : null;
+  const collab = progress ? collaborationStatus({ ...progress, unlocked }, role, service) : null;
 
   // The digital consultant reads the live draft and proposes changes through a frontend
   // tool; the change is written (as an AI-suggested version) only after the user approves.
@@ -665,19 +667,19 @@ function Workspace({ code }: { code: string }) {
   const returned = progress?.status === "in_progress" && progress.lastEvent && ["returnToEdit", "forceReturn"].includes(progress.lastEvent.action);
   const headerStates: HeaderState[] = [];
   if (returned) headerStates.push({ tone: "warn", text: "已退回", detail: progress?.lastEvent?.reason || "顾问退回了这张表，请按批注修改后重新提交。" });
-  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: "修改需由主咨询师解锁重开，下游会标“上游已变更”。", detailLabel: "说明" });
+  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由主咨询师解锁重开，下游会标“上游已变更”。", detailLabel: "说明" });
   else if (collab) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
   if (artifact?.stale) headerStates.push({ tone: "warn", text: "上游已变更", detail: `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。` });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
   // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
-  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant";
+  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || (service === "self" && role === "ent_lead");
   if (progress?.orgNotice && status === "locked") {
     headerStates.push({
       tone: "warn",
       text: "组织已变更",
       detailLabel: "看变化",
-      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : "由主咨询师判断是否需要重开。"}`,
+      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : service === "self" ? "由企业项目负责人判断是否需要重开。" : "由主咨询师判断是否需要重开。"}`,
       actions: canJudgeOrg ? (
         <Button
           size="sm"
@@ -798,7 +800,7 @@ function Workspace({ code }: { code: string }) {
                 }
                 actions={
                   detail.data ? (
-                    <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} />
+                    <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} />
                   ) : null
                 }
               />

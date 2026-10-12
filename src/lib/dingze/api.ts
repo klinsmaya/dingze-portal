@@ -35,6 +35,8 @@ export type ProjectSummary = {
   name: string;
   year: number;
   scene: "camp" | "inhouse";
+  /** 服务方式：陪跑（有咨询师）/ 自助（数字咨询师）。 */
+  service?: "guided" | "self";
   primaryExpression: "house" | "sixfold";
   keyProjectLevel: 1 | 2;
   scheduleScale: "month" | "quarter";
@@ -158,7 +160,7 @@ export async function saveArtifact(
 
 export async function transitionArtifact(
   spaceName: string,
-  values: { projectId: number; code: string; action: Exclude<LifecycleAction, "save">; reason?: string }
+  values: { projectId: number; code: string; action: Exclude<LifecycleAction, "save">; reason?: string; answers?: { key: string; ok: boolean; note?: string }[] }
 ) {
   return nocobaseClient.action<{ status: ArtifactStatus; stale: string[] }>(
     "dingze",

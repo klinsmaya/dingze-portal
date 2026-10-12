@@ -40,6 +40,7 @@ export type OpsProject = {
   name: string;
   year: number;
   scene: "camp" | "inhouse";
+  service?: "guided" | "self";
   primaryExpression: "house" | "sixfold";
   keyProjectLevel: 1 | 2;
   scheduleScale: "month" | "quarter";

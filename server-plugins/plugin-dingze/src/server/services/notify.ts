@@ -79,6 +79,12 @@ const RECIPIENTS: Partial<Record<LifecycleAction, { roles?: ProjectRole[]; kind:
   forceLock: { kind: 'locked', title: (n) => `《${n}》已定版`, verb: '强制定版' },
   reopen: { kind: 'reopened', title: (n) => `《${n}》已解锁重开`, verb: '解锁重开' },
   forceReturn: { kind: 'reopened', title: (n) => `《${n}》已退回重做`, verb: '强制退回' },
+  selfReview: { roles: ['dept_head'], kind: 'confirm', title: (n) => `《${n}》自查复核完成，待定版`, verb: '完成了自查复核' },
+};
+
+/** 自助项目没有咨询师：本步完成后通知企业项目负责人去自查复核。 */
+const SELF_RECIPIENTS: typeof RECIPIENTS = {
+  stepDone: { roles: ['ent_lead'], kind: 'step_done', title: (n) => `《${n}》本步完成，待自查复核`, verb: '标记了本步完成' },
 };
 
 /** “DZ测试燃气 · 2026 年度战略落地”: consultants follow several enterprises at once. */
@@ -98,7 +104,7 @@ export async function notifyTransition(
 ) {
   const projectId = pc.project.get('id');
   const project = await projectLabel(ctx, pc.project, transaction);
-  const rule = RECIPIENTS[action];
+  const rule = (pc.actor.service === 'self' ? SELF_RECIPIENTS[action] : undefined) ?? RECIPIENTS[action];
   if (rule) {
     const names = [def, ...(extra.bundled ?? []).map((c) => getArtifactDef(c))].map((d) => `${d.specId} ${d.name}`).join('、');
     const parts = [`${project} · ${names}：${actorName(ctx)}${rule.verb}`];

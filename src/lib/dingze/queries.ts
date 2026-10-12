@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { LifecycleAction } from "@dingze/shared";
+import type { LifecycleAction, SelfReviewAnswer } from "@dingze/shared";
 
 import {
   type ProjectSummary,
@@ -92,7 +92,7 @@ export function useSaveArtifact(project: ProjectSummary | undefined, code: strin
 export function useTransitionArtifact(project: ProjectSummary | undefined, code: string) {
   const invalidate = useInvalidateProject(project);
   return useMutation({
-    mutationFn: (values: { action: Exclude<LifecycleAction, "save">; reason?: string }) =>
+    mutationFn: (values: { action: Exclude<LifecycleAction, "save">; reason?: string; answers?: SelfReviewAnswer[] }) =>
       transitionArtifact(project!.spaceName, { projectId: project!.id, code, ...values }),
     onSuccess: () => invalidate(code),
   });

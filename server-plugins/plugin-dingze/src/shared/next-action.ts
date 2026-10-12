@@ -2,7 +2,7 @@
 // Shared by the project list (server), the project home and the workspace (Portal).
 
 import { ARTIFACTS, getArtifactDef, stageGateCodes, STAGES } from './catalog';
-import type { ArtifactStatus, ProjectRole } from './lifecycle';
+import type { ArtifactStatus, ProjectRole, ServiceMode } from './lifecycle';
 
 export interface ArtifactProgress {
   code: string;
@@ -34,8 +34,26 @@ export function wasReturned(a: ArtifactProgress): boolean {
 }
 
 /** Collaboration status as the enterprise sees it (spec 二(三): no black-box waiting). */
-export function collaborationStatus(a: ArtifactProgress, role: ProjectRole | null): { tone: 'wait' | 'act' | 'done' | 'neutral' | 'warn'; text: string } | null {
+export function collaborationStatus(
+  a: ArtifactProgress,
+  role: ProjectRole | null,
+  service: ServiceMode = 'guided',
+): { tone: 'wait' | 'act' | 'done' | 'neutral' | 'warn'; text: string } | null {
   const isEnterprise = !!role && ENTERPRISE.includes(role);
+  if (service === 'self') {
+    if (a.stale && a.status !== 'not_started') return { tone: 'warn', text: '上游表有改动，请核对后保存一次' };
+    if (wasReturned(a)) return { tone: 'act', text: `已退回修改${a.lastEvent?.reason ? `：${a.lastEvent.reason}` : ''}` };
+    switch (a.status) {
+      case 'step_done':
+        return role === 'ent_lead' ? { tone: 'act', text: '本步已完成，下一步：自查复核' } : { tone: 'wait', text: '本步已完成，等企业项目负责人自查复核' };
+      case 'pending_confirm':
+        return role === 'ent_lead' ? { tone: 'act', text: '自查复核已完成，待你定版' } : { tone: 'wait', text: '自查复核已完成，等企业项目负责人定版' };
+      case 'locked':
+        return { tone: 'done', text: '已定版（锁定）：如需修改，由企业项目负责人解锁重开' };
+      default:
+        return null;
+    }
+  }
   if (a.stale && a.status !== 'not_started') return { tone: 'warn', text: '上游表有改动，请核对后保存一次' };
   if (wasReturned(a)) return { tone: 'act', text: `已退回修改${a.lastEvent?.reason ? `：${a.lastEvent.reason}` : ''}` };
   switch (a.status) {
@@ -59,7 +77,7 @@ function title(code: string) {
 }
 
 /** The single most useful next step for `role` on a project. */
-export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | null): NextAction {
+export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | null, service: ServiceMode = 'guided'): NextAction {
   const byCode = new Map(artifacts.map((a) => [a.code, a]));
   const steps = ARTIFACTS.filter((d) => d.priority !== 'method').map((d) => byCode.get(d.code)).filter((a): a is ArtifactProgress => !!a);
   const first = (pred: (a: ArtifactProgress) => boolean) => steps.find(pred);
@@ -85,7 +103,11 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
     return { kind: 'stale', code: stale.code, label: `核对：${title(stale.code)}`, hint: '它引用的上游表改过了，核对后保存一次即可' };
   }
   const done = first((x) => x.status === 'step_done');
-  if (done && (role === 'ent_lead' || role === 'dept_head' || (role && CONSULTANT.includes(role)))) {
+  if (service === 'self') {
+    if (done && role === 'ent_lead') return { kind: 'submit', code: done.code, label: `自查复核：${title(done.code)}`, hint: '对照书中定版门禁逐条确认，没问题就进入待定版' };
+    const confirm = first((x) => x.status === 'pending_confirm');
+    if (confirm && role === 'ent_lead') return { kind: 'confirm', code: confirm.code, label: `去定版：${title(confirm.code)}`, hint: '自查复核已完成，确认后这张表锁定' };
+  } else if (done && (role === 'ent_lead' || role === 'dept_head' || (role && CONSULTANT.includes(role)))) {
     return { kind: 'submit', code: done.code, label: `提交顾问审：${title(done.code)}`, hint: '这张表已完成本步，提交后由主咨询师复核' };
   }
   const fill = first((x) => x.unlocked && (x.status === 'not_started' || x.status === 'in_progress') && getArtifactDef(x.code).priority === 'P0');
