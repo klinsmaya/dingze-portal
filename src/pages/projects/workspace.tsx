@@ -1,4 +1,4 @@
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Lock, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { useGetIdentity } from "@refinedev/core";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   type Actor,
   collaborationStatus,
+  type DiffEntry,
   diffPayloads,
   getArtifactDef,
   isArtifactCode,
@@ -271,6 +272,8 @@ function Workspace({ code }: { code: string }) {
   saveShortcut.current = onSave;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const lastAnchor = useRef<string | null>(null);
+  const allThreadsRef = useRef<{ id: number; author: string }[]>([]);
+  const revisionRef = useRef<{ entries: DiffEntry[]; whoOf: (path: string) => string | undefined; stats: ReturnType<EditSession["revisionStats"]> } | null>(null);
   const revisionToggle = useRef<() => void>(() => {});
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -322,6 +325,7 @@ function Workspace({ code }: { code: string }) {
   );
   const [revision, setRevision] = useState<RevisionState>({ on: false, baseRev: null, basePayload: undefined, baseLabel: "" });
   const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
+  const [previewDraft, setPreviewDraft] = useState<EditSession["previewDraft"]>(null);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   // 就地批注 (design 10 画面 5): the composer at the cell / node, its draft listed in the 批注 tab.
@@ -364,6 +368,24 @@ function Workspace({ code }: { code: string }) {
       setActiveComment,
       preview: previewAnchors,
       setPreview: setPreviewAnchors,
+      previewDraft,
+      setPreviewDraft,
+      revisionCell: (key: string) => {
+        const data = revisionRef.current;
+        if (!data) return null;
+        const [row, field] = key.split(".");
+        const primary = !field || ["path", "name", "title", "task"].includes(field);
+        const hit =
+          data.entries.find((d) => (d.kind === "changed" || d.kind === "added") && (d.path === key || d.path.endsWith(`.${key}`))) ??
+          (primary ? data.entries.find((d) => d.kind === "added" && (d.path === row || d.path.endsWith(`.${row}`))) : undefined);
+        if (!hit) return null;
+        return { kind: hit.kind === "added" ? "added" : "changed", before: hit.kind === "changed" ? preview(hit.before, 40) : undefined, by: data.whoOf(hit.path) };
+      },
+      revisionStats: () => revisionRef.current?.stats ?? null,
+      commentInfo: (id: number) => {
+        const i = allThreadsRef.current.findIndex((t) => t.id === id);
+        return i < 0 ? null : { no: i + 1, author: allThreadsRef.current[i].author };
+      },
       selecting,
       setSelecting: (on: boolean) => {
         setSelecting(on);
@@ -389,7 +411,7 @@ function Workspace({ code }: { code: string }) {
       chrome: chromeRef,
       publishChrome: setChromeSig,
     }),
-    [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
+    [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, previewDraft, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
   );
 
   // Canvas markers: 修订 against a chosen version, or just what changed since the last save.
@@ -403,6 +425,29 @@ function Workspace({ code }: { code: string }) {
       before,
     };
   }, [revision, draft, edit.log]);
+  // 修订: who changed each path since the compared version (saved versions, then this session's edits).
+  const revisionData = useMemo(() => {
+    if (!revision.on || revision.basePayload === undefined) return null;
+    const entries = diffPayloads(revision.basePayload, draft);
+    const by = new Map<string, string>();
+    const later = (historyQuery.data?.versions ?? []).filter((v) => v.rev > (revision.baseRev ?? 0)).sort((a, b) => a.rev - b.rev);
+    for (const v of later) for (const c of v.changes ?? []) for (const ch of c.changes) by.set(ch.path, c.by || v.by);
+    for (const c of edit.log) for (const ch of c.changes) by.set(ch.path, c.by ?? "我");
+    const whoOf = (path: string) => by.get(path) ?? [...by.entries()].find(([p]) => p.startsWith(`${path}.`) || path.startsWith(`${p}.`))?.[1];
+    const rows = (kind: string) => entries.filter((d) => d.kind === kind && d.before !== null && typeof (d.before ?? d.after) === "object").length;
+    return {
+      entries,
+      whoOf,
+      stats: {
+        label: revision.baseLabel.split(" · ")[0] || `v${revision.baseRev}`,
+        changed: entries.filter((d) => d.kind === "changed").length,
+        added: entries.filter((d) => d.kind === "added" && typeof d.after === "object").length,
+        removed: rows("removed"),
+        people: new Set(entries.map((d) => whoOf(d.path)).filter(Boolean)).size,
+      },
+    };
+  }, [revision, draft, historyQuery.data, edit.log]);
+  revisionRef.current = revisionData;
   lastAnchor.current = focusAnchor;
   openComposer.current = (anchors: string[]) => {
     if (!canComment) return void toast.info("你在这个项目里不能批注");
@@ -410,6 +455,7 @@ function Workspace({ code }: { code: string }) {
     setCommentDraft((d) => (d && d.anchors.join("|") === anchors.join("|") ? d : { anchors, label, text: "" }));
   };
   const allThreads = useMemo(() => [...(comments.data ?? [])].sort((a, b) => a.id - b.id), [comments.data]);
+  allThreadsRef.current = allThreads;
   const numberOf = useCallback((id: number) => {
     const i = allThreads.findIndex((t) => t.id === id);
     return i < 0 ? null : i + 1;
@@ -428,11 +474,13 @@ function Workspace({ code }: { code: string }) {
     const removed = last.changes.filter((c) => c.kind === "removed" && c.before && typeof c.before === "object");
     if (!removed.length) return;
     toasted.current = last.id;
+    const no = last.commentId ? numberOf(last.commentId) : null;
     toast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+      description: no ? `按批注 ${circled(no)} · 8 秒内可撤销，之后在“修改”里撤销` : "8 秒内可撤销，之后在“修改”里撤销",
       duration: 8000,
-      action: { label: "撤销", onClick: () => undoCommand(last) },
+      action: { label: "撤销 Ctrl+Z", onClick: () => undoCommand(last) },
     });
-  }, [edit.log, undoCommand]);
+  }, [edit.log, undoCommand, numberOf]);
 
   const progress = overview.artifacts.find((a) => a.code === code);
 
@@ -474,7 +522,7 @@ function Workspace({ code }: { code: string }) {
         name: PROPOSE_TOOL,
         title: "建议写入成果表",
         description:
-          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、battlefields.+）；label 是给用户看的格子名称。卡片会给用户看原值→新值→影响，用户确认后才写入草稿，用户保存后生效。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
+          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、nodes.+）；label 是给用户看的格子名称。调结构用 op：set（默认，改一格或追加一条）、remove（删掉 path 指向的一条，路径/WBS 里连同下级）、split（把一条拆成几条同级，value 是每条的字段列表，如 [{path, metric, value}, …]，原来的下级跟第一条）、move（value 为 {parentId, goalId}，整枝移到新上级，层级自动调整）。路径的指标值要让下级合计推得回上级。卡片会给用户看原值→新值→合计核对，并在导图/表格里用琥珀色虚线预览，用户确认后才写入草稿，用户保存后生效。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -491,9 +539,10 @@ function Workspace({ code }: { code: string }) {
                 properties: {
                   path: { type: "string" },
                   label: { type: "string" },
+                  op: { type: "string", enum: ["set", "remove", "split", "move"] },
                   value: {},
                 },
-                required: ["path", "label", "value"],
+                required: ["path", "label"],
               },
             },
           },
@@ -777,7 +826,7 @@ function Workspace({ code }: { code: string }) {
               added={marks.added}
               before={marks.before}
               comments={openThreads.flatMap(threadAnchors)}
-              preview={previewAnchors}
+              preview={previewDraft ? previewDraft.items.map((i) => i.anchor) : previewAnchors}
               selection={selection}
             />
             {selecting ? (
@@ -831,6 +880,28 @@ function Workspace({ code }: { code: string }) {
                   openComposer.current([at]);
                 }}
               />
+            ) : null}
+            {previewDraft ? (
+              <>
+                <div className="sticky top-0 z-30 -mb-2 flex items-center gap-2 self-center rounded-full border px-3 py-1 text-xs shadow-md" style={{ background: "var(--dz-ai-soft)", borderColor: "var(--dz-ai)" }} role="status">
+                  <Sparkles className="size-3.5" style={{ color: "var(--dz-ai)" }} />
+                  正在预览数字咨询师的修改建议：琥珀色虚线和序号对应修改卡，确认后才写入
+                  <Button size="xs" variant="ghost" onClick={() => setPreviewDraft(null)}>
+                    回到当前
+                  </Button>
+                </div>
+                <CommentPins
+                  pins={previewDraft.items.map((i) => ({ id: -i.no, no: i.no, anchors: [i.anchor], resolved: false, label: `修改建议第 ${i.no} 条` }))}
+                  activeId={null}
+                  onOpen={() => {
+                    setPanelPref(true);
+                    setAsideTab("coach");
+                  }}
+                  tone="var(--dz-ai)"
+                  side="left"
+                  what="修改建议"
+                />
+              </>
             ) : null}
             <CommentPins
               pins={pins}
@@ -898,9 +969,9 @@ function Workspace({ code }: { code: string }) {
                 {EDITABLE_CODES.has(code) ? (
                   <ArtifactEditor
                     code={code}
-                    value={draft}
-                    onChange={setDraft}
-                    readOnly={readOnly}
+                    value={previewDraft ? previewDraft.payload : draft}
+                    onChange={previewDraft ? () => toast.info("正在预览修改建议：先在修改卡上确认或不采纳") : setDraft}
+                    readOnly={readOnly || !!previewDraft}
                     issues={issues}
                     upstream={upstream}
                     projectYear={project.year}
@@ -934,7 +1005,7 @@ function Workspace({ code }: { code: string }) {
           </main>
           {EDITABLE_CODES.has(code) && unlocked ? (
             <StatusBar
-              summary={chrome?.summary}
+              summary={previewDraft ? [{ tone: "warn", text: "修改建议待确认" }, ...(chrome?.summary ?? []).map((x) => ({ ...x, text: `预览：${x.text}` }))] : chrome?.summary}
               errors={blocking}
               warnings={issues.length - blocking}
               openComments={openThreads.length}

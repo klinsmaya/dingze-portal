@@ -7,6 +7,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useEditSession } from "@/pages/projects/components/edit-session";
 
 const pendingTone = "border-suggestion-border bg-suggestion text-suggestion-foreground";
 
@@ -168,12 +169,15 @@ export function GridCell({
   align = "left",
   className,
   children,
+  revisionKey,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   readOnly: boolean;
   anchor?: string;
+  /** Payload key matched against 修订 (e.g. “n3.path”); defaults to the anchor. */
+  revisionKey?: string;
   placeholder?: string;
   align?: "left" | "right";
   className?: string;
@@ -182,6 +186,8 @@ export function GridCell({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const cell = useRef<HTMLDivElement>(null);
+  const session = useEditSession();
+  const rev = session?.revision.on ? session.revisionCell(revisionKey ?? anchor ?? "") : null;
   const commit = () => {
     if (draft !== null && draft !== (value ?? "")) onChange(draft);
     setDraft(null);
@@ -246,7 +252,24 @@ export function GridCell({
         className,
       )}
     >
-      {text || (readOnly ? "—" : (placeholder ?? ""))}
+      {rev?.kind === "changed" && rev.before !== undefined ? (
+        <span className="block text-[11px] font-normal text-muted-foreground line-through" title="对比版本里的原值">
+          {rev.before || "空"}
+        </span>
+      ) : null}
+      <span className={cn(rev?.kind === "changed" && "underline decoration-2 underline-offset-2")} style={rev?.kind === "changed" ? { textDecorationColor: "var(--dz-changed)" } : undefined}>
+        {text || (readOnly ? "—" : (placeholder ?? ""))}
+      </span>
+      {rev?.by ? (
+        <span
+          title={`${rev.by} ${rev.kind === "added" ? "新增" : "改的"}`}
+          aria-label={`${rev.by} ${rev.kind === "added" ? "新增" : "改的"}`}
+          className="ml-1 inline-flex size-4 items-center justify-center rounded-full align-middle text-[9px] font-semibold text-white"
+          style={{ background: "var(--dz-changed)" }}
+        >
+          {rev.by.slice(0, 1)}
+        </span>
+      ) : null}
       {children}
     </div>
   );

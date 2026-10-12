@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { cn } from "@/lib/utils";
+
 import { anchorCandidates } from "@/lib/dingze/locate";
 
 // Canvas layer for the edit session: marks rows and cells by `data-anchor` — 本版改过 / 修订
@@ -92,7 +94,22 @@ export function EditMarkers(marks: Marks) {
 export type Pin = { id: number; no: number; anchors: string[]; resolved: boolean; label: string };
 
 /** Numbered purple drops pinned to the rows / cells comments are attached to (design 10 §4). */
-export function CommentPins({ pins, activeId, onOpen }: { pins: Pin[]; activeId: number | null; onOpen: (id: number) => void }) {
+export function CommentPins({
+  pins,
+  activeId,
+  onOpen,
+  tone = "var(--dz-comment)",
+  side = "right",
+  what = "批注",
+}: {
+  pins: Pin[];
+  activeId: number | null;
+  onOpen: (id: number) => void;
+  /** Amber numbered badges at the left for an AI change card's preview (design 10 画面 6). */
+  tone?: string;
+  side?: "left" | "right";
+  what?: string;
+}) {
   const [boxes, setBoxes] = useState<{ pin: Pin; top: number; left: number }[]>([]);
   useEffect(() => {
     const main = document.querySelector<HTMLElement>("[data-dingze-main]");
@@ -110,7 +127,11 @@ export function CommentPins({ pins, activeId, onOpen }: { pins: Pin[]; activeId:
         }
         if (!el) continue;
         const r = el.getBoundingClientRect();
-        out.push({ pin, top: r.top - host.top + main.scrollTop - 6, left: Math.min(r.right - host.left + main.scrollLeft - 14, host.width - 28) });
+        out.push({
+          pin,
+          top: r.top - host.top + main.scrollTop - 6,
+          left: side === "left" ? Math.max(0, r.left - host.left + main.scrollLeft - 8) : Math.min(r.right - host.left + main.scrollLeft - 14, host.width - 28),
+        });
       }
       setBoxes(out);
     };
@@ -123,7 +144,7 @@ export function CommentPins({ pins, activeId, onOpen }: { pins: Pin[]; activeId:
       window.removeEventListener("resize", measure);
       main.removeEventListener("scroll", measure, true);
     };
-  }, [pins]);
+  }, [pins, side]);
   return (
     <>
       {boxes.map(({ pin, top, left }) => (
@@ -131,10 +152,10 @@ export function CommentPins({ pins, activeId, onOpen }: { pins: Pin[]; activeId:
           key={pin.id}
           type="button"
           onClick={() => onOpen(pin.id)}
-          aria-label={`批注 ${pin.no}，${pin.label}，未解决`}
+          aria-label={`${what} ${pin.no}，${pin.label}${what === "批注" ? "，未解决" : ""}`}
           title={pin.label}
-          className="absolute z-10 flex size-6 items-center justify-center rounded-full rounded-br-none text-[11px] font-bold text-white shadow"
-          style={{ top, left, background: "var(--dz-comment)", outline: activeId === pin.id ? "2px solid var(--gold)" : undefined }}
+          className={cn("absolute z-10 flex size-6 items-center justify-center text-[11px] font-bold text-white shadow", side === "left" ? "rounded-md" : "rounded-full rounded-br-none")}
+          style={{ top, left, background: tone, outline: activeId === pin.id ? "2px solid var(--gold)" : undefined }}
         >
           {pin.no}
         </button>

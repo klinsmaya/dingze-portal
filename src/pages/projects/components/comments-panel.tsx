@@ -84,7 +84,8 @@ function Thread({
     session!.setActiveComment(thread.id);
     session!.openPanel("coach");
     const where = thread.anchorLabel || (anchors.length ? anchors.join("、") : "整张表");
-    askCoach(`请按批注${no ? circled(no) : ""}修改（位置：${where}）。批注内容：${thread.content}${thread.replies.length ? `\n后续回复：${thread.replies.map((r) => r.content).join("；")}` : ""}\n请先说明你打算怎么改，再给出修改卡让我确认。`);
+    const quote = [`> 批注${no ? circled(no) : ""} · ${thread.author} · ${where}`, `> ${thread.content.replace(/\n/g, " ")}`, ...thread.replies.filter((r) => !r.content.startsWith("已按批注修改")).map((r) => `> ${r.author}：${r.content.replace(/\n/g, " ")}`)].join("\n");
+    askCoach(`${quote}\n\n请按这条批注修改：先一句话说明打算怎么改，再给出修改卡让我确认。`);
   };
   const send = async () => {
     if (!text.trim()) return;
@@ -177,6 +178,11 @@ function Thread({
               <PencilLine /> 按批注修改
             </Button>
           )
+        ) : null}
+        {canFix && !working ? (
+          <Button size="icon-sm" variant="outline" title="带着批注原文到对话里，让数字咨询师出修改卡" aria-label={`把批注 ${no ?? ""} 带到对话里`} onClick={fixWithCoach}>
+            <Bot />
+          </Button>
         ) : null}
         {canResolve ? (
           <Button size="sm" variant="outline" onClick={() => onResolve(true)}>

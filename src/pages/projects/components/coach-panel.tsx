@@ -1,4 +1,4 @@
-import { Ellipsis, History, MessageSquarePlus } from "lucide-react";
+import { Check, CircleCheck, Ellipsis, Eye, History, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -15,23 +15,28 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import type { StageKey } from "@dingze/shared";
+import { type StageKey, diffPayloads } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
+import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
+import { cn } from "@/lib/utils";
 import { getAt, preview } from "@/lib/dingze/edit-log";
 
-import { useEditSession } from "./edit-session";
+import { type EditSession, useEditSession } from "./edit-session";
 
 const SAY = "dz:coach-say";
 
 /** Put a first sentence into the digital consultant's composer and send it. */
 export function askCoach(text: string, send = true) {
+  if (send) lastSendAt = Date.now();
   window.dispatchEvent(new CustomEvent(SAY, { detail: { text, send } }));
 }
+
+/** When the user last sent something here: a change card arriving after that previews right away. */
+let lastSendAt = 0;
 
 type ProposalArgs = { summary?: string; changes?: ProposedChange[] };
 
@@ -85,6 +90,9 @@ function SuggestionCard({
 }: AIToolRendererProps) {
   const { args } = readProposal(part);
   const state = (part as { state?: string }).state;
+  // A card arriving within minutes of the user's message is live; replayed history does not preview.
+  const live = useRef<boolean | null>(null);
+  if (live.current === null) live.current = state === "input-streaming" || Date.now() - lastSendAt < 5 * 60_000;
   const decided =
     state === "output-available" ||
     state === "output-error" ||
@@ -114,21 +122,71 @@ function SuggestionCard({
     );
   }
 
-  return <PendingCard args={args} disabled={disabled} onApprove={onApprove} onReject={onReject} onRevise={onRevise} />;
+  return <PendingCard args={args} live={live.current} disabled={disabled} onApprove={onApprove} onReject={onReject} onRevise={onRevise} />;
+}
+
+type CardRow = { no: number | null; op: ChangeOp; name: string; before?: string; after?: string; parts?: { no: number; title: string; amount: string; note?: string }[] };
+
+/** One numbered item per thing the card adds or changes, with the anchor it previews at. */
+function cardRows(session: EditSession, changes: ProposedChange[]) {
+  const rows: CardRow[] = [];
+  const items: { anchor: string; no: number }[] = [];
+  let no = 0;
+  let prev: unknown = session.draft;
+  for (const change of changes) {
+    const op = change.op ?? "set";
+    const cur = applyChanges(prev, [change]);
+    const name = change.label ?? session.nameOf(change.path) ?? change.path;
+    const before = getAt(prev, change.path);
+    if (op === "split") {
+      const added = diffPayloads(prev, cur).filter((d) => d.kind === "added").map((d) => d.path);
+      const anchors = [change.path, ...added];
+      const parts = (Array.isArray(change.value) ? (change.value as Record<string, unknown>[]) : []).map((p, i): { no: number; title: string; amount: string; note?: string } => {
+        const n = ++no;
+        if (anchors[i]) items.push({ anchor: anchors[i], no: n });
+        const fields = Object.entries(p).filter(([k, v]) => k !== "id" && typeof v === "string" && v) as [string, string][];
+        const amount = String(p.value ?? p.amount ?? "");
+        return { no: n, title: fields.filter(([k]) => k !== "value" && k !== "metric").map(([, v]) => v)[0] ?? describeValue(p), amount };
+      });
+      const kids = Array.isArray((cur as { nodes?: { parentId?: string }[] }).nodes) ? (cur as { nodes: { parentId?: string }[] }).nodes.filter((n) => n.parentId === change.path.split(".").pop()).length : 0;
+      if (parts[0] && kids) parts[0].note = `原来的 ${kids} 条下级跟到这条`;
+      const item = (before ?? {}) as { value?: unknown; unit?: unknown };
+      rows.push({ no: null, op, name, before: [name, item.value, item.unit && !String(item.value ?? "").includes(String(item.unit)) ? item.unit : ""].filter(Boolean).join(" "), parts });
+    } else if (op === "remove") {
+      rows.push({ no: null, op, name, before: name || preview(before, 60) });
+    } else if (op === "move") {
+      const target = (change.value ?? {}) as { parentId?: string | null };
+      const n = ++no;
+      items.push({ anchor: change.path, no: n });
+      rows.push({ no: n, op, name, after: target.parentId ? `移到「${session.nameOf(`${change.path.split(".").slice(0, -1).join(".")}.${target.parentId}`)}」下` : "移到第一级" });
+    } else {
+      const n = ++no;
+      items.push({ anchor: change.path.replace(/\.\+$/, ""), no: n });
+      const append = change.path.endsWith(".+");
+      const had = before !== undefined && before !== null && before !== "" && !(Array.isArray(before) && before.length === 0);
+      rows.push({ no: n, op, name: `${append ? "新增 · " : ""}${name}`, before: !append && had ? preview(before, 80) : undefined, after: describeValue(change.value) || preview(change.value, 120) });
+    }
+    prev = cur;
+  }
+  return { rows, items, next: prev };
 }
 
 /**
- * 修改卡 (design 10 §3): 原值 → 新值 per cell, and the 影响 on the table's checks. Nothing is
- * written until 确认; the cells it would touch are outlined amber on the canvas meanwhile.
+ * 修改卡 (design 10 画面 6): what changes (拆分 / 修改 / 删除 / 移动, numbered like the amber preview on
+ * the canvas), whether the sums still add up, and the comment it will be attached to. Nothing is
+ * written until 确认修改.
  */
 function PendingCard({
   args,
+  live,
   disabled,
   onApprove,
   onReject,
   onRevise,
 }: {
   args: ProposalArgs;
+  /** Arrived in this session (not replayed history): preview on the canvas right away. */
+  live: boolean;
   disabled?: boolean;
   onApprove: AIToolRendererProps["onApprove"];
   onReject: AIToolRendererProps["onReject"];
@@ -136,85 +194,150 @@ function PendingCard({
 }) {
   const session = useEditSession();
   const changes = useMemo(() => args.changes ?? [], [args.changes]);
-  const paths = changes.map((c) => c.path.replace(/\.\+$/, "")).join("|");
-  useEffect(() => {
-    if (!session) return;
-    session.setPreview(paths.split("|").filter(Boolean));
-    return () => session.setPreview([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paths]);
-
-  const impact = useMemo(() => {
+  const built = useMemo(() => {
     if (!session) return null;
     try {
-      const next = applyChanges(session.draft, changes);
-      const errors = (payload: unknown) => session.validate(payload).filter((i) => i.level === "error");
-      const before = errors(session.draft);
-      const after = errors(next);
-      const fixed = before.filter((b) => !after.some((a) => a.message === b.message));
-      const added = after.filter((a) => !before.some((b) => b.message === a.message));
-      return { before: before.length, after: after.length, fixed, added, invalid: null as string | null };
+      return { ...cardRows(session, changes), invalid: null as string | null };
     } catch (error) {
-      return { before: 0, after: 0, fixed: [], added: [], invalid: error instanceof Error ? error.message : "路径无效" };
+      return { rows: [] as CardRow[], items: [], next: session.draft, invalid: error instanceof Error ? error.message : "路径无效" };
     }
   }, [session, changes]);
+  const [previewing, setPreviewing] = useState(live);
+  const key = JSON.stringify(built?.items ?? []);
+  useEffect(() => {
+    if (!session || !built || built.invalid) return;
+    if (previewing) session.setPreviewDraft({ payload: built.next, items: built.items });
+    else session.setPreview(built.items.map((i) => i.anchor));
+    return () => {
+      session.setPreviewDraft(null);
+      session.setPreview([]);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, previewing]);
+
+  const impact = useMemo(() => {
+    if (!session || !built || built.invalid) return null;
+    const errors = (payload: unknown) => session.validate(payload).filter((i) => i.level === "error");
+    const before = errors(session.draft);
+    const after = errors(built.next);
+    return {
+      before: before.length,
+      after: after.length,
+      fixed: before.filter((b) => !after.some((a) => a.message === b.message)),
+      added: after.filter((a) => !before.some((b) => b.message === a.message)),
+    };
+  }, [session, built]);
+  // 合计核对: the sums this change touches, before → after (路径 下级合计).
+  const checks = useMemo(() => {
+    const fn = session?.chrome.current?.checks;
+    if (!fn || !built || built.invalid) return [];
+    const was = new Map(fn(session!.draft).map((c) => [c.id, c]));
+    const touched = new Set(built.items.map((i) => i.anchor.split(".").pop()));
+    return fn(built.next)
+      .filter((c) => touched.has(c.id) || was.get(c.id)?.text !== c.text)
+      .map((c) => ({ ...c, same: was.get(c.id)?.text === c.text }));
+  }, [session, built]);
+  const comment = session?.activeComment ? session.commentInfo(session.activeComment) : null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border-2 border-dashed border-suggestion-border bg-suggestion p-3 text-sm">
-      <div className="flex justify-between text-xs font-bold text-suggestion-foreground">
-        <span>修改卡{args.summary ? ` · ${args.summary}` : ""}</span>
-        <span>待你确认</span>
+    <div className="flex flex-col gap-2 rounded-xl border-2 border-dashed p-3 text-sm" style={{ borderColor: "var(--dz-ai)", background: "var(--dz-ai-soft)" }}>
+      <div className="flex items-center justify-between gap-2 text-xs font-bold" style={{ color: "var(--dz-ai)" }}>
+        <span className="flex items-center gap-1">
+          <Sparkles className="size-3.5" /> 修改建议{args.summary ? ` · ${args.summary}` : ""}
+        </span>
+        <span className="shrink-0">待你确认</span>
       </div>
-      <ul className="flex flex-col gap-2">
-        {changes.map((change, i) => {
-          const append = change.path.endsWith(".+");
-          const before = session && !append ? getAt(session.draft, change.path) : undefined;
-          const hadText = before !== undefined && before !== null && before !== "" && !(Array.isArray(before) && before.length === 0);
-          const name = change.label ?? session?.nameOf(change.path) ?? change.path;
-          return (
-            <li key={`${change.path}-${i}`} className="flex flex-col gap-0.5">
-              <div className="text-xs text-suggestion-foreground">
-                {append ? "新增一项 · " : ""}
-                {name}
-              </div>
-              {hadText ? (
-                <div className="text-xs text-muted-foreground line-through" title="原值">
-                  {preview(before, 120)}
-                </div>
+      {built?.invalid ? <p className="text-xs text-destructive">这条建议对不上表里的位置（{built.invalid}），请让数字咨询师重出。</p> : null}
+      <ul className="flex flex-col divide-y rounded-lg border bg-card">
+        {built?.rows.map((row, i) => (
+          <li key={i} className="flex flex-col gap-1 px-2.5 py-2">
+            <div className="flex items-start gap-1.5">
+              {row.op !== "set" ? (
+                <span className="shrink-0 rounded border px-1 text-[10px] font-semibold" style={{ color: "var(--dz-ai)", borderColor: "var(--dz-ai)" }}>
+                  {OP_LABELS[row.op]}
+                </span>
               ) : null}
-              <div className="font-semibold text-foreground">{describeValue(change.value) || preview(change.value, 120)}</div>
-              {hadText ? <div className="text-[11px] text-suggestion-foreground">会替换已填写的内容，确认前请核对</div> : null}
-            </li>
-          );
-        })}
+              {row.no ? <NoBadge no={row.no} /> : null}
+              <span className={cn("min-w-0 flex-1 text-xs", row.op === "split" || row.op === "remove" ? "text-destructive line-through" : "text-muted-foreground")}>
+                {row.op === "split" || row.op === "remove" ? row.before || row.name : row.name}
+              </span>
+            </div>
+            {row.op === "set" || row.op === "move" ? (
+              <div className="ml-6">
+                {row.before ? <div className="text-xs text-muted-foreground line-through">{row.before}</div> : null}
+                <div className="font-semibold">{row.after}</div>
+              </div>
+            ) : null}
+            {row.parts?.map((p) => (
+              <div key={p.no} className="flex items-start gap-1.5">
+                <NoBadge no={p.no} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 font-medium">{p.title}</span>
+                    <b className="shrink-0 tabular-nums" style={{ color: "var(--dz-ai)" }}>
+                      {p.amount}
+                    </b>
+                  </div>
+                  {p.note ? <div className="text-[11px] text-muted-foreground">{p.note}</div> : null}
+                </div>
+              </div>
+            ))}
+          </li>
+        ))}
       </ul>
-      {impact ? (
-        <div className="rounded-md bg-background/60 px-2 py-1.5 text-xs">
-          <span className="font-semibold">影响：</span>
-          {impact.invalid ? (
-            <span className="text-destructive">这条建议对不上表里的位置（{impact.invalid}），请让数字咨询师重出。</span>
-          ) : (
-            <>
+      {checks.length || impact ? (
+        <div className="flex flex-col gap-1 text-xs">
+          {checks.map((c) => (
+            <span key={c.id} className="flex items-center gap-1 font-medium" style={{ color: c.ok === false ? "var(--dz-warn)" : "var(--dz-ok)" }}>
+              {c.ok === false ? <TriangleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
+              {c.label ? `${c.label}：` : ""}
+              {c.text}
+              {c.same ? " 不变" : ""}
+            </span>
+          ))}
+          {impact && (impact.before || impact.after) ? (
+            <span className="text-muted-foreground">
               必须改的问题 {impact.before} → {impact.after}
               {impact.fixed.length ? <span className="text-status-done-foreground">，解决：{impact.fixed.slice(0, 2).map((x) => x.message).join("；")}</span> : null}
               {impact.added.length ? <span className="text-destructive">，新增：{impact.added.slice(0, 2).map((x) => x.message).join("；")}</span> : null}
-            </>
-          )}
+            </span>
+          ) : null}
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={disabled || !!impact?.invalid} onClick={() => onApprove()}>
-          确认
+      {comment ? (
+        <p className="flex items-start gap-1 text-[11px] text-muted-foreground">
+          <MessageSquareText className="mt-px size-3 shrink-0" style={{ color: "var(--dz-comment)" }} />
+          确认后，这次修改会附在批注 {circledNo(comment.no)} 下，由{comment.author}决定是否解决
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={disabled || !!built?.invalid} onClick={() => onApprove()}>
+          <Check /> 确认修改
         </Button>
         <Button size="sm" variant="outline" disabled={disabled} onClick={() => onRevise()}>
-          改一下
+          <PencilLine /> 改一下
         </Button>
         <Button size="sm" variant="ghost" disabled={disabled} onClick={() => onReject("用户不采纳这条建议")}>
           不采纳
         </Button>
+        {built && !built.invalid && built.items.length ? (
+          <Button size="xs" variant="ghost" className="ml-auto" aria-pressed={previewing} onClick={() => setPreviewing((v) => !v)}>
+            <Eye /> {previewing ? "收起预览" : "在图里预览"}
+          </Button>
+        ) : null}
       </div>
       <p className="text-[11px] text-muted-foreground">确认后写入草稿、记入“修改”，可撤销；保存后生效。</p>
     </div>
+  );
+}
+
+const circledNo = (n: number) => (n >= 1 && n <= 20 ? String.fromCharCode(0x2460 + n - 1) : String(n));
+
+function NoBadge({ no }: { no: number }) {
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center rounded text-[10px] font-bold text-white" style={{ background: "var(--dz-ai)" }}>
+      {no}
+    </span>
   );
 }
 
@@ -368,7 +491,17 @@ export function CoachPanel({
         <AttachPageContext />
         <CoachBridge />
         {/* Messages scroll; the composer stays at the bottom of the panel (design 10). */}
-        <div ref={host} data-dingze-chat className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={host}
+          data-dingze-chat
+          className="relative flex min-h-0 flex-1 flex-col"
+          onKeyDownCapture={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && (e.target as HTMLElement).closest("textarea")) lastSendAt = Date.now();
+          }}
+          onClickCapture={(e) => {
+            if ((e.target as HTMLElement).closest("button[type=submit], button[aria-label*='发送'], button[aria-label*='Send']")) lastSendAt = Date.now();
+          }}
+        >
           <ChatMenu />
           <AIChatWindow
             className="min-h-0 flex-1 bg-card"

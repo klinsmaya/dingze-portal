@@ -59,14 +59,14 @@ export function StatusBar({
         <GitCompareArrows className="size-3.5" /> 修订 {revisionOn ? `开${revisionLabel ? ` · 对比 ${revisionLabel}` : ""}` : "关"}
       </button>
       {selected ? <span className="hidden max-w-64 truncate text-muted-foreground sm:inline">选中：{selected}</span> : null}
-      <span className="ml-auto hidden items-center gap-2 text-muted-foreground md:flex">
+      <span className="ml-auto hidden items-center gap-2 text-muted-foreground 2xl:flex">
         {hints.map(([keys, what]) => (
           <span key={keys} className="flex items-center gap-1">
             <Kbd>{keys}</Kbd> {what}
           </span>
         ))}
       </span>
-      <Button size="xs" variant="ghost" onClick={onShortcuts} aria-label="全部快捷键（?）">
+      <Button size="xs" variant="ghost" className="ml-auto 2xl:ml-0" onClick={onShortcuts} aria-label="全部快捷键（?）">
         <Keyboard /> ? 全部快捷键
       </Button>
     </div>

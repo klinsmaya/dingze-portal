@@ -1,6 +1,8 @@
 import {
   CircleCheck,
   ClipboardPaste,
+  GitCompareArrows,
+  RotateCcw,
   CornerDownRight,
   GripVertical,
   Network,
@@ -434,6 +436,26 @@ export function PathSystemEditor({
           : { tone: "ok", text: `推得回来 ${rolls.length} 处` },
       ]
     : undefined;
+  // 修订: rows deleted since the compared version stay visible as ghosts, each with 恢复.
+  const baseNodes = session?.revision.on ? (((session.revision.basePayload as GoalPathSystem | undefined)?.nodes ?? []) as Node[]) : [];
+  const removed = baseNodes.filter((b) => !nodes.some((n) => n.id === b.id));
+  const restore = (id: string) => {
+    const gone = new Set(removed.map((r) => r.id));
+    const branch: Node[] = [];
+    const walk = (x: Node) => {
+      branch.push(x);
+      baseNodes.filter((c) => c.parentId === x.id && gone.has(c.id)).forEach(walk);
+    };
+    const top = removed.find((r) => r.id === id);
+    if (!top) return;
+    walk(top);
+    const parentHere = !top.parentId || nodes.some((n) => n.id === top.parentId);
+    const rootGoal = rootOf(top, baseNodes)?.goalId ?? goals[0]?.id ?? null;
+    const shift = parentHere ? 0 : 1 - top.level;
+    const back = branch.map((x) => (x.id === top.id && !parentHere ? { ...x, parentId: null, goalId: rootGoal, level: 1 } : { ...x, level: x.level + shift }));
+    session?.nextMeta({ via: "structure", label: `恢复「${top.path || "已删除的一条"}」${branch.length > 1 ? `及下级 ${branch.length - 1} 条` : ""}` });
+    set(normalize([...nodes, ...back]));
+  };
   const tableExtra =
     view === "t310" || view === "table" ? (
       <span className="flex items-center gap-1">
@@ -461,6 +483,10 @@ export function PathSystemEditor({
       </span>
     ) : undefined;
   const baseChrome: EditorChrome = {
+    checks: (payload) => {
+      const list = ((payload as GoalPathSystem | null)?.nodes ?? []) as Node[];
+      return list.flatMap((n) => (rollUp(n, list) ? [{ id: n.id, label: n.path, ...sumText(childrenOf(list, n.id).map((k) => k.amount as number), n.amount as number) }] : []));
+    },
     extra: tableExtra,
     extraKey: `${view}:${level4}:${readOnly}`,
     summary,
@@ -653,6 +679,9 @@ export function PathSystemEditor({
           actions={actions}
           onMoveTo={setMoving}
           onAddRoot={(g, perspective) => addRoot(g, { perspective })}
+          removed={removed.filter((r) => !r.parentId || !removed.some((x) => x.id === r.parentId)).map((r) => ({ node: r, goalId: rootOf(r, baseNodes)?.goalId ?? null }))}
+          onRestore={restore}
+          revisionStats={session?.revision.on ? session.revisionStats() : null}
           minLevels={level4 ? 4 : 3}
         />
       ) : (
@@ -1049,7 +1078,13 @@ function PathWideTable({
   onMoveTo,
   onAddRoot,
   minLevels,
+  removed,
+  onRestore,
+  revisionStats,
 }: {
+  removed: { node: Node; goalId: string | null }[];
+  onRestore: (id: string) => void;
+  revisionStats: { label: string; changed: number; added: number; removed: number; people: number } | null;
   onAddRoot: (goal: PathGoal, perspective: Perspective) => void;
   goals: PathGoal[];
   nodes: Node[];
@@ -1608,9 +1643,34 @@ function PathWideTable({
                     </Fragment>
                   );
                 })}
+                {removed
+                  .filter((r) => (r.goalId ?? goals[0]?.id) === goal.id)
+                  .map(({ node: r }) => (
+                    <tr key={`gone-${r.id}`} className="text-muted-foreground" style={{ background: "color-mix(in oklab, var(--dz-removed) 8%, transparent)" }}>
+                      <td className="border-r border-b px-2 py-1.5 text-[11px]">已删除</td>
+                      <td colSpan={levels * 3} className="border-b px-2 py-1.5 text-sm">
+                        <span className="line-through" style={{ color: "var(--dz-removed)" }}>
+                          {LEVEL_LABELS[r.level]}「{r.path || "未命名"}」 · {r.metric} · {r.value}
+                        </span>
+                        {!readOnly ? (
+                          <Button size="xs" variant="outline" className="ml-2" onClick={() => onRestore(r.id)}>
+                            <RotateCcw /> 恢复
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
               </Fragment>
             );
           })}
+          {revisionStats ? (
+            <tr>
+              <td colSpan={1 + levels * 3} className="px-3 py-1.5 text-xs text-muted-foreground">
+                <GitCompareArrows className="mr-1 inline size-3.5" />
+                对比 {revisionStats.label}：改 {revisionStats.changed} 处 · 增 {revisionStats.added} 行 · 删 {revisionStats.removed} 行 · {revisionStats.people} 人
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>

@@ -26,6 +26,15 @@ export type EditSession = {
   /** Anchors an unconfirmed AI change card would touch (amber preview). */
   preview: string[];
   setPreview: (anchors: string[]) => void;
+  /** 修改卡预览 (design 10 画面 6): the canvas shows this payload read-only, numbered items amber. */
+  previewDraft: { payload: unknown; items: { anchor: string; no: number }[] } | null;
+  setPreviewDraft: (preview: { payload: unknown; items: { anchor: string; no: number }[] } | null) => void;
+  /** 修订 (design 10 画面 7): what a cell was in the compared version and who changed it. */
+  revisionCell: (key: string) => { kind: "changed" | "added"; before?: string; by?: string } | null;
+  /** 对比 vN：改 a 处 · 增 b 行 · 删 c 行 · d 人. */
+  revisionStats: () => { label: string; changed: number; added: number; removed: number; people: number } | null;
+  /** Number and author of a comment, for “这次修改会附在批注③下”. */
+  commentInfo: (id: number) => { no: number; author: string } | null;
   /** 圈选: anchors picked for a group comment. */
   selecting: boolean;
   setSelecting: (on: boolean) => void;
@@ -83,6 +92,8 @@ export type EditorChrome = {
   setVariant?: (key: string) => void;
   tools?: EditorTools;
   zoom?: { value: number; set: (value: number) => void; fit: () => void; minimap?: boolean; setMinimap?: (on: boolean) => void };
+  /** 合计核对 for a payload (路径 下级合计), shown on a change card before / after. */
+  checks?: (payload: unknown) => { id: string; label: string; ok: boolean | null; text: string }[];
   /** Changes when the editor's `extra` controls change state, so the header re-renders. */
   extraKey?: string;
   /** Shown at the left of the status bar, e.g. “合计 1000 / 1000”“推得回来 3 处”. */
