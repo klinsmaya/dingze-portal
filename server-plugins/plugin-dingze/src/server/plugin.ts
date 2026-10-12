@@ -16,6 +16,7 @@ import {
 } from './services/artifacts';
 import { consultantBoard } from './services/board';
 import { opsBoard } from './services/usage';
+import { checkInvite, listInvites, registerWithInvite, registrationStatus, reviewRegistration, saveInvite } from './services/invites';
 import { campAccounts, campAttach, campClose, campDetail, campEnroll, campRemind, listCamps, saveCamp } from './services/camps';
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
@@ -112,6 +113,12 @@ export class PluginDingzeServer extends Plugin {
         campAccounts: action((ctx) => campAccounts(ctx, values(ctx) as any)),
         campRemind: action((ctx) => campRemind(ctx, values(ctx) as any)),
         campClose: action((ctx) => campClose(ctx, values(ctx) as any)),
+        checkInvite: action((ctx) => checkInvite(ctx, ctx.action.params as any)),
+        registerWithInvite: action((ctx) => registerWithInvite(ctx, values(ctx))),
+        registrationStatus: action((ctx) => registrationStatus(ctx, ctx.action.params as any)),
+        listInvites: action((ctx) => listInvites(ctx, ctx.action.params.enterpriseId)),
+        saveInvite: action((ctx) => saveInvite(ctx, values(ctx) as any)),
+        reviewRegistration: action((ctx) => reviewRegistration(ctx, values(ctx) as any)),
         addGuidanceGap: action(async (ctx) => {
           const v = values(ctx);
           const pc = await loadProjectContext(ctx, v.projectId);
@@ -249,6 +256,8 @@ export class PluginDingzeServer extends Plugin {
     });
     // Every handler checks space membership, project role and artifact status itself.
     this.app.acl.allow('dingze', '*', 'loggedIn');
+    // 邀请码注册：只有这三个动作对未登录的人开放，各自限流。
+    this.app.acl.allow('dingze', ['checkInvite', 'registerWithInvite', 'registrationStatus'], 'public');
     // Originals are uploaded with the standard multipart create; nothing else on the
     // collection is open, reads go through dingze:downloadMaterial.
     this.app.acl.allow('dz_material_files', 'create', 'loggedIn');

@@ -51,7 +51,7 @@ export function creator(ctx: Context) {
   return { createdById: id, updatedById: id };
 }
 
-async function audit(ctx: Context, spaceName: string | null, action: string, meta: Record<string, unknown>, transaction?: any) {
+export async function audit(ctx: Context, spaceName: string | null, action: string, meta: Record<string, unknown>, transaction?: any) {
   await ctx.db.getRepository('dz_audit_events').create({
     values: { action, meta: { ...meta, actorId: currentUserId(ctx) }, spaceName, ...creator(ctx) },
     transaction,
@@ -67,7 +67,7 @@ interface EnterpriseScope {
 }
 
 /** Ops may manage any enterprise whose space they belong to; an enterprise admin only their own. */
-async function loadEnterpriseScope(ctx: Context, enterpriseId: unknown, allowEntAdmin: boolean): Promise<EnterpriseScope> {
+export async function loadEnterpriseScope(ctx: Context, enterpriseId: unknown, allowEntAdmin: boolean): Promise<EnterpriseScope> {
   const access = await systemAccess(ctx);
   const enterprise = await ctx.db.getRepository('dz_enterprises').findOne({ filterByTk: positiveId(enterpriseId, '企业') });
   if (!enterprise) throw new HttpError(404, '企业不存在');

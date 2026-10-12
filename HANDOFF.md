@@ -18,8 +18,8 @@
 ## 2. 当前状态（2026-10-12）
 
 - 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
-- 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.21.0** 已部署启用，门户已用最新代码发布。
-- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（197 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
+- 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.22.2** 已部署启用，门户已用最新代码发布。
+- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（198 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
 - 用户提出的需求已全部完成，并在线上用演示账号实测：
   - 规格硬伤 5 条：六分法 P0 阻断、关闭公开注册、编号对齐附录 B、资料原件、S2-08 空字段与例外不绕过校验。
   - 小白易用性 10 条。
@@ -140,7 +140,7 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
    - 第二批已完成（插件 0.19.1）：`dz_org_units.duty / headName`，`dz_artifacts.orgNotice`；动作 `importOrgUnits`、`setMemberDepartment`、`dismissOrgNotice`；组织变化由 `shared/org.ts` 的 `describeOrgChange` 生成说明，`ops.ts` 的 `flagOrgChange` 只标已定版的部门表（`ORG_DEPENDENT_CODES`）并通知主咨询师和企业项目负责人；定版 / 重开 / 退回时清空。自助项目上线后，“不需要重开”也要开放给企业项目负责人。
    - 训练营批次已完成（插件 0.21.0）：`dz_camps`（名称、日期、地点、状态、今日目标表 `focusCodes`），`dz_projects.campId`；`services/camps.ts` 的 `listCamps / saveCamp / campDetail / campEnroll / campAttach / campAccounts / campRemind / campClose`，都只给运营。营前准备复用 `shared/startup.ts` 的 `startupChecklist`（门户的 `project-startup.ts` 只是转出）。门户 `/ops/camps`、`/ops/camps/:campId`（营前准备 / 现场看板 / 结营），导入模板和解析在 `src/lib/dingze/camp-import.ts`。企业侧界面不区分训练营和内训。
    - 服务方式“陪跑 / 自助”已完成（插件 0.20.0）：`dz_projects.service`；`shared/lifecycle.ts` 的规则带 `service` / `selfRoles`（自助禁用提交复核和复核通过，新增 `selfReview`，解锁重开开放给企业项目负责人）；自查清单 `shared/self-review.ts`（定版门禁、常见的坑、校验建议），服务端重建清单并逐条核对答案；`nextAction` / `collaborationStatus` 带服务方式。
-   - 邀请码注册（审核制）：码绑定企业，可选再绑定项目、角色和部门，可设人数上限和有效期；注册后待企业管理员或运营审核，审核通过才激活；公开注册保持关闭。
+   - 邀请码注册（审核制）已完成（插件 0.22.2）：`dz_invites`（码、企业、可选项目 / 角色 / 部门、名额、有效期、启停）和 `dz_registrations`（申请人信息、密码哈希、状态、审核人、原因）；`services/invites.ts`。公开动作只有 `checkInvite / registerWithInvite / registrationStatus`（进程内按 IP 和码限流）。申请时不建账号，只存密码哈希；审核通过时用 `insertUser` 建企业成员，再把哈希写回（`hooks: false`），并按码加入项目。企业管理员发的码不能给 `ent_lead`。门户：`/register`（`src/pages/register/invite.tsx`），登录前查申请状态（`basic-sign-in-form.tsx`），企业页“邀请注册”页签（`invites-tab.tsx`）。限流是进程内的，多实例部署时要换成共享存储。
 
 1. **待用户决定：** 实例上钉钉认证器开着“自动注册”，没有改。改了会影响同实例的其他应用，要先问用户。
 2. **多人同时编辑：** 设计稿要求节点级锁和实时同步，同一字段冲突时给对比卡。现在只在保存时做版本冲突检查（409）。

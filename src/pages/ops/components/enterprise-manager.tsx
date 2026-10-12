@@ -1,8 +1,10 @@
 import { Ban, CirclePlay, Pencil } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +25,7 @@ import { useEnterpriseDetail, useOpsMutation } from "@/lib/dingze/ops-queries";
 
 import { ConfirmAction } from "./confirm-action";
 import { EnterpriseStatusBadge, SIZE_LABELS } from "./labels";
+import { InvitesTab, usePendingRegistrations } from "./invites-tab";
 import { MembersTab } from "./members-tab";
 import { OrgUnitsTab } from "./org-units-tab";
 import { OpsPageHeader } from "./page-header";
@@ -36,6 +39,11 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
   const detail = useEnterpriseDetail(enterpriseId);
   const [editing, setEditing] = useState(false);
   const update = useOpsMutation(opsApi.updateEnterprise);
+  const pendingRegistrations = usePendingRegistrations(enterpriseId);
+  const [params, setParams] = useSearchParams();
+  const defaultTab = asOps ? "projects" : "members";
+  const tabs = asOps ? ["projects", "members", "org", "invites"] : ["members", "org", "invites"];
+  const tab = tabs.includes(params.get("tab") ?? "") ? (params.get("tab") as string) : defaultTab;
 
   if (detail.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (detail.error || !detail.data) {
@@ -102,11 +110,15 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
         </Alert>
       ) : null}
 
-      <Tabs defaultValue={asOps ? "projects" : "members"}>
+      <Tabs value={tab} onValueChange={(v) => setParams(v === defaultTab ? {} : { tab: String(v) }, { replace: true })}>
         <TabsList>
           {asOps ? <TabsTrigger value="projects">项目与分派</TabsTrigger> : null}
           <TabsTrigger value="members">成员</TabsTrigger>
           <TabsTrigger value="org">组织部门</TabsTrigger>
+          <TabsTrigger value="invites">
+            邀请注册
+            {pendingRegistrations ? <Badge className="ml-1 h-4 px-1.5 text-[10px]">{pendingRegistrations}</Badge> : null}
+          </TabsTrigger>
         </TabsList>
         {asOps ? (
           <TabsContent value="projects" className="pt-4">
@@ -118,6 +130,9 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
         </TabsContent>
         <TabsContent value="org" className="pt-4">
           <OrgUnitsTab detail={detail.data} />
+        </TabsContent>
+        <TabsContent value="invites" className="pt-4">
+          <InvitesTab detail={detail.data} asOps={asOps} />
         </TabsContent>
       </Tabs>
 
