@@ -17,6 +17,8 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { ImportSource } from "@/components/dingze/import-source";
+import { ORG_TEMPLATE } from "@/lib/dingze/import-templates";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type EnterpriseDetail, type OrgUnit, opsApi } from "@/lib/dingze/ops-api";
 import { type OrgNode, flattenOrgUnits, parseOrgTable } from "@/lib/dingze/org-units";
@@ -342,6 +344,7 @@ function OrgImportDialog({ open, onClose, detail }: { open: boolean; onClose: ()
           <DialogTitle>从 Excel 粘贴组织表</DialogTitle>
           <DialogDescription>每行一个部门，列依次是：名称、上级、类型（公司 / 部门 / 团队）、负责人、职责；后几列可以空。同名部门会更新上级、负责人和职责。负责人和企业账号同名时自动关联，否则记为“无账号”姓名。</DialogDescription>
         </DialogHeader>
+        <ImportSource template={ORG_TEMPLATE} onText={setText} />
         <Textarea autoFocus aria-label="组织表内容" className="min-h-40 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"市场营销部\t\t部门\t赵部长\t工商业与居民用户开发、客户服务\n大客户组\t市场营销部\t团队\t\t重点工业用户维护"} />
         {rows.length ? (
           <ul className="max-h-48 overflow-y-auto rounded-lg border text-xs">

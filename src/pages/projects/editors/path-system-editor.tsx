@@ -37,6 +37,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ImportSource } from "@/components/dingze/import-source";
+import { PATH_TEMPLATE } from "@/lib/dingze/import-templates";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -992,6 +994,7 @@ function PasteDialog({
             …”这些列（不含表头）复制，粘贴到下面。合并单元格留空的行，会接在上一行下面。
           </DialogDescription>
         </DialogHeader>
+        <ImportSource template={PATH_TEMPLATE} onText={setText} />
         <Textarea
           autoFocus
           aria-label="粘贴内容"

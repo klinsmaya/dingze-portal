@@ -20,3 +20,10 @@ describe("parsePastedPaths", () => {
     expect(parsePastedPaths("\t\t\t孤立二级\t指标\t1")).toEqual([]);
   });
 });
+
+describe("template header", () => {
+  it("skips the template's header row", () => {
+    const nodes = parsePastedPaths("一级路径\t衡量指标\t指标值\t二级路径\t衡量指标\t指标值\n开拓点供新业务\t新增售气量\t300万方");
+    expect(nodes.map((n) => n.path)).toEqual(["开拓点供新业务"]);
+  });
+});

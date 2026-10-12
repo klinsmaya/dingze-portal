@@ -447,17 +447,14 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
 }
 
 /** 新对话 / 历史对话 (the chat header row is hidden under the panel tabs). */
-function ChatMenu() {
-  const { startNewConversation, setConversationListOpen } = useAIChatBase();
-  const { project } = useProjectContext();
-  const materials = useMaterials(project);
+/** 资料进对话：上传的文件存进项目资料库（数字咨询师才能检索），并在输入框写好“请参考《…》”（不自动发送）。 */
+const citeMaterials = (list: { id: number; title: string }[]) =>
+  list.length && askCoach(`请参考资料${list.map((m) => `《${m.title}》（资料编号 ${m.id}）`).join("、")}，结合当前这张表，告诉我哪些内容能用上。`, false);
+
+function useAttachMaterials() {
   const upload = useMaterialUpload();
   const file = useRef<HTMLInputElement>(null);
-  // 资料进对话：上传的文件存进项目资料，同时把“请参考它”放进输入框（不自动发送）。
-  const cite = (list: { id: number; title: string }[]) =>
-    list.length && askCoach(`请参考资料${list.map((m) => `《${m.title}》（资料编号 ${m.id}）`).join("、")}，结合当前这张表，告诉我哪些内容能用上。`, false);
-  return (
-    <>
+  const input = (
     <input
       ref={file}
       type="file"
@@ -467,10 +464,21 @@ function ChatMenu() {
       aria-label="上传资料"
       onChange={async (e) => {
         const added = await upload(e.target.files);
-        cite(added);
+        citeMaterials(added);
         if (file.current) file.current.value = "";
       }}
     />
+  );
+  return { input, open: () => file.current?.click() };
+}
+
+function ChatMenu({ onUpload }: { onUpload: () => void }) {
+  const { startNewConversation, setConversationListOpen } = useAIChatBase();
+  const { project } = useProjectContext();
+  const materials = useMaterials(project);
+  const cite = citeMaterials;
+  return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-20" aria-label="对话菜单" />}>
         <Ellipsis />
@@ -483,7 +491,7 @@ function ChatMenu() {
           <History /> 历史对话
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => file.current?.click()}>
+        <DropdownMenuItem onClick={onUpload}>
           <Paperclip /> 上传资料…
         </DropdownMenuItem>
         <DropdownMenuSub>
@@ -519,6 +527,7 @@ export function CoachPanel({
   const ai = useAI();
   const controller = useAIChatController();
   const host = useRef<HTMLDivElement>(null);
+  const attach = useAttachMaterials();
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(
     () => ai.employees.some((e) => e.username === employee),
@@ -557,13 +566,15 @@ export function CoachPanel({
             if ((e.target as HTMLElement).closest("button[type=submit], button[aria-label*='发送'], button[aria-label*='Send']")) lastSendAt = Date.now();
           }}
         >
-          <ChatMenu />
+          {attach.input}
+          <ChatMenu onUpload={attach.open} />
           <AIChatWindow
             className="min-h-0 flex-1 bg-card"
             showConversationToggle
             showEmployeeSelector={false}
             showModelSelector={false}
-            disclaimer="Enter 发送 · Shift+Enter 换行 · 修改卡确认后才写入成果"
+            composerActions={[{ key: "attach", label: "上传资料（存进资料库，供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]}
+            disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 上传的文件进资料库 · 修改卡确认后才写入成果"
             placeholder="回答数字咨询师，或直接说你的想法…"
           />
           <StarterPrompts host={host} />
