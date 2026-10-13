@@ -541,7 +541,7 @@ export function resourceRowsFromCharters(set: ProjectCharterSet | null | undefin
 
 /** Chapters entered by the enterprise (non-same-source); the rest is assembled from locked tables. */
 export interface PlanBookText {
-  /** 一 执行摘要：AI 可协助整理，但不得改写定版数字。 */
+  /** 一 执行摘要的补充说明（选填）：摘要本身由定版成果自动汇总（同源），这里不得改写定版数字。 */
   summary: string;
   /** 二 上年度总结概述。 */
   lastYear: string;
@@ -556,7 +556,7 @@ export interface PlanBookText {
 }
 
 export const PLAN_BOOK_CHAPTERS: { no: string; company: string; dept: string; source: 'same' | 'entered' }[] = [
-  { no: '一', company: '执行摘要', dept: '执行摘要', source: 'entered' },
+  { no: '一', company: '执行摘要', dept: '执行摘要', source: 'same' },
   { no: '二', company: '上年度总结概述', dept: '上年度总结概述', source: 'entered' },
   { no: '三', company: '本年度环境分析', dept: '本年度环境承接与部门应对', source: 'entered' },
   { no: '四', company: '本年度关键目标分解', dept: '本年度目标分解', source: 'same' },
@@ -590,7 +590,6 @@ export function emptyDeptPlanBook(): DeptPlanBook {
 function validateText(text: PlanBookText, who: string, anchor: string): Issue[] {
   const issues: Issue[] = [];
   const required: [keyof PlanBookText, string][] = [
-    ['summary', '一 执行摘要'],
     ['lastYear', '二 上年度总结概述'],
     ['environment', '三 环境分析'],
     ['risks', '七 风险评估与应对措施'],

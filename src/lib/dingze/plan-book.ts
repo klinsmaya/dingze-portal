@@ -29,8 +29,9 @@ import { type SvgDiagram, sixfoldSvg, strategyHouseSvg, strategyMapSvg } from ".
 // and nothing here invents numbers — every value is copied from a confirmed table.
 
 export type Block =
-  | { kind: "text"; text: string }
-  | { kind: "heading"; text: string }
+  /** `entered`: the enterprise's own text, which the editor shows as an input rather than a preview. */
+  | { kind: "text"; text: string; entered?: true }
+  | { kind: "heading"; text: string; entered?: true }
   | { kind: "table"; headers: string[]; rows: string[][] }
   | { kind: "note"; text: string }
   | { kind: "figure"; caption: string; diagram: SvgDiagram };
@@ -56,7 +57,79 @@ export type PlanBookUpstream = {
   "S3-06"?: ResourceMatch;
 };
 
-const text = (value: string | undefined, empty = "（待企业填写）"): Block => ({ kind: "text", text: value?.trim() ? value.trim() : empty });
+const text = (value: string | undefined, empty = "（待企业填写）"): Block => ({ kind: "text", text: value?.trim() ? value.trim() : empty, entered: true });
+
+/** “80 万元” + “30 万元” → “110 万元”; null when any amount is missing or the units differ. */
+export function sumAmounts(values: string[]): string | null {
+  let total = 0;
+  let unit: string | null = null;
+  for (const v of values) {
+    const m = /^\s*(-?\d+(?:\.\d+)?)\s*(\S*)\s*$/.exec(v ?? "");
+    if (!m) return null;
+    if (unit !== null && m[2] !== unit) return null;
+    unit = m[2];
+    total += Number(m[1]);
+  }
+  if (unit === null) return null;
+  return `${Math.round(total * 100) / 100} ${unit}`.trim();
+}
+
+function gapLine(match: ResourceMatch | undefined, charters: ProjectCharter[]): string {
+  const ids = new Set(charters.map((c) => c.id));
+  const gaps = (match?.rows ?? []).filter((r) => r.charterId && ids.has(r.charterId) && !r.none && r.gap?.trim() && !/^0(\D|$)/.test(r.gap.trim()));
+  if (gaps.length === 0) return match ? "资源匹配未列出缺口" : "资源匹配尚未完成";
+  const major = gaps.filter((r) => r.major).length;
+  return `资源缺口 ${gaps.length} 项${major ? `，其中重大缺口 ${major} 项` : ""}`;
+}
+
+function projectsLine(charters: ProjectCharter[]): string {
+  if (charters.length === 0) return "还没有关键项目";
+  const budget = sumAmounts(charters.map((c) => c.resources?.budget ?? ""));
+  return `靠 ${charters.length} 个关键项目做成${budget ? `，项目预算合计 ${budget}` : ""}（${charters.map((c) => c.name).join("、")}）`;
+}
+
+/** 执行摘要 is same-source (spec 818): every sentence restates a locked table, nothing is entered. */
+export function companySummary(u: PlanBookUpstream, year: number): string[] {
+  const content = u["S1-01"];
+  const targets = currentYearTargets(u["S1-07"], year);
+  const goals = targetsOf(u["S2-03"])?.goals ?? [];
+  const charters = u["S3-02"]?.charters ?? [];
+  const lines: string[] = [];
+  if (content?.mission?.trim()) lines.push(`使命：${content.mission.trim()}`);
+  if (content?.vision?.trim()) lines.push(`愿景：${content.vision.trim()}`);
+  lines.push(
+    targets.length
+      ? `${year} 年战略 KPI 目标 ${targets.length} 项：${targets.map((x) => `${x.name} ${`${x.value} ${x.unit}`.trim()}`).join("；")}`
+      : `${year} 年战略 KPI 目标尚未定版`
+  );
+  const goalText = (g: (typeof goals)[number]) => {
+    const name = g.task || g.metric;
+    const value = `${g.value} ${g.unit}`.trim();
+    return !value || name.replace(/\s/g, "").includes(value.replace(/\s/g, "")) ? name : `${name} ${value}`;
+  };
+  if (goals.length) lines.push(`公司级年度目标 ${goals.length} 项：${goals.map(goalText).join("；")}`);
+  lines.push(projectsLine(charters));
+  lines.push(gapLine(u["S3-06"], charters));
+  return lines;
+}
+
+export function deptSummary(u: PlanBookUpstream, deptId: string): string[] {
+  const rows = (u["S2-05"]?.rows ?? []).filter((r) => r.deptId === deptId);
+  const charters = (u["S3-02"]?.charters ?? []).filter((c) => c.deptId === deptId);
+  const card = (u["S2-07"]?.cards ?? []).find((c) => c.deptId === deptId);
+  const lead = rows.filter((r) => r.role === "A").length;
+  return [
+    rows.length ? `承接公司目标 ${rows.length} 项（主责 ${lead} 项，协同 ${rows.length - lead} 项）` : "部门承接表里没有本部门的承接项",
+    card?.items?.length ? `绩效计分卡 ${card.items.length} 项指标` : "绩效计分卡尚未建立",
+    projectsLine(charters).replace("关键项目", "牵头项目"),
+    gapLine(u["S3-06"], charters),
+  ];
+}
+
+const summaryBlocks = (lines: string[], extra: string | undefined): Block[] => [
+  { kind: "text", text: lines.join("\n") },
+  ...(extra?.trim() ? [{ kind: "heading", text: "补充说明（企业录入，不改动定版数字）", entered: true } as Block, text(extra)] : []),
+];
 
 function chartersBlock(charters: ProjectCharter[]): Block {
   return {
@@ -208,7 +281,7 @@ export function buildCompanyPlanBook(params: {
   const chapters: Chapter[] = PLAN_BOOK_CHAPTERS.map((c) => ({ no: c.no, title: c.company, source: c.source, blocks: [] }));
   chapters[0].blocks = [
     { kind: "heading", text: "1.1 总体战略目标与愿景承接" },
-    text(t.summary),
+    ...summaryBlocks(companySummary(u, year), t.summary),
     ...strategyFigures(u),
     { kind: "heading", text: "1.2 本年度关键 KPI" },
     targets.length
@@ -260,7 +333,7 @@ export function buildDeptPlanBook(params: {
   const chapters: Chapter[] = PLAN_BOOK_CHAPTERS.map((c) => ({ no: c.no, title: c.dept, source: c.source, blocks: [] }));
   chapters[0].blocks = [
     { kind: "heading", text: "1.1 部门年度目标（承接公司）" },
-    text(t.summary),
+    ...summaryBlocks(deptSummary(u, dept.deptId), t.summary),
     undertakings.length
       ? { kind: "table", headers: ["角色", "任务", "衡量指标", "指标值"], rows: undertakings.map((r) => [r.role, r.task, r.metric, r.value]) }
       : { kind: "note", text: "S2-05 里没有本部门的承接项" },

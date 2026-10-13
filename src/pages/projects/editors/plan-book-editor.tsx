@@ -21,7 +21,7 @@ import { useProjectContext } from "@/pages/projects/project-context";
 import { EditorToolbar, ImportButton, SourceNote, TextCell } from "./kit";
 
 const ENTERED: Record<string, { key: keyof PlanBookText; hint: string }[]> = {
-  一: [{ key: "summary", hint: "一页讲清本年度要做成什么、靠哪些项目做成；数字以定版成果为准，数字咨询师可协助整理语言" }],
+  一: [{ key: "summary", hint: "补充说明（选填）：摘要已由定版成果自动汇总；这里只补充背景与表述，不改动任何定版数字" }],
   二: [{ key: "lastYear", hint: "上年度目标完成情况、主要经验与问题" }],
   三: [{ key: "environment", hint: "宏观、行业、客户、竞争与内部能力（环境盘点在培训中完成，这里写结论）" }],
   七: [
@@ -99,21 +99,19 @@ function BookBody({
               </h3>
               <Badge variant={chapter.source === "same" ? "secondary" : "outline"}>{chapter.source === "same" ? "同源 · 自动汇总" : "企业录入"}</Badge>
             </div>
-            {fields.length ? (
+            {chapter.source === "same" ? (
               <div className="flex flex-col gap-2">
-                {fields.map((f) => (
-                  <TextCell key={f.key} label={`${chapter.title} ${f.key}`} multiline placeholder={f.hint} value={text[f.key] ?? ""} onChange={(v) => onText({ ...text, [f.key]: v })} readOnly={readOnly} className="min-h-24" />
+                {chapter.blocks.filter((b) => !((b.kind === "text" || b.kind === "heading") && b.entered)).map((b, i) => (
+                  <BlockView key={i} block={b} />
                 ))}
-                {chapter.no === "八" ? chapter.blocks.map((b, i) => <BlockView key={i} block={b} />) : null}
-                {/* 战略屋 / 战略地图 go into chapter one of the Word file; show them here too. */}
-                {chapter.blocks.filter((b) => b.kind === "figure").map((b, i) => (
-                  <BlockView key={`figure-${i}`} block={b} />
+                {fields.map((f) => (
+                  <TextCell key={f.key} label={`${chapter.title} ${f.key}`} multiline placeholder={f.hint} value={text[f.key] ?? ""} onChange={(v) => onText({ ...text, [f.key]: v })} readOnly={readOnly} className="min-h-16" />
                 ))}
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {chapter.blocks.map((b, i) => (
-                  <BlockView key={i} block={b} />
+                {fields.map((f) => (
+                  <TextCell key={f.key} label={`${chapter.title} ${f.key}`} multiline placeholder={f.hint} value={text[f.key] ?? ""} onChange={(v) => onText({ ...text, [f.key]: v })} readOnly={readOnly} className="min-h-24" />
                 ))}
               </div>
             )}
@@ -124,7 +122,7 @@ function BookBody({
   );
 }
 
-const HINT = "计划书由项目任务书、计划实施推进表、资源匹配表合成。同源章节直接引用定版成果，不重新创造目标、路径、责任和指标值；企业只需填写标“企业录入”的章节。";
+const HINT = "计划书由项目任务书、计划实施推进表、资源匹配表合成。同源章节直接引用定版成果，不重新创造目标、路径、责任和指标值；企业只需填写标“企业录入”的章节；执行摘要也由定版成果自动汇总，可另加补充说明。";
 
 export function CompanyPlanBookEditor({
   value,

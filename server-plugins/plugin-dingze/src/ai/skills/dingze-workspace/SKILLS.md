@@ -53,7 +53,7 @@ introduction:
 | S3-02 项目任务书 | `screening[{id,sourceId,sourceKind,name,renamed,answers.{crossDept,longRunning,reusable,risky}:true/false/null}]`（四问 ≥2 是为项目）`charters[{id,screeningId,code,name,theme,priority.{fit,roi,urgency,feasibility,resources}(1–5),objective,start,end,inScope,outOfScope,deliverables,milestones,deptId,deptName,owner,raci,resources.{fte,budget,material},risks[{id,risk,trigger,response}],assumptions,acceptance.{result,process,close},wbs[{id,parentId,level(1–3),name,deliverable,doneDefinition,owner,dependsOn[工作包 id]}]}]`；编号形如 `2026OPSP001`（也可 `2024HR-P001`），起止用 `YYYY-MM` | `charters.pc1.objective`、`charters.pc1.wbs.+`、`screening.sc2.answers.risky` |
 | S3-05 计划实施推进表 | `scale`(month/quarter) `rows[{id,charterId,name,nodes[{id,time,name,deliverable,acceptance,owner,status(planned/in_progress/done/delayed),dependsOn[节点 id]}]}]`；`time` 按刻度写 `2026-03` 或 `2026-Q2`，前置节点时间不能晚于本节点 | `rows.pr1.nodes.+`、`rows.pr1.nodes.pn2.acceptance` |
 | S3-06 资源匹配 | `rows[{id,charterId,category(finance/people/it/material),need,stock,gap,approach,owner,none,major}]`；某类不需要时 `none: true`；`major: true` 的缺口必须有 approach 和 owner | `rows.+`、`rows.rs3.approach` |
-| S3-07 公司计划书 | `text.{summary,lastYear,environment,risks,notDo,dictionaryNote}`；其余章节由定版成果自动汇总，不写入 | `text.summary` |
+| S3-07 公司计划书 | `text.{summary,lastYear,environment,risks,notDo,dictionaryNote}`（`summary` 是执行摘要的选填补充说明）；执行摘要和其余同源章节由定版成果自动汇总，不写入 | `text.summary` |
 | S3-08 部门计划书 | `depts[{id(=deptId),deptId,deptName,summary,lastYear,environment,risks,notDo,dictionaryNote}]`（按 deptId 定位） | `depts.org-2.summary` |
 
 指标值、分数这类数字，以用户说出的为准；用户没给的值写“待补”，不要替企业编数。年度目标（S2-03 目标区）的指标值只能来自 S1-07 本年度值、经营预算或用户明确给出的数，绝不自行补造。

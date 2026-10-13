@@ -112,7 +112,7 @@ function RulePack() {
                     <Badge variant={a.priority === "P0" ? "default" : "outline"}>{PRIORITY_LABELS[a.priority]}</Badge>
                     {bookNote(a.code) ? (
                       <details className="basis-full text-sm">
-                        <summary className="cursor-pointer text-xs text-muted-foreground">书中方法：要点 · 常见的坑 · 定版门禁</summary>
+                        <summary className="cursor-pointer text-xs text-muted-foreground">书中方法：目的 · 怎么做 · 完成检查</summary>
                         <div className="mt-2 rounded-lg border border-book-border bg-book px-4 py-2 text-book-foreground">
                           <BookMethod def={a} />
                         </div>

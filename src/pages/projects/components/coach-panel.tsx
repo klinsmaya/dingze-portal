@@ -480,7 +480,7 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
             {" "}
             · {def.task} / {def.step}
           </span>
-          {note?.gate ? <div className="mt-0.5 text-muted-foreground">做到这样可以定版：{note.gate}</div> : null}
+          {note?.gate ? <div className="mt-0.5 text-muted-foreground">完成检查：{note.gate}</div> : null}
         </div>
       ) : null}
       <span className="text-xs text-muted-foreground">第一次用？点一句开始：</span>

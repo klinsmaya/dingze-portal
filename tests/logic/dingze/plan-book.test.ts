@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyCharter, emptyPlanBookText, emptyStrategyContent, planNode, resourceRow } from "@dingze/shared";
 
-import { buildCompanyPlanBook, buildDeptPlanBook } from "@/lib/dingze/plan-book";
+import { buildCompanyPlanBook, buildDeptPlanBook, sumAmounts } from "@/lib/dingze/plan-book";
 
 const upstream = {
   "S1-07": {
@@ -34,16 +34,39 @@ describe("plan books", () => {
     expect(book.chapters[0].blocks).toEqual(
       expect.arrayContaining([
         { kind: "heading", text: "1.1 总体战略目标与愿景承接" },
-        { kind: "text", text: "全年聚焦车用气" },
+        { kind: "heading", text: "补充说明（企业录入，不改动定版数字）", entered: true },
+        { kind: "text", text: "全年聚焦车用气", entered: true },
         { kind: "heading", text: "1.2 本年度关键 KPI" },
         { kind: "heading", text: "1.3 本年度关键项目清单及关键节点" },
       ])
     );
-    expect(book.chapters[1].blocks).toEqual([{ kind: "text", text: "（待企业填写）" }]);
+    expect(book.chapters[1].blocks).toEqual([{ kind: "text", text: "（待企业填写）", entered: true }]);
     const kpi = book.chapters[3].blocks[1];
     expect(kpi).toEqual({ kind: "table", headers: ["战略主题", "战略 KPI", "本年度目标"], rows: [["做强车用气", "车用气销量", "1100 万方"]] });
     const resources = book.chapters[5].blocks[0];
     expect(resources.kind === "table" && resources.rows[0]).toEqual(["物流车队客户拓展", "财务", "80 万元", "", "30 万元（重大）", "", ""]);
+  });
+
+  it("summarises chapter one from the locked tables instead of entered text", () => {
+    const book = buildCompanyPlanBook({ enterprise: "DZ", year: 2026, text: emptyPlanBookText(), upstream });
+    expect(book.chapters[0].source).toBe("same");
+    const summary = book.chapters[0].blocks[1];
+    expect(summary.kind === "text" && !summary.entered && summary.text.split("\n")).toEqual([
+      "2026 年战略 KPI 目标 1 项：车用气销量 1100 万方",
+      "靠 2 个关键项目做成（物流车队客户拓展、站点审批）",
+      "资源缺口 1 项，其中重大缺口 1 项",
+    ]);
+    expect(book.chapters[0].blocks.some((b) => b.kind === "heading" && b.text.startsWith("补充说明"))).toBe(false);
+    const dept = buildDeptPlanBook({ enterprise: "DZ", year: 2026, dept: { deptId: "org-2", deptName: "燃气运营部" }, text: emptyPlanBookText(), upstream });
+    const line = dept.chapters[0].blocks[1];
+    expect(line.kind === "text" && line.text).toContain("靠 1 个牵头项目做成（物流车队客户拓展）");
+  });
+
+  it("adds up project budgets only when every amount shares a unit", () => {
+    expect(sumAmounts(["80 万元", "30.5 万元"])).toBe("110.5 万元");
+    expect(sumAmounts(["80 万元", "30 元"])).toBeNull();
+    expect(sumAmounts(["80 万元", ""])).toBeNull();
+    expect(sumAmounts([])).toBeNull();
   });
 
   it("puts the strategy house and map into chapter one as figures", () => {

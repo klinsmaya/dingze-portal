@@ -1160,7 +1160,7 @@ function Workspace({ code }: { code: string }) {
             <ChangesPanel project={project} code={code} commentNo={numberOf} />
           </div>
           <div className={cn("min-h-0 flex-1 overflow-y-auto bg-book p-4 text-sm text-book-foreground", asideTab !== "book" && "hidden")}>
-            <BookMethod def={def} />
+            <BookMethod def={def} sub={Number(searchParams.get("sub")) || null} zone={searchParams.get("zone")} />
             {overview.isConsultAdmin || (!!role && CONSULTANT_ROLES.includes(role)) ? (
               <div className="mt-4 border-t border-book-border pt-3">
                 <GuidanceGapButton project={project} code={code} artifactName={def.name} />

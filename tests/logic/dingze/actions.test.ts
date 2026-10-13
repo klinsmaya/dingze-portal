@@ -138,7 +138,7 @@ describe("resource match (S3-06)", () => {
 
 describe("plan books (S3-07)", () => {
   it("requires the chapters only the enterprise can write", () => {
-    expect(errors(validateCompanyPlanBook({ text: { summary: "x", lastYear: "", environment: "x", risks: "", notDo: "", dictionaryNote: "" } }))).toEqual([
+    expect(errors(validateCompanyPlanBook({ text: { summary: "", lastYear: "", environment: "x", risks: "", notDo: "", dictionaryNote: "" } }))).toEqual([
       "公司级计划书还缺：二 上年度总结概述、七 风险评估与应对措施",
     ]);
   });
