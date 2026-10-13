@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyCharter, emptyPlanBookText, emptyStrategyContent, planNode, resourceRow } from "@dingze/shared";
 
-import { buildCompanyPlanBook, buildDeptPlanBook, sumAmounts } from "@/lib/dingze/plan-book";
+import { buildCompanyPlanBook, buildDeptPlanBook, companySummary, sumAmounts } from "@/lib/dingze/plan-book";
 
 const upstream = {
   "S1-07": {
@@ -60,6 +60,18 @@ describe("plan books", () => {
     const dept = buildDeptPlanBook({ enterprise: "DZ", year: 2026, dept: { deptId: "org-2", deptName: "燃气运营部" }, text: emptyPlanBookText(), upstream });
     const line = dept.chapters[0].blocks[1];
     expect(line.kind === "text" && line.text).toContain("靠 1 个牵头项目做成（物流车队客户拓展）");
+  });
+
+  it("does not repeat a goal's value when its name already states it", () => {
+    const goals = (task: string, value: string, unit: string) => ({
+      ...upstream,
+      "S2-03": { ...(upstream["S2-03"] ?? {}), targets: { goals: [{ id: "g1", task, metric: "", value, unit }] } },
+    });
+    const line = (task: string, value: string, unit: string) =>
+      companySummary(goals(task, value, unit) as never, 2026).find((l) => l.startsWith("公司级年度目标")) ?? "";
+    expect(line("重大安全事故为零", "0", "起")).toBe("公司级年度目标 1 项：重大安全事故为零");
+    expect(line("营业收入达到 20.5 亿元", "20.5", "亿元")).toBe("公司级年度目标 1 项：营业收入达到 20.5 亿元");
+    expect(line("新增售气量", "6000", "万方")).toBe("公司级年度目标 1 项：新增售气量 6000 万方");
   });
 
   it("adds up project budgets only when every amount shares a unit", () => {

@@ -105,7 +105,11 @@ export function companySummary(u: PlanBookUpstream, year: number): string[] {
   const goalText = (g: (typeof goals)[number]) => {
     const name = g.task || g.metric;
     const value = `${g.value} ${g.unit}`.trim();
-    return !value || name.replace(/\s/g, "").includes(value.replace(/\s/g, "")) ? name : `${name} ${value}`;
+    const compact = name.replace(/\s/g, "");
+    const num = String(g.value ?? "").trim();
+    // “营业收入达到 20.5 亿元”“重大安全事故为零”: the name already states the target.
+    const stated = compact.includes(value.replace(/\s/g, "")) || (num !== "" && compact.includes(num)) || (Number(num) === 0 && num !== "" && /零|无/.test(compact));
+    return !value || stated ? name : `${name} ${value}`;
   };
   if (goals.length) lines.push(`公司级年度目标 ${goals.length} 项：${goals.map(goalText).join("；")}`);
   lines.push(projectsLine(charters));
