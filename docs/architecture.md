@@ -92,7 +92,7 @@
 - 三位 AI 员工按阶段挂在咨询工作区右侧，页面上下文自动附带当前成果（代码、状态、草稿、校验结果）。
 - 前端工具 `dingzeProposeChanges`（需用户确认）：按点号路径写入成果，数组条目按 `id` 定位，`数组名.+` 追加。界面上渲染为修改卡（原值 → 新值 → 影响），确认后作为一条“对话”来源的修改写入草稿，用户保存时生成版本（含对话修改时记为 `ai_draft`）。
 - Skill `dingze-workspace/SKILLS.md` 记录每张表的 payload 路径；阶段 Skill 来自书稿方法论包。
-- 书中方法（要点 / 坑 / 定版门禁）在 `shared/book-notes.ts`，前端面板与运营“方法与规则包”页共用。
+- 书中方法在 `shared/book-notes.ts`：要点、常见的坑，以及六区指引 `guide`（本步目的、准备、怎么做、示例与反例、完成检查、来源与下一步）。S2-01 按子步骤、S2-03 按分区的指引放在 `parts` 里，用 `taskGuide(code, { sub, zone })` 取当前那一份。`gate` 由完成检查拼成，供对话起步卡使用。前端面板、运营“方法与规则包”页、自查复核清单（`shared/self-review.ts`）共用这一份。
 - 只读的服务端工具（`defineTools`，自动允许）：`dingzeGetArtifact`（读成果）、`dingzeSearchMaterials`（列资料 / 关键词检索片段 / 分页读全文）。只读工具放在服务端，是因为前端自动允许的工具并行调用时会卡住对话。
 - 用量：NocoBase 的 `aiUsageEvents` 记录每轮的 Token；对话所属项目取自该对话用户消息的页面上下文（`workContext[].content.projectId`），首次识别后缓存到 `dz_ai_sessions`。运营看板按项目汇总三位数字咨询师的轮次、Token、使用人数，只记录不计费。
 - 引导缺口记录时带当时的插件（规则包）版本，评审“已发布”时填写包含改进的新版本号。

@@ -15,7 +15,7 @@
 
 需求基线：《企业战略咨询平台需求规格说明书》V1.2、附录 B 成果编号；交互基线：设计稿《10 思维导图 / 表格：修改调整与批注》（OPS-72 v1.3）。
 
-## 2. 当前状态（2026-10-12）
+## 2. 当前状态（2026-10-13）
 
 - 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
 - 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.26.0** 已部署启用，门户已用最新代码发布。
@@ -27,7 +27,8 @@
   - 贴近企业实际的演示数据。
   - 2026-10-12 闭环第一批（只改门户）：「成果与定版」「导出」合并为「成果」（旧路由重定向）；资料页加“已确认成果”“组织与职责”；工作台左栏入口带文字并有“参考资料”；对话 ⋯ 菜单可上传 / 引用资料；项目首页“项目启动”三项（`src/lib/dingze/project-startup.ts`）；企业侧不再显示训练营 / 企业内训。
   - 2026-10-12：按设计稿 10 的七个画面改版工作台，分三批（外壳与布局；导图、表 3-10 与批注；对话修改卡与修订视图），保存方式按用户选的“甲”（手动保存，按钮在面包屑行）。
-  - 验证明细见 `docs/acceptance.md` 末尾两节。
+  - 2026-10-13：两份甲方预验收意见（第一、二批和不需拍板的优化项）和“书中方法”复核意见已改完（插件 0.23.0 – 0.26.0）。
+  - 验证明细见 `docs/acceptance.md` 末尾几节；按版本的改动见 `docs/changelog.md`，后续排期见 `docs/roadmap.md`。
 
 ## 3. 仓库地图
 
@@ -43,7 +44,7 @@
 | `server-plugins/plugin-dingze/src/ai/` | 三位 AI 员工与 Skill（`dingze-workspace/SKILLS.md` 记录每张表的 payload 路径） |
 | `server-plugins/scripts/` | 插件构建 / 部署脚本；`demo-seed/` 演示数据种子（见其 README） |
 | `tests/logic/dingze/`、`tests/components/` | 单测；`e2e/dingze-isolation.spec.ts` 跨企业隔离 E2E |
-| `docs/` | 使用说明、架构、发布、成果目录、验收、交付总览、演示账号 |
+| `docs/` | 使用说明、架构、发布、成果目录、验收、交付总览、演示账号、更新记录（`changelog.md`）、路线图（`roadmap.md`） |
 | `registry/` | 模板自带的 NocoBase Registry 源码（`nocobase-ai` 等），一般不改 |
 
 ## 4. 开发、检查、发布
@@ -136,12 +137,12 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
 
 ## 9. 待办（按优先级）
 
-00. **甲方预验收意见（2026-10-13，两份）**：第一批、第二批和不需甲方拍板的优化项已完成（见 `docs/acceptance.md` 末三节）。需求扩展（字段来源分层、路径贡献口径、资源按期间核算等）和方法口径（A/R 进计分卡、书表勘误、S2-02 是否单列 P0、上游已变更能否正式下载）等甲方确认。
+00. **甲方意见（2026-10-13）**：两份预验收意见和书中方法复核意见中不需拍板的部分已完成（见 `docs/acceptance.md` 末四节）。等甲方签认的方法口径（增收术语对应、A/R 进计分卡、计分卡调整与评分锚点、KPI 硬限、S2-02 是否单列 P0、上游已变更能否正式下载、书表勘误）和需求扩展（字段来源分层、路径贡献口径、资源按期间核算、视觉规范）列在 `docs/roadmap.md` 第 1、2 节。签认前不改；面板上的待签认用语标【待确认】。改书中方法时只改 `shared/book-notes.ts`，完成检查会同时进入对话起步卡和自查复核清单，要同步检查 `tests/logic/dingze/task-guide.test.ts`、`self-service.test.ts`。每次升插件版本都在 `docs/changelog.md` 记一节。
 
 0. **闭环第二、三批（用户已同意方案，均需改插件）：**
    - 第二批已完成（插件 0.19.1）：`dz_org_units.duty / headName`，`dz_artifacts.orgNotice`；动作 `importOrgUnits`、`setMemberDepartment`、`dismissOrgNotice`；组织变化由 `shared/org.ts` 的 `describeOrgChange` 生成说明，`ops.ts` 的 `flagOrgChange` 只标已定版的部门表（`ORG_DEPENDENT_CODES`）并通知主咨询师和企业项目负责人；定版 / 重开 / 退回时清空。自助项目上线后，“不需要重开”也要开放给企业项目负责人。
    - 训练营批次已完成（插件 0.21.0）：`dz_camps`（名称、日期、地点、状态、今日目标表 `focusCodes`），`dz_projects.campId`；`services/camps.ts` 的 `listCamps / saveCamp / campDetail / campEnroll / campAttach / campAccounts / campRemind / campClose`，都只给运营。营前准备复用 `shared/startup.ts` 的 `startupChecklist`（门户的 `project-startup.ts` 只是转出）。门户 `/ops/camps`、`/ops/camps/:campId`（营前准备 / 现场看板 / 结营），导入模板和解析在 `src/lib/dingze/camp-import.ts`。企业侧界面不区分训练营和内训。
-   - 服务方式“陪跑 / 自助”已完成（插件 0.20.0）：`dz_projects.service`；`shared/lifecycle.ts` 的规则带 `service` / `selfRoles`（自助禁用提交复核和复核通过，新增 `selfReview`，解锁重开开放给企业项目负责人）；自查清单 `shared/self-review.ts`（定版门禁、常见的坑、校验建议），服务端重建清单并逐条核对答案；`nextAction` / `collaborationStatus` 带服务方式。
+   - 服务方式“陪跑 / 自助”已完成（插件 0.20.0）：`dz_projects.service`；`shared/lifecycle.ts` 的规则带 `service` / `selfRoles`（自助禁用提交复核和复核通过，新增 `selfReview`，解锁重开开放给企业项目负责人）；自查清单 `shared/self-review.ts`（完成检查、常见的坑、校验建议；0.26.0 起由定版门禁改为完成检查），服务端重建清单并逐条核对答案；`nextAction` / `collaborationStatus` 带服务方式。
    - 邀请码注册（审核制）已完成（插件 0.22.2）：`dz_invites`（码、企业、可选项目 / 角色 / 部门、名额、有效期、启停）和 `dz_registrations`（申请人信息、密码哈希、状态、审核人、原因）；`services/invites.ts`。公开动作只有 `checkInvite / registerWithInvite / registrationStatus`（进程内按 IP 和码限流）。申请时不建账号，只存密码哈希；审核通过时用 `insertUser` 建企业成员，再把哈希写回（`hooks: false`），并按码加入项目。企业管理员发的码不能给 `ent_lead`。门户：`/register`（`src/pages/register/invite.tsx`），登录前查申请状态（`basic-sign-in-form.tsx`），企业页“邀请注册”页签（`invites-tab.tsx`）。限流是进程内的，多实例部署时要换成共享存储。
 
 1. **待用户决定：** 实例上钉钉认证器开着“自动注册”，没有改。改了会影响同实例的其他应用，要先问用户。
