@@ -15,7 +15,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { INCOMPLETE_ROW_MESSAGE, type StageKey, diffPayloads } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, type StageKey, bookNote, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -463,6 +463,9 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
   }, [host, messages.length]);
   if (messages.length || messagesLoading) return null;
   const cell = session?.focusAnchor ? session.nameOf(session.focusAnchor) : null;
+  // Each table opens with its own point (验收意见 E D07): what it is, this step, and the book's gate.
+  const def = session && isArtifactCode(session.code) ? getArtifactDef(session.code) : null;
+  const note = session ? bookNote(session.code) : null;
   const prompts: [string, string][] = [
     ["帮我看这张表缺什么", "帮我看看这张表现在缺什么、哪里不符合书里的要求，按先后告诉我先补哪几格。"],
     [cell ? `解释「${cell.length > 10 ? `${cell.slice(0, 10)}…` : cell}」这一格` : "解释这一格", cell ? `「${cell}」这一格应该填什么？请用大白话解释，再举一个同类企业的例子。` : "我不太懂这张表，请用大白话解释每一栏该填什么，各举一个例子。"],
@@ -470,6 +473,16 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
   ];
   return (
     <div className="absolute inset-x-3 z-10 flex flex-col gap-1.5 rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur" style={{ bottom }} aria-label="可以这样开始">
+      {def ? (
+        <div className="text-xs">
+          <span className="font-semibold text-brand">《{def.plain}》</span>
+          <span className="text-muted-foreground">
+            {" "}
+            · {def.task} / {def.step}
+          </span>
+          {note?.gate ? <div className="mt-0.5 text-muted-foreground">做到这样可以定版：{note.gate}</div> : null}
+        </div>
+      ) : null}
       <span className="text-xs text-muted-foreground">第一次用？点一句开始：</span>
       {prompts.map(([label, text]) => (
         <Button key={label} variant="outline" size="sm" className="justify-start whitespace-normal text-left" onClick={() => askCoach(text)}>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { ACTION_LABELS, STATUS_LABELS, VERSION_KIND_LABELS, getArtifactDef } from "@dingze/shared";
 
@@ -10,8 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProjectSummary } from "@/lib/dingze/api";
 import { errorMessage } from "@/lib/dingze/errors";
 import { formatTime } from "@/lib/dingze/records";
+import { getVersionPayload } from "@/lib/dingze/records-api";
 import { useArtifactHistory, useVersionDiff } from "@/lib/dingze/records-queries";
 import { cn } from "@/lib/utils";
+
+import { pathNamer } from "./edit-session";
 
 const KIND_TONE: Record<string, string> = {
   added: "bg-status-done text-status-done-foreground",
@@ -19,6 +23,23 @@ const KIND_TONE: Record<string, string> = {
   changed: "bg-status-progress text-status-progress-foreground",
 };
 const KIND_LABEL: Record<string, string> = { added: "新增", removed: "删除", changed: "修改" };
+
+/** A whole row or list arrives as JSON text: show its name instead of the JSON. */
+function readable(text: string): string {
+  const t = text.trim();
+  if (!t.startsWith("{") && !t.startsWith("[")) return text;
+  try {
+    const v = JSON.parse(t) as unknown;
+    if (Array.isArray(v)) return `${v.length} 条`;
+    const o = v as Record<string, unknown>;
+    const name = [o.name, o.title, o.path, o.task, o.metric, o.deptName].find((x) => typeof x === "string" && x);
+    return typeof name === "string" ? `「${name}」这一条` : "一条内容";
+  } catch {
+    // Cut-off JSON (long values are truncated by the server).
+    const m = t.match(/"(?:name|title|path|task|metric|deptName)":"([^"]+)"/);
+    return m ? `「${m[1]}」这一条` : "一条内容";
+  }
+}
 
 /** Versions, operations and a two-version comparison for one artifact. */
 export function ArtifactHistorySheet({
@@ -38,6 +59,19 @@ export function ArtifactHistorySheet({
   const defaults = versions.length >= 2 ? { from: firstAi?.rev ?? versions[versions.length - 1].rev, to: versions[0].rev } : null;
   const current = pair && pair.code === code ? pair : defaults && code ? { code, ...defaults } : null;
   const diff = useVersionDiff(project, code, current?.from ?? null, current?.to ?? null);
+  // Business names instead of technical keys (验收意见 E D07): rows by their label, fields by name.
+  // Both versions: a removed row only has its name in the older one.
+  const payloadOf = (rev: number | undefined) => ({
+    queryKey: ["dingze", "version-payload", project.id, code ?? "", rev ?? 0],
+    queryFn: () => getVersionPayload(project.id, project.spaceName, code!, rev!),
+    enabled: !!code && !!rev,
+  });
+  const toPayload = useQuery(payloadOf(current?.to));
+  const fromPayload = useQuery(payloadOf(current?.from));
+  const nameOf = useMemo(
+    () => pathNamer({ before: fromPayload.data?.payload, after: toPayload.data?.payload }),
+    [fromPayload.data, toPayload.data],
+  );
   const def = code ? getArtifactDef(code) : null;
 
   return (
@@ -115,10 +149,12 @@ export function ArtifactHistorySheet({
                           <li key={i} className="rounded-lg border p-2 text-xs">
                             <div className="mb-1 flex items-center gap-2">
                               <Badge className={cn("font-semibold", KIND_TONE[e.kind])}>{KIND_LABEL[e.kind]}</Badge>
-                              <code className="break-all text-muted-foreground">{e.path}</code>
+                              <span className="break-all text-muted-foreground" title={e.path}>
+                                {nameOf(e.path)}
+                              </span>
                             </div>
-                            {e.before ? <div className="break-all text-muted-foreground line-through">{e.before}</div> : null}
-                            {e.after ? <div className="break-all">{e.after}</div> : null}
+                            {e.before ? <div className="break-all text-muted-foreground line-through">{readable(e.before)}</div> : null}
+                            {e.after ? <div className="break-all">{readable(e.after)}</div> : null}
                           </li>
                         ))}
                         {diff.data?.truncated ? <li className="text-xs text-muted-foreground">差异较多，只列出前 300 处。</li> : null}

@@ -234,6 +234,9 @@ export function validateCharterSet(set: ProjectCharterSet): Issue[] {
     if ((c.risks ?? []).length === 0) issues.push({ level: 'warning', message: `“${name}”还没有列出风险`, anchor: c.id });
     if ((c.risks ?? []).length > 3) issues.push({ level: 'warning', message: `“${name}”列了 ${c.risks.length} 条风险，任务书只需 Top3`, anchor: c.id });
     if (!filled(c.outOfScope)) issues.push({ level: 'warning', message: `“${name}”还没写范围外：不做什么同样要讲清`, anchor: c.id });
+    // 验收意见 A07：项目目标、交付物和验收标准要能验收，不能只写“推进顺利”“领导满意”。
+    const vague = vagueWord(c.objective, c.deliverables, c.acceptance?.result, c.acceptance?.process, c.acceptance?.close);
+    if (vague) issues.push({ level: 'warning', message: `“${name}”的目标、交付物或验收标准用了“${vague}”这类没法验收的说法：写清证据、测量办法和通过线`, anchor: c.id });
 
     const wbs = c.wbs ?? [];
     if (wbs.length === 0) issues.push({ level: 'error', message: `“${name}”还没有 WBS 工作包`, anchor: c.id });
@@ -248,6 +251,8 @@ export function validateCharterSet(set: ProjectCharterSet): Issue[] {
         ['owner', '责任人'],
       ].filter(([key]) => !filled(w[key as keyof WbsPackage] as string));
       if (wmissing.length) issues.push({ level: 'error', message: `“${wname}”缺${wmissing.map(([, l]) => l).join('、')}`, anchor: w.id });
+      const wvague = vagueWord(w.doneDefinition, w.deliverable);
+      if (wvague) issues.push({ level: 'warning', message: `“${wname}”的完成定义用了“${wvague}”，写成看得见的成果`, anchor: w.id });
       for (const dep of w.dependsOn ?? []) {
         if (!ids.has(dep)) issues.push({ level: 'error', message: `“${wname}”依赖的工作包不存在`, anchor: w.id });
       }
@@ -323,7 +328,16 @@ export interface ProgressPlan {
 }
 
 /** Words that describe effort, not an acceptable result (“推进、加强、持续优化”…). */
-export const VAGUE_WORDS = ['推进', '加强', '持续优化', '进一步', '大力', '积极', '完善'];
+export const VAGUE_WORDS = ['推进', '加强', '持续优化', '进一步', '大力', '积极', '完善', '顺利', '满意', '基本完成', '尽快', '适当'];
+
+/** The first effort word in a text meant to be checkable (验收标准、交付物、完成定义). */
+export function vagueWord(...texts: (string | undefined | null)[]): string | undefined {
+  return VAGUE_WORDS.find((w) => texts.some((t) => (t ?? '').includes(w)));
+}
+
+/** Node names that verify and nodes that put into production; a verify after production is suspicious. */
+const VERIFY = /验证|测试|试运行|调试|评审|验收/;
+const PRODUCE = /投产|投运|上线|交付使用|正式运行|量产/;
 
 export function emptyProgressPlan(scale: 'month' | 'quarter'): ProgressPlan {
   return { scale, rows: [] };
@@ -363,6 +377,25 @@ export function validateProgressPlan(plan: ProgressPlan, charters?: ProjectChart
     const nodes = row.nodes ?? [];
     if (nodes.length === 0) issues.push({ level: 'error', message: `“${row.name}”还没有关键节点`, anchor: row.id });
     else if (nodes.length < 3) issues.push({ level: 'warning', message: `“${row.name}”只有 ${nodes.length} 个节点，一般分 3—5 个阶段`, anchor: row.id });
+    // 验收意见 A07：节点超出任务书的起止时间、验证排在投产之后，都要企业自己决定怎么调。
+    const charter = charters?.charters?.find((c) => c.id === row.charterId);
+    const end = charter?.end ? timeIndex(String(charter.end).slice(0, 7)) : null;
+    for (const n of nodes) {
+      const t = timeIndex(n.time);
+      if (end !== null && t !== null && t > end) {
+        issues.push({ level: 'warning', message: `“${row.name} · ${n.name || '未命名节点'}”晚于任务书的结束时间 ${charter!.end}：改节点，或回任务书调整工期`, anchor: n.id });
+      }
+    }
+    const verify = nodes.filter((n) => VERIFY.test(`${n.name}${n.phase ?? ''}`));
+    const produce = nodes.filter((n) => PRODUCE.test(`${n.name}${n.phase ?? ''}`));
+    for (const v of verify) {
+      const tv = timeIndex(v.time);
+      const early = produce.find((p) => {
+        const tp = timeIndex(p.time);
+        return tv !== null && tp !== null && tp < tv;
+      });
+      if (early) issues.push({ level: 'warning', message: `“${row.name}”的“${v.name}”排在“${early.name}”之后：先投产后验证，可能顺序倒了`, anchor: v.id });
+    }
     for (const n of nodes) {
       const name = `${row.name} · ${n.name || '未命名节点'}`;
       const missing = [
@@ -462,6 +495,14 @@ export function validateResourceMatch(match: ResourceMatch, charters?: ProjectCh
     const name = `${charters?.charters?.find((c) => c.id === r.charterId)?.name ?? '未关联项目'} · ${cat}`;
     if (!filled(r.need)) issues.push({ level: 'error', message: `“${name}”缺需求`, anchor: r.id });
     if (!filled(r.stock)) issues.push({ level: 'warning', message: `“${name}”还没核对存量`, anchor: r.id });
+    // 验收意见 A08：需求、存量、缺口都是同一单位的数字时，缺口应等于需求减存量。
+    const nums = [r.need, r.stock, r.gap].map((v) => (v ?? '').trim().match(/^(-?\d+(?:\.\d+)?)\s*(\S*)$/));
+    if (nums.every(Boolean) && nums[0]![2] === nums[1]![2] && nums[1]![2] === nums[2]![2]) {
+      const expect = Math.max(0, Number((Number(nums[0]![1]) - Number(nums[1]![1])).toFixed(6)));
+      if (Math.abs(expect - Number(nums[2]![1])) > 1e-6) {
+        issues.push({ level: 'warning', message: `“${name}”需求 ${r.need}、存量 ${r.stock}，缺口应为 ${expect}${nums[0]![2]}，表里写的是 ${r.gap}`, anchor: r.id });
+      }
+    }
     const hasGap = filled(r.gap) && !/^(0|无|没有)$/.test(r.gap.trim());
     if ((hasGap || r.major) && (!filled(r.approach) || !filled(r.owner))) {
       issues.push({ level: r.major ? 'error' : 'warning', message: `“${name}”有缺口，要写明补齐方式和责任人`, anchor: r.id });

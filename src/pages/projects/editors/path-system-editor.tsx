@@ -162,7 +162,7 @@ const amountOf = (n: Node) =>
   typeof n.amount === "number" ? n.amount : parseAmount(n.value);
 
 const num = (v: number) => String(Number(v.toFixed(6)));
-/** “700 + 300 = 1000”, or “… = 900 ≠ 1000” when it does not add up. */
+/** “700 + 300 = 1000”, or “… = 900 ≠ 1000（还差 100）” when it does not add up: the gap stays visible. */
 export function sumText(
   parts: number[],
   target: number | null,
@@ -175,7 +175,8 @@ export function sumText(
   const expr = parts.length > 1 ? `${terms} = ${num(sum)}` : `合计 ${num(sum)}`;
   if (target === null) return { ok: null, text: expr };
   const ok = Math.abs(sum - target) < 1e-6;
-  return { ok, text: ok ? expr : `${expr} ≠ ${num(target)}` };
+  const gap = Number((target - sum).toFixed(6));
+  return { ok, text: ok ? expr : `${expr} ≠ ${num(target)}（${gap > 0 ? `还差 ${num(gap)}` : `多 ${num(-gap)}`}）` };
 }
 
 /**
@@ -1600,7 +1601,7 @@ function PathWideTable({
                                 >
                                   <Check37
                                     ok={false}
-                                    text={`${num(n.amount as number)} ≠ ${parts} = ${num(roll.sum)}`}
+                                    text={`${num(n.amount as number)} ≠ ${parts} = ${num(roll.sum)}（${(n.amount as number) > roll.sum ? `还差 ${num((n.amount as number) - roll.sum)}` : `多 ${num(roll.sum - (n.amount as number))}`}）`}
                                   />
                                   {!readOnly && !later.has(n.id) ? (
                                     <>

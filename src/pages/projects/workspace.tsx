@@ -46,6 +46,7 @@ import { cn } from "@/lib/utils";
 import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
 import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
 import { workflowContext } from "@/lib/dingze/coach-context";
+import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
@@ -652,9 +653,9 @@ function Workspace({ code }: { code: string }) {
   // ── Shell (design 10): route rail · header + canvas + status bar · four-tab panel ──
   const narrowRail = useMediaQuery("(max-width: 1279px)");
   const narrowPanel = useMediaQuery("(max-width: 1099px)");
-  const [railPref, setRailPref] = useState<boolean | null>(null);
+  const [railPref, setRailPref] = usePersistentFlag("dingze:rail-collapsed");
   const railCollapsed = railPref ?? narrowRail;
-  const [panelPref, setPanelPref] = useState<boolean | null>(null);
+  const [panelPref, setPanelPref] = usePersistentFlag("dingze:panel-open");
   const panelOpen = panelPref ?? !narrowPanel;
   useEffect(() => {
     if (highlightComment && narrowPanel) setPanelPref(true);
@@ -836,7 +837,7 @@ function Workspace({ code }: { code: string }) {
                 }
                 actions={
                   detail.data ? (
-                    <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} />
+                    <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} openComments={openThreads.length} />
                   ) : null
                 }
               />

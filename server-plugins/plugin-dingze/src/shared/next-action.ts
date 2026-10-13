@@ -71,16 +71,24 @@ export function collaborationStatus(
     case 'step_done':
       return { tone: 'act', text: isEnterprise ? '本步已完成，下一步：提交给顾问审' : '企业已完成本步，可提交复核' };
     case 'in_review':
-      return { tone: isEnterprise ? 'wait' : 'act', text: isEnterprise ? '顾问在审，审完会通知你' : '待复核' };
+      return { tone: isEnterprise ? 'wait' : 'act', text: isEnterprise ? `等主咨询师复核${since(a, '提交')}，审完会通知你` : `待复核${since(a, '提交')}` };
     case 'pending_confirm':
       return role === 'ent_lead'
-        ? { tone: 'act', text: '顾问已审过，待你定版' }
-        : { tone: 'wait', text: isEnterprise ? '顾问已审过，等企业项目负责人定版' : '等企业项目负责人定版' };
+        ? { tone: 'act', text: `顾问已审过${since(a, '通过')}，待你定版` }
+        : { tone: 'wait', text: isEnterprise ? `顾问已审过${since(a, '通过')}，等企业项目负责人定版` : `等企业项目负责人定版${since(a, '通过')}` };
     case 'locked':
       return { tone: 'done', text: '已定版（锁定）：如需修改，请主咨询师解锁重开' };
     default:
       return null;
   }
+}
+
+/** “（孙经理 10-11 提交）”: who moved the table to where it waits, and when (验收意见 B03). */
+function since(a: ArtifactProgress, verb: string): string {
+  const e = a.lastEvent;
+  if (!e || (!e.by && !e.at)) return '';
+  const day = e.at ? String(e.at).slice(5, 10) : '';
+  return `（${[e.by, day].filter(Boolean).join(' ')} ${verb}）`;
 }
 
 function title(code: string) {

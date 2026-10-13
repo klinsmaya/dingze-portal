@@ -19,6 +19,10 @@ export async function downloadPlanBookDocx(fileName: string, model: PlanBookMode
     TableRow,
     TextRun,
     WidthType,
+    Header,
+    Footer,
+    PageNumber,
+    TableOfContents,
   } = await import("docx");
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: "C9D1D6" };
@@ -32,7 +36,7 @@ export async function downloadPlanBookDocx(fileName: string, model: PlanBookMode
       ),
     });
 
-  const children: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [
+  const children: (InstanceType<typeof Paragraph> | InstanceType<typeof Table> | InstanceType<typeof TableOfContents>)[] = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 120 },
@@ -49,6 +53,12 @@ export async function downloadPlanBookDocx(fileName: string, model: PlanBookMode
       children: [new TextRun({ text: `编制时间：${new Date().toLocaleDateString("zh-CN")}`, size: 20, color: "5B6B73" })],
     }),
   ];
+
+  // 目录 (验收意见 C04)：Word 打开时更新域即可生成，各章为一级标题。
+  children.push(
+    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: "目录", color: BRAND })] }),
+    new TableOfContents("目录", { hyperlink: true, headingStyleRange: "1-2" }),
+  );
 
   // 版本与来源 (验收 D01 / D08): which version this file is and which table versions it was built from.
   if (model.provenance) {
@@ -115,7 +125,32 @@ export async function downloadPlanBookDocx(fileName: string, model: PlanBookMode
     creator: "自驱战略 · 定三责",
     title: model.title,
     styles: { default: { document: { run: { font: "Microsoft YaHei", size: 21 } } } },
-    sections: [{ children }],
+    features: { updateFields: true },
+    sections: [
+      {
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                children: [new TextRun({ text: `${model.title}${draft ? " · 草稿（未定版）" : ""}`, size: 16, color: draft ? "B42318" : "5B6B73" })],
+              }),
+            ],
+          }),
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ children: ["第 ", PageNumber.CURRENT, " 页 / 共 ", PageNumber.TOTAL_PAGES, " 页"], size: 16, color: "5B6B73" })],
+              }),
+            ],
+          }),
+        },
+        children,
+      },
+    ],
   });
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);

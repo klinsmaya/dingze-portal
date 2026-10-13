@@ -194,6 +194,20 @@ const FIELD_NAMES: Record<string, string> = {
   "#order": "顺序",
   time: "时间",
   phase: "阶段",
+  cards: "计分卡",
+  items: "指标",
+  definition: "口径",
+  scoring: "计分规则",
+  source: "数据来源",
+  deptName: "部门",
+  rows: "行",
+  nodes: "节点",
+  charters: "任务书",
+  wbs: "工作包",
+  doneDefinition: "完成定义",
+  deliverables: "交付物",
+  goals: "目标",
+  themes: "主题",
 };
 
 /** Builds `nameOf` for a payload: row label (from comment anchors) plus the field's name. */

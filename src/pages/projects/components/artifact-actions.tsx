@@ -30,7 +30,10 @@ import type { ArtifactDetail, ProjectSummary } from "@/lib/dingze/api";
 import { errorMessage } from "@/lib/dingze/errors";
 import { useRecordDissent, useTransitionArtifact } from "@/lib/dingze/queries";
 
+import { confirmSummary } from "@/lib/dingze/confirm-summary";
+
 import { askCoach } from "./coach-panel";
+import { pathNamer } from "./edit-session";
 
 type Transition = Exclude<LifecycleAction, "save">;
 
@@ -74,9 +77,11 @@ type Props = {
   blocking: number;
   /** Validation suggestions still open (自查复核 asks about each). */
   warnings?: string[];
+  /** Unresolved comment threads, shown before 确认定版. */
+  openComments?: number;
 };
 
-export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking, warnings = [] }: Props) {
+export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking, warnings = [], openComments = 0 }: Props) {
   const [selfReviewing, setSelfReviewing] = useState(false);
   const status = detail.artifact?.status ?? "not_started";
   const transition = useTransitionArtifact(project, code);
@@ -169,6 +174,9 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
       <ConfirmDialog
         open={confirming}
         title={title}
+        warnings={warnings}
+        openComments={openComments}
+        reopener={actor.service === "self" ? "企业项目负责人" : "主咨询师"}
         detail={detail}
         project={project}
         code={code}
@@ -275,6 +283,9 @@ function ReasonDialog({
 function ConfirmDialog({
   open,
   title,
+  warnings,
+  openComments,
+  reopener,
   detail,
   project,
   code,
@@ -284,6 +295,10 @@ function ConfirmDialog({
 }: {
   open: boolean;
   title: string;
+  warnings: string[];
+  openComments: number;
+  /** Who may reopen it later: 主咨询师, or the enterprise lead on a self-service project. */
+  reopener: string;
   detail: ArtifactDetail;
   project: ProjectSummary;
   code: string;
@@ -293,15 +308,44 @@ function ConfirmDialog({
 }) {
   const [acknowledged, setAcknowledged] = useState(false);
   const rev = detail.artifact?.currentRev;
+  const current = detail.artifact?.currentVersion?.payload;
+  const locked = detail.artifact?.lockedVersion;
+  const summary = open ? confirmSummary(code, current, locked ? { rev: locked.rev, payload: locked.payload } : null, pathNamer(current)) : null;
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold text-brand">确认并定版《{title}》</DialogTitle>
           <DialogDescription>
-            定版后这份成果成为正式输入，供后续成果引用。版本：v{rev}。之后如需修改，要由咨询师解锁重开。
+            定版后这份成果成为正式输入，供后续成果引用。版本：v{rev}。之后如需修改，要由{reopener}解锁重开。
           </DialogDescription>
         </DialogHeader>
+        {summary ? (
+          <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+            <div className="font-semibold">
+              {summary.firstLock ? "首次定版" : `与上一定版 v${summary.lockedRev} 相比：${summary.total ? `改了 ${summary.total} 处` : "没有改动"}`}
+            </div>
+            {summary.changes.length ? (
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
+                {summary.changes.map((c, i) => (
+                  <li key={i}>
+                    <span className="text-muted-foreground">{c.where}：</span>
+                    {c.kind === "added" ? `新增 ${c.after}` : c.kind === "removed" ? `删除 ${c.before}` : `${c.before} → ${c.after}`}
+                  </li>
+                ))}
+                {summary.total > summary.changes.length ? <li className="text-muted-foreground">……另有 {summary.total - summary.changes.length} 处，在“修改”里看全部</li> : null}
+              </ul>
+            ) : null}
+            {warnings.length || openComments ? (
+              <div className="text-xs text-[color:var(--dz-warn)]">
+                {[warnings.length && `还有 ${warnings.length} 条校验建议没处理`, openComments && `${openComments} 条批注未解决`].filter(Boolean).join("；")}——不挡定版，但请确认可以接受。
+              </div>
+            ) : null}
+            {summary.downstream.length ? (
+              <div className="text-xs text-muted-foreground">定版后，这些表以它为依据：{summary.downstream.join("、")}</div>
+            ) : null}
+          </div>
+        ) : null}
         <DissentList detail={detail} project={project} code={code} />
         <label className="flex items-start gap-2 text-sm">
           <Checkbox checked={acknowledged} onCheckedChange={(v) => setAcknowledged(v === true)} className="mt-0.5" />
