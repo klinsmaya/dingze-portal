@@ -27,17 +27,36 @@ function clone<T>(value: T): T {
   return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
+/** An appended row without an id gets a stable one, so preview and confirmed write agree. */
+function withId(list: unknown[], value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id === "string" && row.id) return row;
+  const taken = new Set(list.map((x) => (x && typeof x === "object" ? (x as { id?: unknown }).id : undefined)));
+  let n = list.length + 1;
+  while (taken.has(`ai${n}`)) n++;
+  return { ...row, id: `ai${n}` };
+}
+
 function setAt(target: unknown, segments: string[], value: unknown, fullPath: string): unknown {
   const [head, ...rest] = segments;
   if (Array.isArray(target)) {
+    // A row list (objects with ids) only takes whole rows: the AI's output is not schema-checked,
+    // and a half-streamed or partial value would otherwise break the editor and the validators.
+    const rows = target.some((item) => item && typeof item === "object");
     if (head === "+") {
       if (rest.length) throw new ChangePathError(`“${fullPath}”：追加时不能再带下级路径`);
-      return [...target, value];
+      if (value === undefined || value === null || value === "") throw new ChangePathError(`“${fullPath}”：追加的内容是空的`);
+      if (rows && (typeof value !== "object" || Array.isArray(value))) throw new ChangePathError(`“${fullPath}”：这里要追加一整条，而不是一个值`);
+      return [...target, withId(target, value)];
     }
     const index = target.findIndex((item) => item && typeof item === "object" && (item as { id?: unknown }).id === head);
     if (index < 0) throw new ChangePathError(`“${fullPath}”：找不到 id 为 ${head} 的条目`);
+    if (!rest.length && (value === null || typeof value !== "object" || Array.isArray(value))) {
+      throw new ChangePathError(`“${fullPath}”：这里要换成一整条，而不是一个值`);
+    }
     const next = [...target];
-    next[index] = rest.length ? setAt(target[index], rest, value, fullPath) : value;
+    next[index] = rest.length ? setAt(target[index], rest, value, fullPath) : { ...(value as object), id: head };
     return next;
   }
   if (target === null || typeof target !== "object") {

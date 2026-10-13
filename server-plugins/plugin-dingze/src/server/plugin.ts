@@ -24,6 +24,7 @@ import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExper
 import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
 import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
+import { planBookSources } from './services/plan-book-sources';
 import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff, versionPayload } from './services/registry';
 import { createProject, listEnterprises, myProjects, provisionEnterprise, setProjectMembers } from './services/enterprises';
 import {
@@ -174,6 +175,7 @@ export class PluginDingzeServer extends Plugin {
           return versionDiff(ctx, pc, requireArtifactDef(p.code), p.from, p.to);
         }),
         deliveryBundle: action(async (ctx) => deliveryBundle(ctx, await loadProjectContext(ctx, ctx.action.params.projectId))),
+        planBookSources: action(async (ctx) => planBookSources(ctx, await loadProjectContext(ctx, ctx.action.params.projectId), String(ctx.action.params.code ?? ''))),
         recordExport: action(async (ctx) => {
           const v = values(ctx);
           const pc = await loadProjectContext(ctx, v.projectId);

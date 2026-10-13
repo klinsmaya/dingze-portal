@@ -18,6 +18,8 @@ export default defineCollection({
     { type: 'integer', name: 'schemaVersion', defaultValue: 1 },
     // { [upstreamCode]: upstreamVersionId } read when this version was made
     { type: 'jsonb', name: 'upstreamRefs', defaultValue: {} },
+    // 计划书定版时引用的上游版本：{ [code]: { versionId, rev, basis } }，导出始终用这一份 (验收 D01)。
+    { type: 'jsonb', name: 'sources' },
     { type: 'text', name: 'note' },
     // Command log of the edits this version saved: [{ via, label, at, by, commentId, changes[] }].
     { type: 'jsonb', name: 'changes', defaultValue: [] },

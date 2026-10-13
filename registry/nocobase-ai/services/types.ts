@@ -37,6 +37,8 @@ export type UpdatedToolCall = {
   execution?: string;
   willInterrupt?: boolean;
   args?: unknown;
+  /** The decision recorded for this call; a rejected call must never be executed. */
+  userDecision?: UpdateToolCallDecisionOptions["userDecision"] | null;
 };
 
 export type AIConversationActiveState = "idle" | "streaming" | "invoking";

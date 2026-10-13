@@ -212,12 +212,14 @@ export const IPOOC_STAGES: { key: IpoocStage; label: string; hint: string; dimen
   { key: 'C', label: 'C 成本', hint: '费用支出与节约水平（本书约定 C = Cost）', dimensions: '总成本 / 单位成本 / 成本节降率' },
 ];
 
-export const SMART_CHECKS: { key: keyof IpoocSheet['smart']; label: string }[] = [
-  { key: 's', label: '具体（S）' },
-  { key: 'm', label: '可衡量（M）' },
-  { key: 'a', label: '可达成（A）' },
-  { key: 'r', label: '相关（R）' },
-  { key: 't', label: '有时限（T）' },
+// 书稿第 2 章子步骤四、第 3 章“好目标”：A = Ambitious（有挑战性），R = Realistic（切实可行），
+// 不是常见版本的“可达成 / 相关”。
+export const SMART_CHECKS: { key: keyof IpoocSheet['smart']; label: string; hint: string }[] = [
+  { key: 's', label: '具体（S）', hint: 'Specific，明确的、具体的' },
+  { key: 'm', label: '可衡量（M）', hint: 'Measurable，可衡量的' },
+  { key: 'a', label: '有挑战性（A）', hint: 'Ambitious，有雄心的、有挑战性的：跳一跳够得着' },
+  { key: 'r', label: '切实可行（R）', hint: 'Realistic，切实可行的：通过努力可以达到' },
+  { key: 't', label: '有时限（T）', hint: 'Time-related，有时间期限的' },
 ];
 
 export interface IpoocRow {

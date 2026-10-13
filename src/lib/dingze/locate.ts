@@ -2,7 +2,9 @@
 // `data-anchor`; an anchor such as `battlefields.b1.mustWin` or `sheet1.O2` falls back to its
 // shorter prefixes and then to its single segments (row ids), so the closest row is found.
 
-export function anchorCandidates(anchor: string): string[] {
+export function anchorCandidates(anchor: string | null | undefined): string[] {
+  // 整表批注、整表问题没有锚点。
+  if (!anchor) return [];
   const parts = anchor.split(".").filter(Boolean);
   const out = [anchor];
   for (let i = parts.length - 1; i > 0; i--) out.push(parts.slice(0, i).join("."));

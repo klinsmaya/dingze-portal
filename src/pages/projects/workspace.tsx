@@ -23,6 +23,7 @@ import {
   defineAIFrontendTool,
 } from "@/extensions/nocobase-ai/providers";
 
+import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +36,7 @@ import { useAddComment } from "@/lib/dingze/comments-api";
 import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
-import { useArtifactHistory, useRecordExport } from "@/lib/dingze/records-queries";
+import { useArtifactHistory, usePlanBookSources, useRecordExport } from "@/lib/dingze/records-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { locateAnchor } from "@/lib/dingze/locate";
 import { buildRoute, topbarItems } from "@/lib/dingze/route";
@@ -43,6 +44,7 @@ import { cn } from "@/lib/utils";
 
 import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
 import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
+import { workflowContext } from "@/lib/dingze/coach-context";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
@@ -108,9 +110,13 @@ function Workspace({ code }: { code: string }) {
   const def = getArtifactDef(code);
   const detail = useArtifactDetail(project, code);
   const save = useSaveArtifact(project, code);
-  const upstream = useUpstreamPayloads(project, [...def.dependsOn, ...(def.reads ?? [])]).payloads;
+  const liveUpstream = useUpstreamPayloads(project, [...def.dependsOn, ...(def.reads ?? [])]).payloads;
 
   const artifact = detail.data?.artifact ?? null;
+  // A locked plan book shows the tables as they were when it was locked, same as its Word file (验收 D01).
+  const lockedPlanBook = (code === "S3-07" || code === "S3-08") && artifact?.status === "locked";
+  const planSources = usePlanBookSources(project, code, lockedPlanBook);
+  const upstream = lockedPlanBook && planSources.data ? planSources.data.payloads : liveUpstream;
   const serverPayload =
     artifact?.currentVersion?.payload ?? emptyPayload(code, project);
   const serverRev = artifact?.currentRev ?? 0;
@@ -618,6 +624,16 @@ function Workspace({ code }: { code: string }) {
       issues: latest.current.draft
         ? validateArtifact(code, latest.current.draft, upstream)
         : [],
+      workflow: workflowContext({
+        status,
+        lastEvent: progress?.lastEvent,
+        stale: artifact?.stale,
+        staleReason: artifact?.staleReason,
+        currentRev: latest.current.baseRev,
+        stepDoneRev: artifact?.stepDoneVersion?.rev ?? null,
+        lockedRev: artifact?.lockedVersion?.rev ?? null,
+        comments: comments.data,
+      }),
       enterpriseProfile: profileBrief(profile.data) || "（企业画像还没有内容）",
       materialsHint: `起草或核对数字时可用 ${SEARCH_MATERIALS_TOOL} 查阅企业资料`,
     }),
@@ -786,12 +802,10 @@ function Workspace({ code }: { code: string }) {
                     />
                     <PlanBookExportButton
                       code={code}
-                      payload={artifact?.currentVersion?.payload}
+                      project={project}
                       rev={artifact?.currentRev ?? 0}
-                      status={status}
                       enterprise={project.enterprise?.name ?? "企业"}
                       year={project.year}
-                      upstream={upstream}
                       dirty={dirty}
                       onExported={recordExport}
                       variant="ghost"
@@ -1001,6 +1015,12 @@ function Workspace({ code }: { code: string }) {
                 ) : null}
 
                 {EDITABLE_CODES.has(code) ? (
+                  <RegionErrorBoundary
+                    title={previewDraft ? "这条修改建议预览不了" : "这张表显示出错"}
+                    description={previewDraft ? "建议的内容不完整，表里没有任何改动。收起预览后可以在修改卡上不采纳。" : "可以刷新页面重试；未保存的修改在“修改”里。"}
+                    action={previewDraft ? { label: "收起预览", onClick: () => setPreviewDraft(null) } : undefined}
+                    resetKeys={[previewDraft, code]}
+                  >
                   <ArtifactEditor
                     code={code}
                     value={previewDraft ? previewDraft.payload : draft}
@@ -1015,6 +1035,7 @@ function Workspace({ code }: { code: string }) {
                     scheduleScale={project.scheduleScale}
                     enterprise={project.enterprise?.name ?? "企业"}
                   />
+                  </RegionErrorBoundary>
                 ) : (
                   <Alert>
                     <AlertTitle>这张表暂无在线编辑器</AlertTitle>

@@ -361,7 +361,21 @@ export function validateRaci(matrix: RaciMatrix): Issue[] {
  * `upstream` carries upstream payloads by code where a check compares against them
  * (S1-07 against S1-06); those checks only ever produce warnings.
  */
+export const INCOMPLETE_ROW_MESSAGE = '表里有一条内容不完整（缺少必需的字段），请补全或删除这一条后再检查';
+
+/**
+ * Never throws: a draft can be partial (an AI suggestion being previewed, an old payload), and a
+ * validator that trips over a missing row would take the whole page down.
+ */
 export function validateArtifact(code: string, payload: unknown, upstream: Record<string, unknown> = {}): Issue[] {
+  try {
+    return validateArtifactUnsafe(code, payload, upstream);
+  } catch {
+    return [{ level: 'error', message: INCOMPLETE_ROW_MESSAGE }];
+  }
+}
+
+function validateArtifactUnsafe(code: string, payload: unknown, upstream: Record<string, unknown> = {}): Issue[] {
   if (payload === null || typeof payload !== 'object') {
     return [{ level: 'error', message: '成果内容为空' }];
   }

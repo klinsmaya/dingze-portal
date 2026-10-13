@@ -24,6 +24,7 @@ import {
 import { HttpError, type ProjectContext, currentUserId } from './access';
 import { openCommentCounts } from './comments';
 import { notifyTransition } from './notify';
+import { PLAN_BOOKS, currentSources } from './plan-book-sources';
 
 const LIFECYCLE_HTTP: Record<LifecycleError['code'], number> = {
   FORBIDDEN: 403,
@@ -282,7 +283,7 @@ async function readsCurrentUpstream(ctx: Context, projectId: number, code: strin
   });
 }
 
-const PLAN_BOOKS = ['S3-07', 'S3-08'];
+
 
 /** Current content of the artifacts `def` depends on, for checks that compare against them. */
 async function upstreamPayloads(ctx: Context, projectId: number, def: ArtifactDef, transaction?: any) {
@@ -373,6 +374,12 @@ export async function transitionArtifact(
         { code: row.get('code'), action: 'confirm', fromStatus: 'pending_confirm', toStatus: 'locked', rev: row.get('currentRev'), meta: { with: def.code } },
         transaction,
       );
+    }
+
+    // 计划书定版时记下所引用的上游版本，之后的导出都按这一份取数 (验收 D01)。
+    if (PLAN_BOOKS.includes(def.code) && (action === 'confirm' || action === 'forceLock')) {
+      const sources = await currentSources(ctx, projectId, def.code, transaction);
+      await ctx.db.getRepository('dz_artifact_versions').update({ filterByTk: artifact.get('currentVersionId'), values: { sources }, transaction });
     }
 
     let stale: string[] = [];

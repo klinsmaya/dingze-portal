@@ -118,12 +118,10 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                   {a?.payload ? (
                     <PlanBookExportButton
                       code={code}
-                      payload={a.payload}
+                      project={project}
                       rev={a.rev}
-                      status={a.locked ? "locked" : a.status}
                       enterprise={project.enterprise?.name ?? enterprise}
                       year={project.year}
-                      upstream={upstream}
                       dirty={false}
                       onExported={recordExport}
                       variant={code === "S3-07" ? "default" : "outline"}

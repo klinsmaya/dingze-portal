@@ -37,7 +37,10 @@ export type Block =
 
 export type Chapter = { no: string; title: string; source: "same" | "entered"; blocks: Block[] };
 
-export type PlanBookModel = { title: string; subtitle: string; chapters: Chapter[] };
+/** 版本与来源 page: which plan book version this is and which upstream versions it was built from. */
+export type Provenance = { lines: string[]; sources: { specId: string; name: string; version: string }[] };
+
+export type PlanBookModel = { title: string; subtitle: string; chapters: Chapter[]; provenance?: Provenance };
 
 export type PlanBookUpstream = {
   "S1-01"?: StrategyContent;

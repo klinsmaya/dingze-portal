@@ -134,9 +134,9 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
           </div>
 
           <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <legend className="mb-1 text-xs font-semibold text-muted-foreground">SMART 验证</legend>
+            <legend className="mb-1 text-xs font-semibold text-muted-foreground">SMART 验证（按书稿：A 有挑战性、R 切实可行）</legend>
             {SMART_CHECKS.map((check) => (
-              <label key={check.key} className="flex items-center gap-2">
+              <label key={check.key} className="flex items-center gap-2" title={check.hint}>
                 <Checkbox
                   checked={!!sheet.smart?.[check.key]}
                   disabled={readOnly}

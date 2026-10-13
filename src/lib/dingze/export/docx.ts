@@ -50,6 +50,23 @@ export async function downloadPlanBookDocx(fileName: string, model: PlanBookMode
     }),
   ];
 
+  // 版本与来源 (验收 D01 / D08): which version this file is and which table versions it was built from.
+  if (model.provenance) {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: "版本与来源", color: BRAND })] }));
+    for (const line of model.provenance.lines) children.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: line, size: 20 })] }));
+    if (model.provenance.sources.length) {
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({ tableHeader: true, children: ["编号", "引用的成果", "版本"].map((h) => cell(h, true)) }),
+            ...model.provenance.sources.map((x) => new TableRow({ children: [cell(x.specId), cell(x.name), cell(x.version)] })),
+          ],
+        })
+      );
+    }
+  }
+
   for (const chapter of model.chapters) {
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 360, after: 120 }, children: [new TextRun({ text: `${chapter.no}、${chapter.title}`, color: BRAND })] }));
     for (const block of chapter.blocks) {

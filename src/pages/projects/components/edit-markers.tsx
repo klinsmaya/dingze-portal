@@ -22,7 +22,7 @@ export type Marks = {
 const esc = (a: string) => a.replace(/["\\\\]/g, "");
 
 /** The element a path points at: the most specific `data-anchor` present on the page. */
-export function anchorElement(main: ParentNode, path: string): HTMLElement | null {
+export function anchorElement(main: ParentNode, path: string | null | undefined): HTMLElement | null {
   for (const c of anchorCandidates(path)) {
     const el = main.querySelector<HTMLElement>(`[data-anchor="${esc(c)}"]`);
     if (el) return el;

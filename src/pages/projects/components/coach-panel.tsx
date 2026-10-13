@@ -15,7 +15,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { type StageKey, diffPayloads } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, type StageKey, diffPayloads } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { cn } from "@/lib/utils";
+import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { getAt, preview } from "@/lib/dingze/edit-log";
 
 import { useProjectContext } from "../project-context";
@@ -106,14 +107,24 @@ function SuggestionCard({
   // A card arriving within minutes of the user's message is live; replayed history does not preview.
   const live = useRef<boolean | null>(null);
   if (live.current === null) live.current = state === "input-streaming" || Date.now() - lastSendAt < 5 * 60_000;
+  // 不采纳 takes effect on the click: the card closes and its preview goes away at once, without
+  // waiting for the conversation to come back (验收 D02).
+  const [rejected, setRejected] = useState(false);
   const decided =
+    rejected ||
     state === "output-available" ||
     state === "output-error" ||
     state === "output-denied";
   const changes = args.changes ?? [];
+  const reject: typeof onReject = (reason) => {
+    setRejected(true);
+    return onReject(reason);
+  };
 
   if (decided) {
-    const { ok, message } = readOutcome(part);
+    const outcome = readOutcome(part);
+    const ok = !rejected && outcome.ok;
+    const message = rejected && !outcome.message ? "表里没有任何改动。" : outcome.message;
     return (
       <div className="rounded-xl border bg-card p-3 text-sm">
         <div
@@ -135,7 +146,16 @@ function SuggestionCard({
     );
   }
 
-  return <PendingCard args={args} live={live.current} disabled={disabled} onApprove={onApprove} onReject={onReject} onRevise={onRevise} />;
+  return (
+    <RegionErrorBoundary
+      title="这条修改建议显示不了"
+      description="建议的内容不完整，表里没有任何改动。可以不采纳，再让数字咨询师重出。"
+      action={disabled ? undefined : { label: "不采纳", onClick: () => reject("建议内容不完整，用户不采纳") }}
+      resetKeys={[JSON.stringify(args)]}
+    >
+      <PendingCard args={args} live={live.current} disabled={disabled} onApprove={onApprove} onReject={reject} onRevise={onRevise} />
+    </RegionErrorBoundary>
+  );
 }
 
 type CardRow = { no: number | null; op: ChangeOp; name: string; before?: string; after?: string; parts?: { no: number; title: string; amount: string; note?: string }[] };
@@ -210,12 +230,22 @@ function PendingCard({
   const built = useMemo(() => {
     if (!session) return null;
     try {
-      return { ...cardRows(session, changes), invalid: null as string | null };
+      const rows = cardRows(session, changes);
+      // A suggestion with an incomplete row must not reach the preview, where editors would trip on it.
+      if (session.validate(rows.next).some((i) => i.message === INCOMPLETE_ROW_MESSAGE)) throw new Error("建议里有一条内容不完整");
+      return { ...rows, invalid: null as string | null };
     } catch (error) {
       return { rows: [] as CardRow[], items: [], next: session.draft, invalid: error instanceof Error ? error.message : "路径无效" };
     }
   }, [session, changes]);
   const [previewing, setPreviewing] = useState(live);
+  // One decision per card: a fast double click must not send both 确认 and 不采纳.
+  const [decided, setDecided] = useState(false);
+  const decide = (fn: () => void) => () => {
+    if (decided) return;
+    setDecided(true);
+    fn();
+  };
   const key = JSON.stringify(built?.items ?? []);
   useEffect(() => {
     if (!session || !built || built.invalid) return;
@@ -244,11 +274,15 @@ function PendingCard({
   const checks = useMemo(() => {
     const fn = session?.chrome.current?.checks;
     if (!fn || !built || built.invalid) return [];
-    const was = new Map(fn(session!.draft).map((c) => [c.id, c]));
-    const touched = new Set(built.items.map((i) => i.anchor.split(".").pop()));
-    return fn(built.next)
-      .filter((c) => touched.has(c.id) || was.get(c.id)?.text !== c.text)
-      .map((c) => ({ ...c, same: was.get(c.id)?.text === c.text }));
+    try {
+      const was = new Map(fn(session!.draft).map((c) => [c.id, c]));
+      const touched = new Set(built.items.map((i) => i.anchor.split(".").pop()));
+      return fn(built.next)
+        .filter((c) => touched.has(c.id) || was.get(c.id)?.text !== c.text)
+        .map((c) => ({ ...c, same: was.get(c.id)?.text === c.text }));
+    } catch {
+      return [];
+    }
   }, [session, built]);
   const comment = session?.activeComment ? session.commentInfo(session.activeComment) : null;
 
@@ -324,13 +358,13 @@ function PendingCard({
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={disabled || !!built?.invalid} onClick={() => onApprove()}>
+        <Button size="sm" disabled={disabled || decided || !!built?.invalid} onClick={decide(() => onApprove())}>
           <Check /> 确认修改
         </Button>
-        <Button size="sm" variant="outline" disabled={disabled} onClick={() => onRevise()}>
+        <Button size="sm" variant="outline" disabled={disabled || decided} onClick={decide(() => onRevise())}>
           <PencilLine /> 改一下
         </Button>
-        <Button size="sm" variant="ghost" disabled={disabled} onClick={() => onReject("用户不采纳这条建议")}>
+        <Button size="sm" variant="ghost" disabled={disabled || decided} onClick={decide(() => onReject("用户不采纳这条建议"))}>
           不采纳
         </Button>
         {built && !built.invalid && built.items.length ? (

@@ -71,6 +71,24 @@ export async function getDeliveryBundle(projectId: number, spaceName: string) {
   });
 }
 
+export type PlanBookSources = {
+  code: string;
+  locked: boolean;
+  rev: number;
+  payload: unknown;
+  /** false: locked before sources were recorded; reconstructed from the lock time. */
+  recorded: boolean;
+  stale: boolean;
+  staleReason: string | null;
+  sources: { code: string; specId: string; name: string; rev: number; basis: "locked" | "draft" | "at_time"; basisLabel: string }[];
+  payloads: Record<string, unknown>;
+};
+
+/** The plan book version to export and the exact upstream versions it was built from (验收 D01). */
+export async function getPlanBookSources(projectId: number, spaceName: string, code: string) {
+  return nocobaseClient.action<PlanBookSources>("dingze", "planBookSources", { method: "GET", query: { projectId, code }, headers: spaceHeaders(spaceName) });
+}
+
 export type ExportInfo = { code: string; rev: number; format: ExportFormat; fileName: string; draft: boolean };
 
 export async function recordExport(projectId: number, spaceName: string, info: ExportInfo) {

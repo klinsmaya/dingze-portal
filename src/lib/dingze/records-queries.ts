@@ -7,6 +7,7 @@ import {
   getArtifactRegistry,
   getDeliveryBundle,
   getMyNotifications,
+  getPlanBookSources,
   getVersionDiff,
   getVersionPayload,
   markNotificationsRead,
@@ -20,6 +21,15 @@ export const recordKeys = {
   delivery: (projectId: number) => ["dingze", "delivery", projectId] as const,
   notifications: ["dingze", "notifications"] as const,
 };
+
+/** A plan book's recorded source versions; only fetched for a locked plan book. */
+export function usePlanBookSources(project: ProjectSummary, code: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["dingze", "plan-book-sources", project.id, code] as const,
+    queryFn: () => getPlanBookSources(project.id, project.spaceName, code),
+    enabled,
+  });
+}
 
 export function useArtifactRegistry(project: ProjectSummary) {
   return useQuery({ queryKey: recordKeys.registry(project.id), queryFn: () => getArtifactRegistry(project.id, project.spaceName) });

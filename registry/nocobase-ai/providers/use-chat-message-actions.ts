@@ -339,6 +339,24 @@ export function useChatMessageActions({
         const toolCallIds = result.toolCalls.map((toolCall) => toolCall.id);
         const toolCallResults: Array<{ id: string; result: unknown }> = [];
         for (const toolCall of result.toolCalls) {
+          // The server marks rejected calls "waiting" too, so the decision is checked here: a
+          // rejected call is never executed and only reports the rejection back.
+          const decided =
+            toolCall.id === decision.toolCallId
+              ? userDecision
+              : toolCall.userDecision;
+          if (decided?.type === "reject") {
+            toolCallResults.push({
+              id: toolCall.id,
+              result: {
+                status: "error",
+                content: `The user rejected this action; it was not executed and nothing was changed.${
+                  decided.message ? ` ${decided.message}` : ""
+                }`,
+              },
+            });
+            continue;
+          }
           const invocation = await ai.invokeToolCall(
             toolCall.name,
             toolCall.args,
