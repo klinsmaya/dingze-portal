@@ -135,7 +135,10 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
             </NativeSelectOption>
           ))}
         </NativeSelect>
-        <span className="text-xs text-muted-foreground">{rows.length} 项</span>
+        {/* 与下表行数一致：附录 B 的成果项（含图形视图、内嵌表和移出项），方法底稿另列 (验收 D07)。 */}
+        <span className="text-xs text-muted-foreground">
+          {listed.length} 项 · 其中 {listed.filter((l) => l.item.kind === "artifact").length} 张表独立定版
+        </span>
       </div>
 
       {registry.error ? (

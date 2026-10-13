@@ -11,7 +11,7 @@ import {
   Target,
   TriangleAlert,
 } from "lucide-react";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   type GoalPathSystem,
@@ -21,7 +21,9 @@ import {
   type PathNode,
   type Perspective,
   orderedPaths,
+  additive,
   parseAmount,
+  unitOf,
   pathNode,
 } from "@dingze/shared";
 
@@ -49,7 +51,7 @@ import {
   type Figure37Item,
   figureTag,
 } from "@/lib/dingze/figure-3-7";
-import { anchorCandidates } from "@/lib/dingze/locate";
+import { REVEAL_EVENT, anchorCandidates } from "@/lib/dingze/locate";
 import { errorAnchors } from "@/lib/dingze/rows";
 import {
   type EditorChrome,
@@ -81,8 +83,22 @@ export type PathGoal = {
   label: string;
   metric: string;
   value: string;
+  unit?: string;
   group?: string;
 };
+
+/** Paths that measure different things support a goal together but have no sum (验收 E D02). */
+const NOT_ADDITIVE = { ok: null, text: "口径不同：共同支撑，不求和" } as const;
+
+/** The level-1 paths' sum, compared with the goal only when the goal is the same measure. */
+function goalRoll(goal: PathGoal, paths: Node[], amounts: (number | null)[], compare: boolean) {
+  if (paths.length === 0 || !amounts.every((a) => typeof a === "number")) return null;
+  if (!additive(paths)) return NOT_ADDITIVE;
+  const p = paths[0];
+  const sameAsGoal =
+    (!goal.metric.trim() || goal.metric.trim() === p.metric.trim()) && (!unitOf(goal) || unitOf(goal) === unitOf(p));
+  return sumText(amounts as number[], compare && sameAsGoal ? parseAmount(goal.value) : null);
+}
 
 type Props = {
   value: GoalPathSystem;
@@ -587,7 +603,6 @@ export function PathSystemEditor({
             const level1 = nodes.filter(
               (n) => !n.parentId && n.goalId === g.id,
             );
-            const target = parseAmount(g.value);
             const amounts = level1.map(amountOf);
             const allNumbers =
               level1.length > 0 && amounts.every((a) => typeof a === "number");
@@ -602,7 +617,7 @@ export function PathSystemEditor({
                 badge: g.group || goalWord,
                 nodes: level1,
                 onAdd: () => addRoot(g),
-                roll: allNumbers ? sumText(amounts as number[], target) : null,
+                roll: allNumbers ? goalRoll(g, level1, amounts, true) : null,
               };
             }
             // 表 3-10 / 系统图: 年度目标 → 四个层面 → 一级路径 (design 10 画面 2).
@@ -626,12 +641,7 @@ export function PathSystemEditor({
                 nodes: own,
                 placeholder: "还没有一级路径",
                 // Compared with the goal only when every level-1 path of the goal sits in this layer.
-                roll: numeric
-                  ? sumText(
-                      ownAmounts as number[],
-                      own.length === level1.length ? target : null,
-                    )
-                  : null,
+                roll: numeric ? goalRoll(g, own, ownAmounts, own.length === level1.length) : null,
                 onAdd: () => addRoot(g, { perspective: p.key }),
                 target: { parentId: null, goalId: g.id },
                 patch: { perspective: p.key } as Partial<Node>,
@@ -1103,6 +1113,20 @@ function PathWideTable({
     Math.max(minLevels, ...nodes.map((n) => n.level)),
   );
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  // A located issue unfolds the layer its row sits in (验收 D05).
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const ids = (e as CustomEvent<string[]>).detail ?? [];
+      let n = nodes.find((x) => ids.includes(x.id));
+      while (n?.parentId) n = nodes.find((x) => x.id === n!.parentId);
+      if (n) {
+        const key = `${n.goalId}:${n.perspective ?? ""}`;
+        setClosed((c) => (c[key] ? { ...c, [key]: false } : c));
+      }
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, [nodes]);
   const [later, setLater] = useState<Set<string>>(new Set());
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -1386,10 +1410,8 @@ function PathWideTable({
                   group.roots.forEach((r) => emit(r, rows));
                   const layerSum = group.roots.map(amountOf);
                   const layerCheck =
-                    layerSum.every((a) => typeof a === "number") &&
-                    group.roots.length === roots.length &&
-                    target !== null
-                      ? sumText(layerSum as number[], target)
+                    group.roots.length === roots.length && target !== null
+                      ? goalRoll(goal, group.roots, layerSum, true)
                       : null;
                   return (
                     <Fragment key={key}>
@@ -1546,7 +1568,7 @@ function PathWideTable({
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                             {layerCheck ? (
                               <Check37
-                                ok={!!layerCheck.ok}
+                                ok={layerCheck.ok}
                                 text={
                                   layerCheck.ok
                                     ? `${num(target!)} = ${(layerSum as number[]).map(num).join(" + ")}`
@@ -1680,13 +1702,14 @@ function PathWideTable({
   );
 }
 
-function Check37({ ok, text }: { ok: boolean; text: string }) {
+/** ok: adds up; false: does not; null: nothing to add up (different measures). */
+function Check37({ ok, text }: { ok: boolean | null; text: string }) {
   return (
     <span
       className="inline-flex items-center gap-1 font-medium tabular-nums"
-      style={{ color: ok ? "var(--dz-ok)" : "var(--dz-warn)" }}
+      style={{ color: ok === null ? "var(--muted-foreground)" : ok ? "var(--dz-ok)" : "var(--dz-warn)" }}
     >
-      {ok ? (
+      {ok === null ? null : ok ? (
         <CircleCheck className="size-3.5" />
       ) : (
         <TriangleAlert className="size-3.5" />

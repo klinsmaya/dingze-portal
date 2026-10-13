@@ -20,6 +20,24 @@ export function parseAmount(value: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** The unit of a value: the explicit unit, else the text after the number (“1.0 亿元” → “亿元”, “100%” → “%”). */
+export function unitOf(item: { unit?: string | null; value?: string | null }): string {
+  const unit = (item.unit ?? '').trim();
+  if (unit) return unit;
+  return String(item.value ?? '').trim().replace(/^[≥≤<>约~]*\s*-?\d+(?:\.\d+)?/, '').trim();
+}
+
+/**
+ * Values add up only when they measure the same thing in the same unit (验收 E D02): 改造长度 120 公里
+ * and 安检覆盖率 100% support the same goal together but have no sum.
+ */
+export function additive(items: { metric?: string | null; unit?: string | null; value?: string | null }[]): boolean {
+  if (items.length === 0) return false;
+  const metric = (items[0].metric ?? '').trim();
+  const unit = unitOf(items[0]);
+  return items.every((i) => (i.metric ?? '').trim() === metric && unitOf(i) === unit);
+}
+
 // ── S2-03 目标区：公司级年度目标（第一步 定目标）──
 
 /** 目标 = 目的 + 任务 + 目标值（衡量指标 + 指标值）。 */

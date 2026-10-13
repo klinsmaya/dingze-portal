@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useDeliveryBundle, useRecordExport } from "@/lib/dingze/records-queries";
 
 import { DiagramExportButton } from "./components/diagram-export";
+import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { useProjectContext } from "./project-context";
@@ -114,6 +115,11 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                       {def.specId} · {def.name} ·{" "}
                       {a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}（未定版）`) : "还没有开始写"}
                     </div>
+                    {a?.payload && a.stale ? (
+                      <div className="mt-1 text-xs font-medium text-[color:var(--dz-warn)]">
+                        上游已变更（{a.staleReason || "引用的表有新版本"}）。{a.locked ? `下载的仍是定版 v${a.rev} 批准时的内容；新方案要重开计划书、重新定版后再出新版本。` : "导出前请先核对并保存。"}
+                      </div>
+                    ) : null}
                   </div>
                   {a?.payload ? (
                     <PlanBookExportButton
@@ -140,7 +146,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
 
           <details className="group rounded-xl border bg-card" open={false}>
             <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-              其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、战略图 PNG / SVG（次要，按需导出）</span>
+              其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG（按需导出）</span>
             </summary>
           <section aria-labelledby="deliverables" className="flex flex-col gap-3 border-t p-4">
             <h2 id="deliverables" className="sr-only">
@@ -163,7 +169,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                               {def.specId} · {def.name} · {a.locked ? `定版 v${a.rev}` : `草稿 v${a.rev}`}
                             </div>
                           </div>
-                          <StatusBadge status={a.status} />
+                          <StatusBadge status={a.status} stale={a.stale} />
                           <div className="flex gap-1">
                             <ExportButton
                               code={def.code}
@@ -179,6 +185,19 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                               variant="ghost"
                               size="sm"
                               label="Excel"
+                            />
+                            <CharterDocxButton
+                              code={def.code}
+                              payload={a.payload}
+                              rev={a.rev}
+                              status={a.locked ? "locked" : a.status}
+                              enterprise={project.enterprise?.name ?? enterprise}
+                              projectName={project.name}
+                              year={project.year}
+                              dirty={false}
+                              onExported={recordExport}
+                              variant="ghost"
+                              size="sm"
                             />
                             <DiagramExportButton
                               code={def.code}

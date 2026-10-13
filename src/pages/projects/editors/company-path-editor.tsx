@@ -71,7 +71,7 @@ export function CompanyPathEditor({ value, onChange, readOnly, issues, upstream,
             readOnly={readOnly}
             issues={zoneIssues("找路径")}
             goalWord="年度目标"
-            goals={(targets.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric, metric: g.metric, value: g.value }))}
+            goals={(targets.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric, metric: g.metric, value: g.value, unit: g.unit }))}
             importFromMap={{ count: imported.nodes.length - (value.nodes ?? []).length, run: () => onChange(imported) }}
             decodeLayout
             graphSpecId="S2-02"

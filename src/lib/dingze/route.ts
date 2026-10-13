@@ -197,7 +197,14 @@ export function buildRoute(stage: StageKey, artifacts: ArtifactOverview[], where
   let currentTask: RouteTask | null = null;
   const tasks: RouteTask[] = ROUTE[stage].map((t) => {
     const steps: RouteStep[] = t.steps.map((def) => {
-      const main = def.codes.find((c) => getArtifactDef(c).priority !== "method") ?? def.codes[0];
+      // A step spanning an optional P1 table and a P0 one (筛选 KPI: S1-05 + S1-06) links to the first
+      // table that is open; a P1 table still locked behind a skipped one is never the target (验收 E D04).
+      const tables = def.codes.filter((c) => getArtifactDef(c).priority !== "method");
+      const main =
+        tables.find((c) => stateOf(byCode.get(c)) !== "locked") ??
+        tables.find((c) => getArtifactDef(c).priority === "P0") ??
+        tables[0] ??
+        def.codes[0];
       // A step is “now” when it owns the open table (and zone, for S2-03).
       const isCurrent =
         def.codes.includes(where.code) &&

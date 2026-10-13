@@ -76,6 +76,11 @@ function useInvalidateProject(project: ProjectSummary | undefined) {
       code
         ? client.invalidateQueries({ queryKey: dingzeKeys.artifact(project.id, code) })
         : Promise.resolve(),
+      // 修改记录、成果清单、交付包和计划书来源都跟着版本走：保存或流转后立刻刷新 (验收 D06)。
+      client.invalidateQueries({ queryKey: ["dingze", "history", project.id] }),
+      client.invalidateQueries({ queryKey: ["dingze", "registry", project.id] }),
+      client.invalidateQueries({ queryKey: ["dingze", "delivery", project.id] }),
+      client.invalidateQueries({ queryKey: ["dingze", "plan-book-sources", project.id] }),
     ]);
   };
 }

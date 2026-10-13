@@ -18,8 +18,8 @@
 ## 2. 当前状态（2026-10-12）
 
 - 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
-- 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.23.0** 已部署启用，门户已用最新代码发布。
-- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（208 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
+- 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.24.0** 已部署启用，门户已用最新代码发布。
+- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（212 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
 - 用户提出的需求已全部完成，并在线上用演示账号实测：
   - 规格硬伤 5 条：六分法 P0 阻断、关闭公开注册、编号对齐附录 B、资料原件、S2-08 空字段与例外不绕过校验。
   - 小白易用性 10 条。
@@ -136,7 +136,7 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
 
 ## 9. 待办（按优先级）
 
-00. **甲方预验收意见（2026-10-13，两份）**：第一批已完成（见 `docs/acceptance.md` 末节）。第二批待做：D05 校验项跨区定位（目标区点路径问题要切到路径区并展开）、D06 保存后刷新修改记录、D07 成果清单“22 项”计数、D08 S2-01 / S2-02 出 PNG / SVG 和 S3-02 独立 Word、E D02 合计胶囊不同量纲不相加、E D04 第三步导航直达 S1-06 且 S1-04 可选不显示红色必改、E D05 状态文字（“已交出去”、定版表的“保存一次”、交付页不显示上游已变更）。需求扩展（字段来源分层、路径贡献口径、资源按期间核算等）和方法口径（A/R 进计分卡、书表勘误、S2-02 是否单列 P0、上游已变更能否正式下载）等甲方确认。
+00. **甲方预验收意见（2026-10-13，两份）**：第一批、第二批已完成（见 `docs/acceptance.md` 末两节）。需求扩展（字段来源分层、路径贡献口径、资源按期间核算等）和方法口径（A/R 进计分卡、书表勘误、S2-02 是否单列 P0、上游已变更能否正式下载）等甲方确认。
 
 0. **闭环第二、三批（用户已同意方案，均需改插件）：**
    - 第二批已完成（插件 0.19.1）：`dz_org_units.duty / headName`，`dz_artifacts.orgNotice`；动作 `importOrgUnits`、`setMemberDepartment`、`dismissOrgNotice`；组织变化由 `shared/org.ts` 的 `describeOrgChange` 生成说明，`ops.ts` 的 `flagOrgChange` 只标已定版的部门表（`ORG_DEPENDENT_CODES`）并通知主咨询师和企业项目负责人；定版 / 重开 / 退回时清空。自助项目上线后，“不需要重开”也要开放给企业项目负责人。

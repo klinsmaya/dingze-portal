@@ -1,4 +1,12 @@
-import { SIXFOLD_FIELDS, houseStarted, type StrategyContent, type StrategyMap } from "@dingze/shared";
+import {
+  type DecodeMap,
+  type GoalPathSystem,
+  PERSPECTIVES,
+  SIXFOLD_FIELDS,
+  houseStarted,
+  type StrategyContent,
+  type StrategyMap,
+} from "@dingze/shared";
 
 import { LANE_HEIGHT, LANE_LABEL_WIDTH, layoutStrategyMap, linkLines } from "./map-layout";
 
@@ -94,12 +102,12 @@ function wrap(width: number, height: number, body: string, title: string): SvgDi
   };
 }
 
-function header(title: string, subtitle: string | undefined): { svg: string; height: number } {
+function header(title: string, subtitle: string | undefined, width = WIDTH): { svg: string; height: number } {
   return {
     height: subtitle ? 64 : 48,
     svg:
-      textLines([title], WIDTH / 2, 34, { size: 20, color: C.brand, weight: 700, anchor: "middle" }) +
-      (subtitle ? textLines([subtitle], WIDTH / 2, 56, { size: 12, color: C.sub, anchor: "middle" }) : ""),
+      textLines([title], width / 2, 34, { size: 20, color: C.brand, weight: 700, anchor: "middle" }) +
+      (subtitle ? textLines([subtitle], width / 2, 56, { size: 12, color: C.sub, anchor: "middle" }) : ""),
   };
 }
 
@@ -223,7 +231,135 @@ export function strategyMapSvg(map: StrategyMap, subtitle?: string, title = "战
   return wrap(WIDTH, legendY + 20, body, title);
 }
 
-/** The diagrams of an artifact: S1-01 六分法 (plus the strategy house when filled in), S1-02 战略地图. */
+// ── 目标责的图 (验收 D08)：S2-01 年度战略解码地图、S2-02 公司级目标路径系统图（S2-03 的图形视图）──
+
+const PERSPECTIVE_COLORS: Record<string, string> = { financial: "#0c3d52", customer: "#2f7d6d", process: "#b7791f", learning: "#6b5b95" };
+
+/** A box with a bold title (≤ 2 lines) and a smaller measure line. */
+function measureBox(x: number, y: number, w: number, h: number, title: string, measure: string, stroke: string, fill = C.paper, titleColor = C.brand) {
+  const lines = wrapText(title || "（未命名）", w - 16, 12, 2);
+  const m = wrapText(measure, w - 16, 11, 1);
+  return (
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>` +
+    textLines(lines, x + 8, y + 19, { size: 12, color: titleColor, weight: 700, lineHeight: 16 }) +
+    (measure ? textLines(m, x + 8, y + h - 9, { size: 11, color: fill === C.paper ? C.sub : C.brandText }) : "")
+  );
+}
+
+type PathGoalLike = { id: string; label: string; metric?: string; value?: string; unit?: string };
+
+/** 公司级目标路径系统图: per annual goal, its paths as a left-to-right tree (up to four levels). */
+export function pathSystemSvg(system: GoalPathSystem, opts: { title?: string; subtitle?: string; goals?: PathGoalLike[] } = {}): SvgDiagram {
+  const title = opts.title ?? "公司级目标路径系统图";
+  const nodes = system.nodes ?? [];
+  const goals: PathGoalLike[] =
+    opts.goals ?? (system.targets?.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric, metric: g.metric, value: g.value, unit: g.unit }));
+  const levels = Math.max(1, ...nodes.map((n) => n.level || 1));
+  const margin = 32;
+  const goalW = 200;
+  const colW = 190;
+  const gap = 36;
+  const boxH = 58;
+  const pitch = 70;
+  const width = Math.max(WIDTH, margin * 2 + goalW + levels * (colW + gap));
+  const head = header(title, opts.subtitle, width);
+  let body = head.svg;
+  let y = head.height + 16;
+  const kids = (id: string | null, goalId: string) => nodes.filter((n) => (n.parentId ?? null) === id && (id !== null || n.goalId === goalId));
+  for (const g of goals) {
+    const pos = new Map<string, number>();
+    let row = 0;
+    const place = (id: string, goalId: string): number => {
+      const children = kids(id, goalId);
+      if (!children.length) {
+        const at = y + row * pitch;
+        row++;
+        pos.set(id, at);
+        return at;
+      }
+      const ys = children.map((c) => place(c.id, goalId));
+      const at = (ys[0] + ys[ys.length - 1]) / 2;
+      pos.set(id, at);
+      return at;
+    };
+    const roots = kids(null, g.id);
+    const rootYs = roots.map((r) => place(r.id, g.id));
+    if (!roots.length) row = 1;
+    const goalY = rootYs.length ? (rootYs[0] + rootYs[rootYs.length - 1]) / 2 : y;
+    const colX = (level: number) => margin + goalW + gap + (level - 1) * (colW + gap);
+    // Connectors first, boxes on top.
+    const elbow = (x1: number, y1: number, x2: number, y2: number) => {
+      const mx = x1 + gap / 2;
+      return `<path d="M${x1} ${y1 + boxH / 2} H${mx} V${y2 + boxH / 2} H${x2}" fill="none" stroke="${C.border}" stroke-width="1.5"/>`;
+    };
+    for (const r of roots) body += elbow(margin + goalW, goalY, colX(1), pos.get(r.id)!);
+    for (const n of nodes) {
+      if (!n.parentId || !pos.has(n.id) || !pos.has(n.parentId)) continue;
+      const parent = nodes.find((x) => x.id === n.parentId)!;
+      body += elbow(colX(parent.level || 1) + colW, pos.get(parent.id)!, colX(n.level || 1), pos.get(n.id)!);
+    }
+    body += measureBox(margin, goalY, goalW, boxH, g.label, [g.metric, g.value, g.unit].filter(Boolean).join(" "), C.brand, C.brand, C.brandText);
+    for (const n of nodes) {
+      if (!pos.has(n.id)) continue;
+      const color = PERSPECTIVE_COLORS[n.perspective ?? "financial"] ?? C.brand;
+      body += measureBox(colX(n.level || 1), pos.get(n.id)!, colW, boxH, n.path, [n.metric, n.value, n.unit && !String(n.value ?? "").includes(n.unit) ? n.unit : ""].filter(Boolean).join(" "), color);
+    }
+    if (!roots.length) body += textLines(["还没有一级路径"], colX(1) + 8, goalY + boxH / 2 + 4, { size: 12, color: C.sub });
+    y += Math.max(1, row) * pitch + 24;
+  }
+  if (!goals.length) {
+    body += textLines(["还没有年度目标"], width / 2, y + 20, { size: 14, color: C.sub, anchor: "middle" });
+    y += 48;
+  }
+  // Legend: path colour by perspective.
+  let lx = margin;
+  for (const p of PERSPECTIVES) {
+    body += `<rect x="${lx}" y="${y}" width="12" height="12" rx="2" fill="${C.paper}" stroke="${PERSPECTIVE_COLORS[p.key]}" stroke-width="2"/>`;
+    body += textLines([p.label], lx + 18, y + 11, { size: 11, color: C.sub });
+    lx += 120;
+  }
+  return wrap(width, y + 32, body, title);
+}
+
+/** 年度战略解码地图: the value gap on top, then themes by perspective (财务 → 学习与成长). */
+export function decodeMapSvg(map: DecodeMap, subtitle?: string): SvgDiagram {
+  const title = "年度战略解码地图";
+  const margin = 32;
+  const labelW = 120;
+  const boxW = 190;
+  const boxH = 58;
+  const gapX = 16;
+  const perRow = Math.max(1, Math.floor((WIDTH - margin * 2 - labelW - 16 + gapX) / (boxW + gapX)));
+  const head = header(title, subtitle);
+  let body = head.svg;
+  let y = head.height + 8;
+  const gapText = [
+    map.valueGap?.target && `目标：${map.valueGap.target}`,
+    map.valueGap?.baseline && `基期：${map.valueGap.baseline}`,
+    map.valueGap?.gap && `差距：${map.valueGap.gap}`,
+  ].filter(Boolean).join("\u3000");
+  body += `<rect x="${margin}" y="${y}" width="${WIDTH - margin * 2}" height="40" rx="6" fill="${C.brand}"/>`;
+  body += textLines([`股东价值差距\u3000${gapText || "（待填写）"}`], margin + 14, y + 26, { size: 13, color: C.brandText, weight: 700 });
+  y += 56;
+  for (const [i, p] of PERSPECTIVES.entries()) {
+    const own = (map.themes ?? []).filter((t) => t.perspective === p.key);
+    const rows = Math.max(1, Math.ceil(own.length / perRow));
+    const laneH = rows * (boxH + 12) + 12;
+    body += `<rect x="${margin}" y="${y}" width="${WIDTH - margin * 2}" height="${laneH}" fill="${i % 2 ? C.muted : C.paper}" stroke="${C.border}"/>`;
+    body += `<rect x="${margin}" y="${y}" width="4" height="${laneH}" fill="${PERSPECTIVE_COLORS[p.key]}"/>`;
+    body += textLines([p.label], margin + 14, y + laneH / 2 + 5, { size: 14, color: C.brand, weight: 700 });
+    own.forEach((t, k) => {
+      const x = margin + labelW + (k % perRow) * (boxW + gapX);
+      const by = y + 12 + Math.floor(k / perRow) * (boxH + 12);
+      body += measureBox(x, by, boxW, boxH, t.title || t.category, [t.metric, t.value].filter(Boolean).join(" "), PERSPECTIVE_COLORS[p.key]);
+    });
+    if (!own.length) body += textLines(["（还没有战略主题）"], margin + labelW, y + laneH / 2 + 4, { size: 12, color: C.sub });
+    y += laneH;
+  }
+  return wrap(WIDTH, y + margin, body, title);
+}
+
+/** The diagrams of an artifact: S1-01 六分法 (plus the strategy house), S1-02 战略地图, S2-01 解码地图, S2-03 → S2-02 路径系统图. */
 export function artifactDiagrams(code: string, payload: unknown, subtitle?: string): { key: string; label: string; diagram: SvgDiagram }[] {
   if (!payload || typeof payload !== "object") return [];
   if (code === "S1-01") {
@@ -234,5 +370,8 @@ export function artifactDiagrams(code: string, payload: unknown, subtitle?: stri
     ];
   }
   if (code === "S1-02") return [{ key: "map", label: "战略地图", diagram: strategyMapSvg(payload as StrategyMap, subtitle) }];
+  if (code === "S2-01") return [{ key: "decode", label: "年度战略解码地图", diagram: decodeMapSvg(payload as DecodeMap, subtitle) }];
+  // S2-02 is the graphic view of S2-03: same data, exported from S2-03.
+  if (code === "S2-03") return [{ key: "paths", label: "公司级目标路径系统图（S2-02）", diagram: pathSystemSvg(payload as GoalPathSystem, { subtitle }) }];
   return [];
 }

@@ -158,7 +158,15 @@ export async function deliveryBundle(ctx: Context, pc: ProjectContext) {
         const current = r.get('currentVersion');
         const useLocked = r.get('status') === 'locked' && locked;
         const version = useLocked ? locked : current;
-        return { code: r.get('code'), status: r.get('status'), rev: version?.get('rev') ?? 0, locked: !!useLocked, payload: version?.get('payload') ?? null };
+        return {
+          code: r.get('code'),
+          status: r.get('status'),
+          rev: version?.get('rev') ?? 0,
+          locked: !!useLocked,
+          stale: !!r.get('stale'),
+          staleReason: r.get('staleReason') ?? null,
+          payload: version?.get('payload') ?? null,
+        };
       }),
     exports: exports.map((e: any) => ({
       id: e.get('id'),

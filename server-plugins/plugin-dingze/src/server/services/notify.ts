@@ -1,6 +1,6 @@
 import type { Context } from '@nocobase/actions';
 
-import { type ArtifactDef, type LifecycleAction, PROJECT_ROLE_LABELS, type ProjectRole, getArtifactDef } from '../../shared';
+import { type ArtifactDef, type LifecycleAction, PROJECT_ROLE_LABELS, type ProjectRole, getArtifactDef, staleAdvice } from '../../shared';
 import { type ProjectContext, currentUserId, userSpaceNames } from './access';
 
 // In-app notifications (spec 二(二)5): project name, artifact, action and a direct link.
@@ -129,6 +129,8 @@ export async function notifyTransition(
     const owners = await projectMemberIds(ctx, projectId, ['ent_lead', 'lead_consultant'], transaction);
     for (const code of extra.stale) {
       const target = getArtifactDef(code);
+      const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });
+      const advice = staleAdvice(row?.get('status') ?? '', pc.actor.service ?? 'guided');
       await notify(
         ctx,
         {
@@ -138,7 +140,7 @@ export async function notifyTransition(
           kind: 'stale',
           code,
           title: `《${target.name}》上游已变更`,
-          content: `${project} · ${target.specId} ${target.name}：上游 ${def.specId} ${def.name}${action === 'reopen' || action === 'forceReturn' ? '已解锁重开' : '有新版本'}，请核对后保存一次`,
+          content: `${project} · ${target.specId} ${target.name}：上游 ${def.specId} ${def.name}${action === 'reopen' || action === 'forceReturn' ? '已解锁重开' : '有新版本'}。${advice}`,
           link: `/projects/${projectId}/workspace/${code}`,
         },
         transaction,

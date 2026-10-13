@@ -58,7 +58,7 @@ export async function getVersionDiff(projectId: number, spaceName: string, code:
   return nocobaseClient.action<VersionDiff>("dingze", "versionDiff", { method: "GET", query: { projectId, code, from, to }, headers: spaceHeaders(spaceName) });
 }
 
-export type DeliveryArtifact = { code: string; status: ArtifactStatus; rev: number; locked: boolean; payload: unknown };
+export type DeliveryArtifact = { code: string; status: ArtifactStatus; rev: number; locked: boolean; stale?: boolean; staleReason?: string | null; payload: unknown };
 export type ExportFormat = "xlsx" | "docx" | "svg" | "png";
 
 export type ExportRecord = { id: number; code: string; rev: number; format: ExportFormat; fileName: string; draft: boolean; at: string; by: string };

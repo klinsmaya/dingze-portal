@@ -11,6 +11,7 @@ import {
   PERSPECTIVES,
   type Perspective,
   type StrategyMap,
+  additive,
   emptyTheme,
   parseAmount,
   targetsOf,
@@ -200,7 +201,8 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
                   soft: style.soft,
                   nodes: own,
                   placeholder: `子步骤 ${i + 1} · 待开始`,
-                  roll: numeric ? sumText(amounts as number[], gapTarget) : null,
+                  // 口径不同的主题共同支撑缺口，不求和 (验收 E D02)。
+                  roll: numeric ? (additive(own) ? sumText(amounts as number[], gapTarget) : { ok: null, text: "口径不同：共同支撑，不求和" }) : null,
                   onAdd: () => setThemes([...themes, emptyTheme(p.key)]),
                   target: { parentId: null, goalId: p.key },
                 };

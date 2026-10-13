@@ -68,6 +68,7 @@ import {
   split,
   subtree,
 } from "@/lib/dingze/tree-ops";
+import { REVEAL_EVENT } from "@/lib/dingze/locate";
 import { cn } from "@/lib/utils";
 import {
   type EditorChrome,
@@ -721,6 +722,19 @@ export function TreeMindMap<T extends TreeItem>({
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // A located issue unfolds the branches above its node (验收 D05).
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const ids = (e as CustomEvent<string[]>).detail ?? [];
+      const hit = cfg.nodes.find((x) => ids.includes(x.id));
+      if (!hit) return;
+      const up = new Set<string>();
+      for (let p = hit.parentId; p; p = cfg.nodes.find((x) => x.id === p)?.parentId ?? null) up.add(p);
+      setCollapsed((c) => ([...c].some((id) => up.has(id)) ? new Set([...c].filter((id) => !up.has(id))) : c));
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, [cfg.nodes]);
   const [moving, setMoving] = useState<string | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const [drop, setDrop] = useState<Drop<T> | null>(null);

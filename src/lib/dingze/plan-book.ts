@@ -136,6 +136,21 @@ function charterAppendix(c: ProjectCharter): Block[] {
   ];
 }
 
+/** S3-02 on its own (spec: 表单 → Word, 验收 D08): the project list, then one section per charter with its WBS. */
+export function buildCharterBook(params: { enterprise: string; year: number; charters: ProjectCharter[] }): PlanBookModel {
+  const charters = params.charters ?? [];
+  return {
+    title: `${params.enterprise} ${params.year} 年度项目任务书`,
+    subtitle: "S3-02 项目任务书（含 WBS）· 表 4-4",
+    chapters: [
+      { no: "一", title: "项目清单", source: "same", blocks: charters.length ? [chartersBlock(charters)] : [{ kind: "note", text: "还没有项目任务书" }] },
+      ...charters.map((c, i) => ({ no: CHINESE_NUMBERS[i + 1] ?? String(i + 2), title: `${c.code} ${c.name}`, source: "same" as const, blocks: charterAppendix(c).slice(1) })),
+    ],
+  };
+}
+
+const CHINESE_NUMBERS = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十"];
+
 /** S3-07: the company plan book. */
 /** 六分法 (and the strategy house when it was filled in) and the strategy map. */
 function strategyFigures(u: PlanBookUpstream): Block[] {

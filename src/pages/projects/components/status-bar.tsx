@@ -19,7 +19,10 @@ export function StatusBar({
   onRevision,
   onShortcuts,
   summary,
+  optional = false,
 }: {
+  /** A P1 table that can be skipped: open gaps are not 必须改. */
+  optional?: boolean;
   summary?: { tone: "ok" | "warn" | "muted"; text: string }[];
   errors: number;
   warnings: number;
@@ -46,9 +49,13 @@ export function StatusBar({
           {s.text}
         </span>
       ))}
-      <button type="button" onClick={onIssues} className={cn("flex items-center gap-1", errors ? "text-destructive" : "text-status-done-foreground")}>
+      <button
+        type="button"
+        onClick={onIssues}
+        className={cn("flex items-center gap-1", errors ? (optional ? "text-[color:var(--dz-warn)]" : "text-destructive") : "text-status-done-foreground")}
+      >
         {errors ? <CircleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
-        {errors ? `${errors} 处必须改` : "校验通过"}
+        {errors ? (optional ? `可选表 · 做完还差 ${errors} 处` : `${errors} 处必须改`) : "校验通过"}
         {warnings ? <span className="text-muted-foreground">· {warnings} 条建议</span> : null}
       </button>
       <button type="button" onClick={onComments} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">

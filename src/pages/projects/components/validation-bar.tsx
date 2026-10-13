@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import type { Issue } from "@dingze/shared";
 
-import { locateAnchor } from "@/lib/dingze/locate";
+import { locateIssue } from "@/lib/dingze/locate";
 import { cn } from "@/lib/utils";
 
 function IssueItem({ issue }: { issue: Issue }) {
@@ -16,7 +16,9 @@ function IssueItem({ issue }: { issue: Issue }) {
         className="inline-flex items-start gap-1 text-left underline decoration-dotted underline-offset-4 hover:decoration-solid"
         title="定位到这一行"
         onClick={() => {
-          if (!locateAnchor(issue.anchor!)) toast.info("这一条针对整张表，或所在行当前未展开");
+          void locateIssue(issue).then((found) => {
+            if (!found) toast.info("这一条针对整张表，在表里找不到对应的行");
+          });
         }}
       >
         <LocateFixed className="mt-0.5 size-3.5 shrink-0 opacity-70" />
@@ -27,7 +29,7 @@ function IssueItem({ issue }: { issue: Issue }) {
 }
 
 /** Errors block “本步完成” and confirmation; warnings never block (Q3). Each issue with an anchor jumps to its row. */
-export function ValidationBar({ issues, hasRules }: { issues: Issue[]; hasRules: boolean }) {
+export function ValidationBar({ issues, hasRules, optional = false }: { issues: Issue[]; hasRules: boolean; /** P1 tables can be skipped: their gaps are not shown as 必须改 (验收 E D04). */ optional?: boolean }) {
   const [showAllWarnings, setShowAllWarnings] = useState(false);
   const errors = issues.filter((i) => i.level === "error");
   const warnings = issues.filter((i) => i.level === "warning");
@@ -40,14 +42,20 @@ export function ValidationBar({ issues, hasRules }: { issues: Issue[]; hasRules:
       aria-label="校验结果"
       className={cn(
         "flex flex-col gap-1.5 rounded-xl border px-4 py-3 text-sm",
-        errors.length
-          ? "border-destructive/30 bg-status-stale text-status-stale-foreground"
-          : "border-status-done-foreground/20 bg-status-done text-status-done-foreground"
+        errors.length && optional
+          ? "border-[color:var(--dz-warn)]/40 bg-card text-foreground"
+          : errors.length
+            ? "border-destructive/30 bg-status-stale text-status-stale-foreground"
+            : "border-status-done-foreground/20 bg-status-done text-status-done-foreground"
       )}
     >
       <div className="flex items-center gap-2 font-semibold">
         {errors.length ? <CircleAlert className="size-4" /> : <CircleCheck className="size-4" />}
-        {errors.length ? `还差 ${errors.length} 处才能“本步完成”——草稿可以先保存；点问题可定位` : "结构校验通过"}
+        {errors.length && optional
+          ? `这张表可选，可以跳过；要做完还差 ${errors.length} 处——点问题可定位`
+          : errors.length
+            ? `还差 ${errors.length} 处才能“本步完成”——草稿可以先保存；点问题可定位`
+            : "结构校验通过"}
       </div>
       {errors.length ? (
         <ul className="flex flex-col gap-1">

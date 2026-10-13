@@ -51,3 +51,31 @@ export function locateAnchor(anchor: string, root: ParentNode = document): boole
   }
   return false;
 }
+
+/** Editors that fold rows (layers, collapsed branches) listen for this and unfold the anchor's ancestors. */
+export const REVEAL_EVENT = "dz-reveal";
+
+/**
+ * Locate an issue (验收 D05): switch to its step zone first (S2-03 定目标 / 找路径 render one at a
+ * time), ask editors to unfold the row, then retry while the zone renders.
+ */
+export function locateIssue(issue: { anchor?: string | null; zone?: string }): Promise<boolean> {
+  const anchor = issue.anchor;
+  if (!anchor) return Promise.resolve(false);
+  if (issue.zone) document.querySelector<HTMLElement>(`[data-zone-tab="${CSS.escape(issue.zone)}"]`)?.click();
+  return new Promise((resolve) => {
+    let tries = 0;
+    const step = () => {
+      window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: anchorCandidates(anchor) }));
+      const root = (issue.zone && document.querySelector(`[data-zone="${CSS.escape(issue.zone)}"]`)) || document;
+      // One frame for the unfold to render before looking.
+      window.requestAnimationFrame(() => {
+        if (locateAnchor(anchor, root)) return resolve(true);
+        if (++tries >= 12) return resolve(false);
+        window.setTimeout(step, 100);
+      });
+    };
+    step();
+  });
+}
+

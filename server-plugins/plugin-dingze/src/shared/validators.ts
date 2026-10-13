@@ -58,6 +58,8 @@ export interface Issue {
   message: string;
   /** Item ID or field key the issue points at, for jump-to-cell. */
   anchor?: string;
+  /** The step zone of a table split in steps (S2-03: targets / paths), so locating can switch to it. */
+  zone?: string;
 }
 
 const PENDING_MARK = '待补';
@@ -405,9 +407,9 @@ function validateArtifactUnsafe(code: string, payload: unknown, upstream: Record
     case 'S2-03': {
       // 第一步 定目标 first: without goals there is nothing to find paths for.
       const targets = targetsOf(payload) ?? { year: 0, strategyReview: '', lastPeriodIssues: '', goals: [] };
-      const targetIssues = validateGoalTargets(targets).map((i) => ({ ...i, message: `定目标：${i.message}` }));
+      const targetIssues = validateGoalTargets(targets).map((i) => ({ ...i, message: `定目标：${i.message}`, zone: 'targets' }));
       const goals = (targets.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric }));
-      return [...targetIssues, ...validateGoalPathSystem(payload as GoalPathSystem, goals).map((i) => ({ ...i, message: `找路径：${i.message}` }))];
+      return [...targetIssues, ...validateGoalPathSystem(payload as GoalPathSystem, goals).map((i) => ({ ...i, message: `找路径：${i.message}`, zone: 'paths' }))];
     }
     case 'S2-06': {
       const rows = (upstream['S2-05'] as DeptUndertakingTable | undefined)?.rows ?? [];

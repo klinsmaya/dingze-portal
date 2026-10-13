@@ -15,6 +15,7 @@ import {
   ARTIFACTS,
   STAGES,
   profileBrief,
+  staleAdvice,
 } from "@dingze/shared";
 
 import { useAIPageElementHandle } from "@/extensions/nocobase-ai/components";
@@ -51,6 +52,7 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
 import { CoachPanel } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
+import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { type RailLink, RouteRail } from "./components/route-rail";
@@ -686,7 +688,15 @@ function Workspace({ code }: { code: string }) {
   else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由主咨询师解锁重开，下游会标“上游已变更”。", detailLabel: "说明" });
   else if (collab) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
-  if (artifact?.stale) headerStates.push({ tone: "warn", text: "上游已变更", detail: `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。` });
+  if (artifact?.stale)
+    headerStates.push({
+      tone: "warn",
+      text: "上游已变更",
+      detail:
+        status === "locked"
+          ? `${artifact.staleReason ?? "引用的上游表改过了"}。${staleAdvice(status, actor.service)}；重开后核对并保存，再重新定版。在那之前，这张表和它的导出仍是原定版内容。`
+          : `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。`,
+    });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
   // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
   const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || (service === "self" && role === "ent_lead");
@@ -785,6 +795,18 @@ function Workspace({ code }: { code: string }) {
                       enterprise={project.enterprise?.shortName ?? "企业"}
                       projectName={project.name}
                       upstream={upstream}
+                      dirty={dirty}
+                      onExported={recordExport}
+                      variant="ghost"
+                    />
+                    <CharterDocxButton
+                      code={code}
+                      payload={artifact?.currentVersion?.payload}
+                      rev={artifact?.currentRev ?? 0}
+                      status={status}
+                      enterprise={project.enterprise?.name ?? "企业"}
+                      projectName={project.name}
+                      year={project.year}
                       dirty={dirty}
                       onExported={recordExport}
                       variant="ghost"
@@ -991,7 +1013,9 @@ function Workspace({ code }: { code: string }) {
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed bg-background px-3 py-1.5 text-sm">
                     {next ? (
                       <>
-                        <span className="text-muted-foreground">这一步{status === "locked" ? "已定版" : "已交出去"}，可以接着做：</span>
+                        <span className="text-muted-foreground">
+                          这一步{status === "locked" ? "已定版" : status === "step_done" ? (actor.service === "self" ? "本步已完成（还没自查复核）" : "本步已完成（还没交给顾问复核）") : "已交出去"}，可以接着做：
+                        </span>
                         <Link to={workspacePath(project.id, next.code)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
                           《{next.name}》 <ArrowRight className="size-4" />
                         </Link>
@@ -1043,7 +1067,7 @@ function Workspace({ code }: { code: string }) {
                   </Alert>
                 )}
 
-                {EDITABLE_CODES.has(code) ? <ValidationBar issues={issues} hasRules /> : null}
+                {EDITABLE_CODES.has(code) ? <ValidationBar issues={issues} hasRules optional={def.priority === "P1"} /> : null}
                 {detail.data && (status === "pending_confirm" || status === "locked" || detail.data.dissents.length > 0) ? (
                   <DissentList detail={detail.data} project={project} code={code} />
                 ) : null}
@@ -1062,6 +1086,7 @@ function Workspace({ code }: { code: string }) {
             <StatusBar
               summary={previewDraft ? [{ tone: "warn", text: "修改建议待确认" }, ...(chrome?.summary ?? []).map((x) => ({ ...x, text: `预览：${x.text}` }))] : chrome?.summary}
               errors={blocking}
+              optional={def.priority === "P1"}
               warnings={issues.length - blocking}
               openComments={openThreads.length}
               revisionOn={revision.on}
