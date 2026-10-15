@@ -508,7 +508,7 @@ function useAttachMaterials() {
       multiple
       accept={MATERIAL_ACCEPT}
       className="hidden"
-      aria-label="上传资料"
+      aria-label="上传到资料库"
       onChange={async (e) => {
         const added = await upload(e.target.files);
         citeMaterials(added);
@@ -539,11 +539,11 @@ function ChatMenu({ onUpload }: { onUpload: () => void }) {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onUpload}>
-          <Paperclip /> 上传资料…
+          <Paperclip /> 上传到资料库…
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <FolderOpen /> 引用资料
+            <FolderOpen /> 引用资料库里的资料
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="max-h-72 min-w-56 overflow-y-auto">
             {(materials.data ?? []).length ? (
@@ -620,7 +620,7 @@ export function CoachPanel({
             showConversationToggle
             showEmployeeSelector={false}
             showModelSelector={false}
-            composerActions={[{ key: "attach", label: "上传资料（存进资料库，供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]}
+            composerActions={[{ key: "attach", label: "上传到资料库（写入资料库，供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]}
             disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 上传的文件进资料库 · 修改卡确认后才写入成果"
             placeholder="回答数字咨询师，或直接说你的想法…"
           />

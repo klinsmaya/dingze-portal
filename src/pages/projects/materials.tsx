@@ -30,7 +30,6 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { type MaterialSummary, downloadOriginal, useAddMaterial, useDeleteMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
-import { workspacePath } from "@/lib/dingze/progress";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
@@ -78,44 +77,23 @@ function PasteDialog({ open, onClose, onSubmit, pending }: { open: boolean; onCl
   );
 }
 
-/** 已确认成果: every table once 定版 is part of the enterprise's materials (资料分类“已确认成果”). */
+/** 已确认成果：只放一张链接卡，成果的唯一入口在「成果」（开营前 UX 改版 M1、M2）。规格把它列为资料分类，数字咨询师仍按定版内容引用。 */
 function ConfirmedResults() {
   const { project, overview } = useProjectContext();
   const locked = overview.artifacts.filter((a) => a.status === "locked" && getArtifactDef(a.code).priority !== "method");
   return (
-    <section aria-labelledby="confirmed" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h2 id="confirmed" className="font-heading text-lg font-bold text-brand">
-          已确认成果
-        </h2>
-        <span className="text-xs text-muted-foreground">表一定版就出现在这里，数字咨询师和专家咨询都按定版内容引用；版本、对比和导出在</span>
-        <Link to={`/projects/${project.id}/results`} className="text-xs text-primary hover:underline">
-          「成果」
-        </Link>
-      </div>
-      {locked.length === 0 ? (
-        <p className="rounded-xl border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">还没有定版的表。</p>
-      ) : (
-        <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {locked.map((a) => {
-            const def = getArtifactDef(a.code);
-            return (
-              <li key={a.code}>
-                <Link to={workspacePath(project.id, a.code)} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:border-primary">
-                  <FileCheck2 className="size-4 shrink-0 text-status-done-foreground" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{def.plain}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {def.specId} · 定版 v{a.currentRev}
-                      {a.stale ? " · 上游已变更" : ""}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <section aria-labelledby="confirmed" className="flex flex-col gap-2">
+      <h2 id="confirmed" className="font-heading text-lg font-bold text-brand">
+        已确认成果
+      </h2>
+      <Link to={`/projects/${project.id}/results`} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-primary">
+        <FileCheck2 className="size-5 shrink-0 text-status-done-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">{locked.length ? `已有 ${locked.length} 张表定版` : "还没有定版的表"}</span>
+          <span className="block text-xs text-muted-foreground">表一定版就成为资料的一部分，数字咨询师和专家咨询都按定版内容引用。查看、对比和下载在「成果」。</span>
+        </span>
+        <span className="shrink-0 text-xs text-primary">去「成果」→</span>
+      </Link>
     </section>
   );
 }
