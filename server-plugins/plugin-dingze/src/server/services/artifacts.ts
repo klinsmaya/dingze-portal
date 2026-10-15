@@ -18,6 +18,7 @@ import {
   unlockInfo,
   validateArtifact,
   type SelfReviewAnswer,
+  canPerform,
   missingSelfReview,
   selfReviewChecklist,
 } from '../../shared';
@@ -184,6 +185,9 @@ export async function saveArtifact(ctx: Context, pc: ProjectContext, def: Artifa
 
   return ctx.db.sequelize.transaction(async (transaction: any) => {
     const artifact = await ensureArtifact(ctx, pc, def.code, transaction);
+    const previousRefs = artifact.get('currentVersionId')
+      ? ((await ctx.db.getRepository('dz_artifact_versions').findOne({ filterByTk: artifact.get('currentVersionId'), fields: ['upstreamRefs'], transaction }))?.get('upstreamRefs') ?? {})
+      : {};
     const currentRev = artifact.get('currentRev') as number;
     if (Number(input.baseRev) !== currentRev) {
       throw new HttpError(409, '这份成果刚被其他人更新过，请刷新后再改', 'CONFLICT', { currentRev });
@@ -209,9 +213,10 @@ export async function saveArtifact(ctx: Context, pc: ProjectContext, def: Artifa
       context: ctx,
       transaction,
     });
-    // Saving re-reads the latest upstream versions, which resolves “上游已变更” unless an
-    // upstream has been reopened and is still being edited.
-    const stillStale = upstream.reopened.length > 0;
+    // 上游已变更不再“保存一次就消失”（客户反馈 2026-10-15）：要看过上游改了什么并点“已核对”。
+    // 保存时记下核对基线（变更前读的上游版本），供“上游改了什么”对比。
+    const wasStale = !!artifact.get('stale');
+    const stillStale = wasStale || upstream.reopened.length > 0;
     await artifact.update(
       {
         status: to,
@@ -222,6 +227,7 @@ export async function saveArtifact(ctx: Context, pc: ProjectContext, def: Artifa
           ? artifact.get('staleReason') ??
             `${upstream.reopened.map((c) => getArtifactDef(c).specId).join('、')} 已解锁重开，正在修改`
           : null,
+        upstreamBase: stillStale ? (artifact.get('upstreamBase') ?? previousRefs) : null,
       },
       { transaction },
     );
@@ -235,6 +241,11 @@ export async function saveArtifact(ctx: Context, pc: ProjectContext, def: Artifa
     await audit(ctx, pc, { code: def.code, action: 'save', fromStatus: from, toStatus: to, rev: currentRev + 1, meta: { kind } }, transaction);
     return { status: to, rev: currentRev + 1, versionId: version.get('id') };
   });
+}
+
+/** The upstream versions this artifact was last in step with: the 核对基线, else its current version's refs. */
+function baseRefs(artifact: any): Record<string, number | null> {
+  return ((artifact?.get('upstreamBase') ?? artifact?.get('currentVersion')?.get('upstreamRefs') ?? {}) as Record<string, number | null>);
 }
 
 const PROPAGATING: LifecycleAction[] = ['stepDone', 'confirm', 'forceLock', 'reopen', 'forceReturn'];
@@ -259,14 +270,14 @@ async function markDownstreamStale(
       appends: ['currentVersion'],
       transaction,
     });
-    const refs = (target?.get('currentVersion')?.get('upstreamRefs') ?? {}) as Record<string, number | null>;
+    const refs = baseRefs(target);
     const latest = readableVersionId(source, getArtifactDef(code).stage === def.stage);
     if (target && (unconditional || refs[def.code] !== latest)) {
       await target.update({ stale: true, staleReason: reason }, { transaction });
       marked.push(code);
     } else if (target?.get('stale') && (await readsCurrentUpstream(ctx, projectId, code, refs, transaction))) {
       // An upstream reopened and re-locked without changes: nothing to re-check any more.
-      await target.update({ stale: false, staleReason: null }, { transaction });
+      await target.update({ stale: false, staleReason: null, upstreamBase: null }, { transaction });
     }
   }
   return marked;
@@ -542,6 +553,54 @@ export async function dismissOrgNotice(ctx: Context, pc: ProjectContext, code: s
     const notice = row.get('orgNotice');
     await row.update({ orgNotice: null }, { transaction });
     await audit(ctx, pc, { code, action: 'dismissOrgNotice', reason: String(note ?? '').slice(0, 500) || '组织变更不影响已定版内容', meta: { notice } }, transaction);
+    return { ok: true };
+  });
+}
+
+/** 上游改了什么：每个上游，核对基线读的版本与现在应读的版本（不同才列出）。 */
+export async function upstreamChanges(ctx: Context, pc: ProjectContext, def: ArtifactDef) {
+  const projectId = pc.project.get('id');
+  const artifact = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code: def.code }, appends: ['currentVersion'] });
+  if (!artifact) return { stale: false, changes: [] };
+  const base = baseRefs(artifact);
+  const rows = def.dependsOn.length
+    ? await ctx.db.getRepository('dz_artifacts').find({ filter: { projectId, code: { $in: def.dependsOn } } })
+    : [];
+  const versions = ctx.db.getRepository('dz_artifact_versions');
+  const load = async (id: number | null | undefined) => {
+    if (!id) return null;
+    const v = await versions.findOne({ filterByTk: id, fields: ['id', 'rev', 'payload', 'createdAt'] });
+    return v ? { rev: v.get('rev') as number, payload: v.get('payload'), at: v.get('createdAt') } : null;
+  };
+  const changes = [];
+  for (const code of def.dependsOn) {
+    const row = rows.find((r: any) => r.get('code') === code);
+    const now = readableVersionId(row, getArtifactDef(code).stage === def.stage);
+    const was = base[code] ?? null;
+    if (now === was && !isReopened(row)) continue;
+    const upstreamDef = getArtifactDef(code);
+    changes.push({ code, specId: upstreamDef.specId, name: upstreamDef.plain, reopened: isReopened(row), from: await load(was), to: await load(now) });
+  }
+  return { stale: !!artifact.get('stale'), staleReason: artifact.get('staleReason') ?? null, changes };
+}
+
+/** 已核对：看过上游改了什么，确认本表已按新内容调整或不受影响。 */
+export async function acknowledgeUpstream(ctx: Context, pc: ProjectContext, def: ArtifactDef, note?: string) {
+  const projectId = pc.project.get('id');
+  return ctx.db.sequelize.transaction(async (transaction: any) => {
+    const artifact = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code: def.code }, transaction });
+    if (!artifact?.get('stale')) return { ok: true };
+    const status = artifact.get('status') as ArtifactStatus;
+    const judge = pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || pc.projectRole === 'ent_lead';
+    if (status === 'locked' ? !judge : !canPerform('save', pc.actor)) {
+      throw new HttpError(403, status === 'locked' ? '已定版的表由企业项目负责人或主咨询师确认是否受影响' : '当前角色不能修改这张表');
+    }
+    const upstream = await upstreamState(ctx, projectId, def, transaction);
+    if (upstream.reopened.length) {
+      throw new HttpError(409, `${upstream.reopened.map((c) => getArtifactDef(c).plain).join('、')}已解锁重开、正在修改，等它重新完成后再核对`);
+    }
+    await artifact.update({ stale: false, staleReason: null, upstreamBase: upstream.refs }, { transaction });
+    await audit(ctx, pc, { code: def.code, action: 'acknowledgeUpstream', reason: String(note ?? '').slice(0, 500) || '已核对上游改动', meta: { refs: upstream.refs, reason: artifact.get('staleReason') } }, transaction);
     return { ok: true };
   });
 }

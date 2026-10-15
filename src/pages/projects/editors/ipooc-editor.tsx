@@ -8,7 +8,7 @@ import {
   SMART_CHECKS,
   type StrategyLogic,
   emptyIpoocSheet,
-  tacticsFromLogic,
+  tacticOptions,
 } from "@dingze/shared";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,8 +39,9 @@ const COLUMNS: { key: keyof IpoocRow; label: string; width: string }[] = [
 export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Props) {
   const invalid = errorAnchors(issues);
   const sheets = value.sheets ?? [];
-  const tactics = tacticsFromLogic(upstream["S1-03"]);
-  const unused = tactics.filter((t) => !sheets.some((s) => s.strategy.trim() === t));
+  // 按策略 id 关联逻辑表（S1-03），逻辑表改名或删除时会提示（客户反馈：各表要可承接）。
+  const tactics = tacticOptions(upstream["S1-03"]);
+  const unused = tactics.filter((t) => !sheets.some((s) => s.tacticId === t.id || s.strategy.trim() === t.text));
   const setSheet = (id: string, patch: Partial<IpoocSheet>) => onChange({ sheets: patchById(sheets, id, patch) });
 
   return (
@@ -52,12 +53,15 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
               <NativeSelect
                 aria-label="从逻辑表选择关键策略"
                 value=""
-                onChange={(e) => e.target.value && onChange({ sheets: [...sheets, emptyIpoocSheet(e.target.value)] })}
+                onChange={(e) => {
+                  const t = tactics.find((x) => x.id === e.target.value);
+                  if (t) onChange({ sheets: [...sheets, emptyIpoocSheet(t.text, t.id)] });
+                }}
               >
                 <NativeSelectOption value="">＋ 从逻辑表选择关键策略…</NativeSelectOption>
                 {unused.map((t) => (
-                  <NativeSelectOption key={t} value={t}>
-                    {t}
+                  <NativeSelectOption key={t.id} value={t.id}>
+                    {t.text}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>

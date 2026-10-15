@@ -4,8 +4,10 @@ import { Plugin } from '@nocobase/server';
 import type { LifecycleAction } from '../shared';
 import { HttpError, SYSTEM_ROLES, loadProjectContext } from './services/access';
 import {
+  acknowledgeUpstream,
   artifactDetail,
   dismissOrgNotice,
+  upstreamChanges,
   grantStepException,
   projectOverview,
   recordDissent,
@@ -246,6 +248,14 @@ export class PluginDingzeServer extends Plugin {
         saveOrgUnit: action((ctx) => saveOrgUnit(ctx, values(ctx) as any)),
         setMemberDepartment: action((ctx) => setMemberDepartment(ctx, values(ctx) as any)),
         importOrgUnits: action((ctx) => importOrgUnits(ctx, values(ctx) as any)),
+        upstreamChanges: action(async (ctx) => {
+          const p = ctx.action.params as any;
+          return upstreamChanges(ctx, await loadProjectContext(ctx, p.projectId), requireArtifactDef(p.code));
+        }),
+        acknowledgeUpstream: action(async (ctx) => {
+          const v = values(ctx);
+          return acknowledgeUpstream(ctx, await loadProjectContext(ctx, v.projectId), requireArtifactDef(v.code), v.note);
+        }),
         dismissOrgNotice: action(async (ctx) => {
           const v = values(ctx);
           return dismissOrgNotice(ctx, await loadProjectContext(ctx, v.projectId), String(v.code ?? ''), v.note);

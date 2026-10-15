@@ -158,6 +158,10 @@ export function useEditSession(): EditSession | null {
 }
 
 const FIELD_NAMES: Record<string, string> = {
+  resources: "资源与预算",
+  budget: "预算",
+  fte: "人力",
+  material: "物力与支持",
   value: "指标值",
   metric: "衡量指标",
   path: "路径",

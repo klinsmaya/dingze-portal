@@ -72,7 +72,7 @@ export function StrategyKpiEditor({ value, onChange, readOnly, issues, upstream 
                         label={`${kpi.name || "战略 KPI"} ${c.label}`}
                         placeholder={c.placeholder}
                         multiline={c.multiline}
-                        value={kpi[c.key]}
+                        value={String(kpi[c.key] ?? "")}
                         onChange={(v) => set(patchById(kpis, kpi.id, { [c.key]: v }))}
                         readOnly={readOnly}
                       />

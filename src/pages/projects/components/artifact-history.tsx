@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 
 import { ACTION_LABELS, STATUS_LABELS, VERSION_KIND_LABELS, getArtifactDef } from "@dingze/shared";
 
@@ -13,6 +14,8 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { formatTime } from "@/lib/dingze/records";
 import { getVersionPayload } from "@/lib/dingze/records-api";
 import { useArtifactHistory, useVersionDiff } from "@/lib/dingze/records-queries";
+import { workspacePath } from "@/lib/dingze/progress";
+import { lockRounds, roundOf } from "@/lib/dingze/rounds";
 import { cn } from "@/lib/utils";
 
 import { pathNamer } from "./edit-session";
@@ -73,13 +76,14 @@ export function ArtifactHistorySheet({
     [fromPayload.data, toPayload.data],
   );
   const def = code ? getArtifactDef(code) : null;
+  const rounds = useMemo(() => lockRounds(history.data?.events ?? []), [history.data]);
 
   return (
     <Sheet open={!!code} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{def ? `${def.specId} 《${def.name}》` : ""}</SheetTitle>
-          <SheetDescription>版本、操作记录和任意两个版本的差异。</SheetDescription>
+          <SheetDescription>版本、操作记录和任意两个版本的差异。每次定版是一轮，之后的修改属于“优化”；点“查看”打开那一版的完整内容（只读）。</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-6">
           {history.error ? (
@@ -99,8 +103,14 @@ export function ArtifactHistorySheet({
                     <li key={v.rev} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                       <span className="font-semibold tabular-nums">v{v.rev}</span>
                       <Badge variant={v.kind === "ai_draft" ? "secondary" : "outline"}>{VERSION_KIND_LABELS[v.kind] ?? v.kind}</Badge>
+                      {rounds.get(v.rev) ? <Badge className="bg-status-locked text-status-locked-foreground">{rounds.get(v.rev)!.label}</Badge> : roundOf(v.rev, rounds) ? <span className="text-xs text-muted-foreground">{roundOf(v.rev, rounds)}</span> : null}
                       <span>{v.by || "—"}</span>
                       <span className="text-muted-foreground">{formatTime(v.at)}</span>
+                      {code ? (
+                        <Link to={`${workspacePath(project.id, code)}?view=${v.rev}`} onClick={onClose} className="ml-auto text-xs text-primary hover:underline">
+                          查看
+                        </Link>
+                      ) : null}
                       {v.note ? <span className="basis-full text-xs text-muted-foreground">{v.note}</span> : null}
                     </li>
                   ))}

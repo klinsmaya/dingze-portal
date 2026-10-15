@@ -29,6 +29,10 @@ import { useRecordDissent, useTransitionArtifact } from "@/lib/dingze/queries";
 
 import { confirmSummary } from "@/lib/dingze/confirm-summary";
 import { type FlowAction, flowLabel, flowPlan, mainAction, whoCan } from "@/lib/dingze/flow-plan";
+import { type ImpactRow, impactList } from "@/lib/dingze/impact";
+import { useProjectContext } from "@/pages/projects/project-context";
+
+import { ImpactTable } from "./impact-list";
 
 import { askCoach } from "./coach-panel";
 import { pathNamer } from "./edit-session";
@@ -80,6 +84,7 @@ type Props = {
 };
 
 export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking, warnings = [], openComments = 0 }: Props) {
+  const { overview } = useProjectContext();
   const [selfReviewing, setSelfReviewing] = useState(false);
   const status = detail.artifact?.status ?? "not_started";
   const transition = useTransitionArtifact(project, code);
@@ -183,7 +188,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         onClose={() => setSelfReviewing(false)}
         onSubmit={(answers) => run(ACTIONS.find((a) => a.action === "selfReview")!, undefined, answers)}
       />
-      <ReasonDialog spec={reasonFor} pending={transition.isPending} onClose={() => setReasonFor(null)} onSubmit={run} />
+      <ReasonDialog spec={reasonFor} pending={transition.isPending} onClose={() => setReasonFor(null)} onSubmit={run} project={project} impact={reasonFor?.action === "reopen" ? impactList(code, overview.artifacts) : []} />
       <ConfirmDialog
         open={confirming}
         title={title}
@@ -264,11 +269,16 @@ function ReasonDialog({
   pending,
   onClose,
   onSubmit,
+  project,
+  impact,
 }: {
   spec: ActionSpec | null;
   pending: boolean;
   onClose: () => void;
   onSubmit: (spec: ActionSpec, reason: string) => void;
+  project: ProjectSummary;
+  /** 解锁重开前列出会受影响的下游表（影响清单）。 */
+  impact: ImpactRow[];
 }) {
   const [reason, setReason] = useState("");
   return (
@@ -282,6 +292,14 @@ function ReasonDialog({
           <Label htmlFor="transition-reason">原因（必填，随审计记录保存）</Label>
           <Textarea id="transition-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
+        {spec?.action === "reopen" ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-xs font-semibold">影响清单：重开并重新定版后，这些表要核对</div>
+            <div className="max-h-48 overflow-y-auto">
+              <ImpactTable project={project} rows={impact} />
+            </div>
+          </div>
+        ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={!reason.trim() || pending} onClick={() => spec && onSubmit(spec, reason.trim())}>

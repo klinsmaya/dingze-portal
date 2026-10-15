@@ -4,7 +4,9 @@ import {
   type StrategyLine,
   type StrategyLogic,
   newRowId,
+  type StrategyMap,
   seedStrategyLogic,
+  strategiesFromMap,
 } from "@dingze/shared";
 
 import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
@@ -17,7 +19,7 @@ type Props = {
   onChange: (next: StrategyLogic) => void;
   readOnly: boolean;
   issues: Issue[];
-  upstream: { "S1-01"?: StrategyContent };
+  upstream: { "S1-01"?: StrategyContent; "S1-02"?: StrategyMap };
 };
 
 /** S1-03 (表 2-7): 使命 → 愿景 → 战略（做不做 / 做什么）→ 策略（动词＋宾语），路径可选。 */
@@ -26,6 +28,8 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
   const strategies = value.strategies ?? [];
   const content = upstream["S1-01"];
   const seed = content ? seedStrategyLogic(content) : null;
+  // 战略地图（S1-02）的目标逐条带成战略，记下来源目标，地图改名或删除时会提示（客户反馈：各表要可承接）。
+  const fromMap = strategiesFromMap(upstream["S1-02"], strategies);
   const setStrategies = (next: StrategyLine[]) => onChange({ ...value, strategies: next });
   const setLine = (id: string, patch: Partial<StrategyLine>) => setStrategies(patchById(strategies, id, patch));
 
@@ -43,7 +47,8 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
       ) : null}
 
       <EditorToolbar hint="战略回答“做不做、做什么”，策略回答“怎么做”，写成“动词＋宾语”。路径为可选层，在定目标责展开。">
-        {strategies.length === 0 && seed ? (
+        {upstream["S1-02"] ? <ImportButton label="从战略地图带入目标" count={fromMap.length} readOnly={readOnly} onClick={() => setStrategies([...strategies, ...fromMap])} /> : null}
+        {strategies.length === 0 && seed && !fromMap.length ? (
           <ImportButton label="按主要战场带入战略" count={seed.strategies.length} readOnly={readOnly} onClick={() => onChange({ ...seed, levelNote: value.levelNote })} />
         ) : null}
         {!readOnly ? (

@@ -1,5 +1,6 @@
-import { ArrowRight, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, History, Lock, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { useGetIdentity } from "@refinedev/core";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import {
   ARTIFACTS,
   STAGES,
   profileBrief,
+  canPerform,
   staleAdvice,
 } from "@dingze/shared";
 
@@ -59,6 +61,11 @@ import { PlanBookExportButton } from "./components/plan-book-export";
 import { type RailLink, RouteRail } from "./components/route-rail";
 import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, TitleRow, TopbarTitle, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
+import { UpstreamChangesDialog } from "./components/upstream-changes";
+import { ImpactDialog } from "./components/impact-list";
+import { ArtifactHistorySheet } from "./components/artifact-history";
+import { impactList } from "@/lib/dingze/impact";
+import { lockRounds, roundOf } from "@/lib/dingze/rounds";
 import { BookMethod } from "./components/book-method";
 import { ChangesPanel } from "./components/changes-panel";
 import { AnchorMenu, type CommentDraft, CommentComposer, LassoBar, LassoOutlines } from "./components/comment-composer";
@@ -190,9 +197,14 @@ function Workspace({ code }: { code: string }) {
     });
   }, []);
   const recordExport = useRecordExport(project);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 查看历史版本（成果历史可查看）：?view=<rev> 只读打开那一版的完整内容。
+  const viewRev = Number(searchParams.get("view")) || null;
   const highlightComment = Number(searchParams.get("comment")) || null;
   const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
+  const [upstreamOpen, setUpstreamOpen] = useState(false);
+  const [impactOpen, setImpactOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Opens the right panel on a tab; set once the panel preference is known (below).
   const openAside = useRef<(tab: AsideTab) => void>(setAsideTab);
   const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
@@ -336,6 +348,13 @@ function Workspace({ code }: { code: string }) {
 
   // ── Edit session shared with the right panel, the change cards and the canvas markers ──
   const historyQuery = useArtifactHistory(project, code);
+  const viewed = useQuery({
+    queryKey: ["dingze", "version-payload", project.id, code, viewRev ?? 0],
+    queryFn: () => getVersionPayload(project.id, project.spaceName, code, viewRev!),
+    enabled: !!viewRev,
+  });
+  const rounds = useMemo(() => lockRounds(historyQuery.data?.events ?? []), [historyQuery.data]);
+  const viewRound = viewRev ? (rounds.get(viewRev)?.label ?? roundOf(viewRev, rounds)) : "";
   const versions = useMemo(
     () => (historyQuery.data?.versions ?? []).map((v) => ({ rev: v.rev, by: v.by, at: v.at, kind: v.kind })),
     [historyQuery.data],
@@ -693,11 +712,30 @@ function Workspace({ code }: { code: string }) {
   if (artifact?.stale)
     headerStates.push({
       tone: "warn",
-      text: status === "locked" ? "上游已变更" : "上游已变更 · 核对后保存一次",
+      text: status === "locked" ? "上游已变更" : "上游已变更 · 核对后点“已核对”",
+      detailLabel: "查看原因",
       detail:
         status === "locked"
-          ? `${artifact.staleReason ?? "引用的上游表改过了"}。${staleAdvice(status, actor.service)}；重开后核对并保存，再重新定版。在那之前，这张表和它的导出仍是原定版内容。`
-          : `${artifact.staleReason ?? "引用的上游表改过了"}。核对后保存一次，即视为已按新版本更新。`,
+          ? `${artifact.staleReason ?? "引用的上游表改过了"}。${staleAdvice(status, actor.service)}；不受影响就在“上游改了什么”里点“已核对，保持定版”。在那之前，这张表和它的导出仍是原定版内容。`
+          : `${artifact.staleReason ?? "引用的上游表改过了"}。看上游改了什么，本表跟着改好后点“已核对”。只保存不会消除这个提示。`,
+      actions: (
+        <Button size="sm" variant="outline" onClick={() => setUpstreamOpen(true)}>
+          看上游改了什么
+        </Button>
+      ),
+    });
+  // 影响清单：下游还有待核对的表时，在表头给出入口。
+  const impact = impactList(code, overview.artifacts);
+  const impactWaiting = impact.filter((r) => r.stale).length;
+  if (impactWaiting)
+    headerStates.push({
+      tone: "warn",
+      text: `下游 ${impactWaiting} 张待核对`,
+      actions: (
+        <Button size="sm" variant="outline" onClick={() => setImpactOpen(true)}>
+          影响清单
+        </Button>
+      ),
     });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
   // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
@@ -793,6 +831,11 @@ function Workspace({ code }: { code: string }) {
                   setPanelPref(true);
                   setAsideTab("comments");
                 }}
+                history={
+                  <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} title="版本、定版轮次，查看任意一版">
+                    <History /> 历史
+                  </Button>
+                }
                 exportMenu={
                   <ExportMenu>
                     <ExportButton
@@ -1047,8 +1090,40 @@ function Workspace({ code }: { code: string }) {
                   </div>
                 ) : null}
 
+                {viewRev ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--dz-changed)] bg-card px-4 py-2 text-sm">
+                    <History className="size-4" style={{ color: "var(--dz-changed)" }} />
+                    <span className="font-semibold">正在查看 v{viewRev}</span>
+                    {viewRound ? <span className="rounded bg-status-locked px-1.5 text-xs text-status-locked-foreground">{viewRound}</span> : null}
+                    <span className="text-muted-foreground">{viewed.data ? `${viewed.data.by || "—"} · ${formatTime(viewed.data.at)} · 只读` : viewed.error ? errorMessage(viewed.error) : "加载中…"}</span>
+                    <span className="ml-auto flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const next = new URLSearchParams(searchParams);
+                          next.delete("view");
+                          setSearchParams(next, { replace: true });
+                          compareWith(viewRev, true).catch(() => toast.error("读取对比版本失败"));
+                        }}
+                      >
+                        和当前对比
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const next = new URLSearchParams(searchParams);
+                          next.delete("view");
+                          setSearchParams(next, { replace: true });
+                        }}
+                      >
+                        回到当前版本
+                      </Button>
+                    </span>
+                  </div>
+                ) : null}
                 {EDITABLE_CODES.has(code) ? (
-                  <div data-dz-readonly={readOnly && !previewDraft ? "" : undefined} className="contents">
+                  <div data-dz-readonly={(readOnly && !previewDraft) || viewRev ? "" : undefined} className="contents">
                   <RegionErrorBoundary
                     title={previewDraft ? "这条修改建议预览不了" : "这张表显示出错"}
                     description={previewDraft ? "建议的内容不完整，表里没有任何改动。收起预览后可以在修改卡上不采纳。" : "可以刷新页面重试；未保存的修改在“修改”里。"}
@@ -1057,9 +1132,9 @@ function Workspace({ code }: { code: string }) {
                   >
                   <ArtifactEditor
                     code={code}
-                    value={previewDraft ? previewDraft.payload : draft}
-                    onChange={previewDraft ? () => toast.info("正在预览修改建议：先在修改卡上确认或不采纳") : setDraft}
-                    readOnly={readOnly || !!previewDraft}
+                    value={viewRev ? (viewed.data?.payload ?? draft) : previewDraft ? previewDraft.payload : draft}
+                    onChange={viewRev ? () => toast.info("正在查看历史版本：点“回到当前版本”后再改") : previewDraft ? () => toast.info("正在预览修改建议：先在修改卡上确认或不采纳") : setDraft}
+                    readOnly={readOnly || !!previewDraft || !!viewRev}
                     issues={issues}
                     upstream={upstream}
                     projectYear={project.year}
@@ -1078,7 +1153,25 @@ function Workspace({ code }: { code: string }) {
                   </Alert>
                 )}
 
-                {EDITABLE_CODES.has(code) ? <ValidationBar issues={issues} hasRules optional={def.priority === "P1"} /> : null}
+                {EDITABLE_CODES.has(code) ? (
+                  <ValidationBar
+                    issues={issues}
+                    hasRules
+                    optional={def.priority === "P1"}
+                    onFix={
+                      readOnly || previewDraft || !draft
+                        ? undefined
+                        : (fix) => {
+                            try {
+                              commit(applyChanges(draft, fix.changes), { via: "edit", label: `${fix.label}：${fix.changes.map((c) => c.label).filter(Boolean).join("、")}` });
+                              toast.success(`${fix.label}：已写入草稿，记得保存`);
+                            } catch (error) {
+                              toast.error(errorMessage(error));
+                            }
+                          }
+                    }
+                  />
+                ) : null}
                 {detail.data && (status === "pending_confirm" || status === "locked" || detail.data.dissents.length > 0) ? (
                   <DissentList detail={detail.data} project={project} code={code} />
                 ) : null}
@@ -1111,6 +1204,23 @@ function Workspace({ code }: { code: string }) {
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
           <MaterialViewer id={viewingMaterial} onClose={() => setViewingMaterial(null)} />
+          <ArtifactHistorySheet project={project} code={historyOpen ? code : null} onClose={() => setHistoryOpen(false)} />
+          <ImpactDialog
+            project={project}
+            title={def.plain}
+            rows={impactList(code, overview.artifacts)}
+            open={impactOpen}
+            onClose={() => setImpactOpen(false)}
+            canReopen={overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead"}
+          />
+          <UpstreamChangesDialog
+            project={project}
+            code={code}
+            open={upstreamOpen}
+            onClose={() => setUpstreamOpen(false)}
+            locked={status === "locked"}
+            canAcknowledge={status === "locked" ? overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead" : canPerform("save", actor)}
+          />
         </div>
 
         <aside

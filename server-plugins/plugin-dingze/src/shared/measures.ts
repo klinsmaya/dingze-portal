@@ -151,6 +151,8 @@ export interface StrategyLine {
   id: string;
   /** 战略：做不做、做什么。 */
   statement: string;
+  /** 来自战略地图（S1-02）的目标：带入时记下，改名、删除可追溯。 */
+  objectiveId?: string | null;
   tactics: StrategyTactic[];
 }
 
@@ -200,6 +202,15 @@ export function seedStrategyLogic(content: StrategyContent): StrategyLogic {
   };
 }
 
+/** 战略地图（S1-02）里还没有进逻辑表的目标，一个目标一条战略（客户反馈：各表要可承接）。 */
+export function strategiesFromMap(map: StrategyMap | null | undefined, existing: StrategyLine[] = []): StrategyLine[] {
+  const linked = new Set(existing.map((s) => s.objectiveId).filter(Boolean));
+  const texts = new Set(existing.map((s) => s.statement.trim()));
+  return (map?.objectives ?? [])
+    .filter((o) => filled(o.title) && !linked.has(o.id) && !texts.has(o.title.trim()))
+    .map((o) => ({ id: newRowId('s'), statement: o.title.trim(), objectiveId: o.id, tactics: [{ id: newRowId('t'), text: '', path: '' }] }));
+}
+
 // ── S1-04 IPOOC 指标设计表（表 2-8） ──
 
 export type IpoocStage = 'I' | 'P' | 'O1' | 'O2' | 'C';
@@ -235,6 +246,8 @@ export interface IpoocSheet {
   id: string;
   /** 关键策略（来自 S1-03）。 */
   strategy: string;
+  /** 来自逻辑表（S1-03）的策略 id。 */
+  tacticId?: string | null;
   period: string;
   ownerDept: string;
   rows: Record<IpoocStage, IpoocRow>;
@@ -247,10 +260,11 @@ export interface IpoocDesign {
 
 const emptyIpoocRow = (): IpoocRow => ({ elements: '', indicator: '', formula: '', target: '', source: '', frequency: '' });
 
-export function emptyIpoocSheet(strategy = ''): IpoocSheet {
+export function emptyIpoocSheet(strategy = '', tacticId: string | null = null): IpoocSheet {
   return {
     id: newRowId('i'),
     strategy,
+    tacticId,
     period: '',
     ownerDept: '',
     rows: { I: emptyIpoocRow(), P: emptyIpoocRow(), O1: emptyIpoocRow(), O2: emptyIpoocRow(), C: emptyIpoocRow() },
@@ -291,6 +305,11 @@ export function tacticsFromLogic(logic: StrategyLogic | null | undefined): strin
   return (logic?.strategies ?? []).flatMap((s) => (s.tactics ?? []).map((t) => t.text.trim()).filter(filled));
 }
 
+/** S1-03 tactics with their ids, for picking an IPOOC theme. */
+export function tacticOptions(logic: StrategyLogic | null | undefined): { id: string; text: string }[] {
+  return (logic?.strategies ?? []).flatMap((s) => (s.tactics ?? []).filter((t) => filled(t.text)).map((t) => ({ id: t.id, text: t.text.trim() })));
+}
+
 // ── S1-05 KPI 筛选评价表（表 2-10/2-11） ──
 
 export type ScreenDimension = 'relevance' | 'measurability' | 'controllability' | 'motivation';
@@ -310,6 +329,8 @@ export interface KpiCandidate {
   name: string;
   /** 来源：IPOOC 主题与环节，或手工补充。 */
   origin: string;
+  /** 来自 IPOOC（S1-04）的指标：`工作表 id.环节`。 */
+  sourceRef?: string | null;
   scores: Record<ScreenDimension, number | null>;
   /** 保留为战略 KPI（true）、剔除（false）、未决（null）。 */
   keep: boolean | null;
@@ -370,13 +391,15 @@ export function validateKpiScreening(screening: KpiScreening): Issue[] {
 /** Candidates from the IPOOC indicators that are not already listed. */
 export function candidatesFromIpooc(design: IpoocDesign | null | undefined, existing: KpiCandidate[] = []): KpiCandidate[] {
   const names = new Set(existing.map((c) => c.name.trim()));
+  const refs = new Set(existing.map((c) => c.sourceRef).filter(Boolean));
   const out: KpiCandidate[] = [];
   for (const sheet of design?.sheets ?? []) {
     for (const stage of IPOOC_STAGES) {
       const indicator = sheet.rows?.[stage.key]?.indicator?.trim() ?? '';
-      if (!filled(indicator) || names.has(indicator)) continue;
+      const ref = `${sheet.id}.${stage.key}`;
+      if (!filled(indicator) || names.has(indicator) || refs.has(ref)) continue;
       names.add(indicator);
-      out.push(emptyCandidate(indicator, `${sheet.strategy} · ${stage.label}`));
+      out.push({ ...emptyCandidate(indicator, `${sheet.strategy} · ${stage.label}`), sourceRef: ref });
     }
   }
   return out;
@@ -389,6 +412,8 @@ export interface StrategyKpi {
   /** 战略主题 / 战略要点。 */
   theme: string;
   name: string;
+  /** 来自筛选表（S1-05）的候选指标 id。 */
+  candidateId?: string | null;
   /** 口径 / 计算公式。 */
   definition: string;
   unit: string;
@@ -440,9 +465,10 @@ export function validateStrategyKpis(table: StrategyKpiTable): Issue[] {
 /** Kept screening candidates that are not in the KPI table yet. */
 export function kpisFromScreening(screening: KpiScreening | null | undefined, existing: StrategyKpi[] = []): StrategyKpi[] {
   const names = new Set(existing.map((k) => k.name.trim()));
+  const ids = new Set(existing.map((k) => k.candidateId).filter(Boolean));
   return (screening?.candidates ?? [])
-    .filter((c) => c.keep === true && filled(c.name) && !names.has(c.name.trim()))
-    .map((c) => emptyKpi(c.name.trim(), c.origin.split(' · ')[0] ?? ''));
+    .filter((c) => c.keep === true && filled(c.name) && !names.has(c.name.trim()) && !ids.has(c.id))
+    .map((c) => ({ ...emptyKpi(c.name.trim(), c.origin.split(' · ')[0] ?? ''), candidateId: c.id }));
 }
 
 // ── S1-07 战略 KPI 3—5 年年度分解表（表 2-12） ──

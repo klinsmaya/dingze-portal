@@ -12,7 +12,9 @@ import {
   listMyProjects,
   recordDissent,
   saveArtifact,
+  acknowledgeUpstream,
   dismissOrgNotice,
+  getUpstreamChanges,
   transitionArtifact,
 } from "./api";
 
@@ -107,6 +109,22 @@ export function useDismissOrgNotice(project: ProjectSummary | undefined, code: s
   const invalidate = useInvalidateProject(project);
   return useMutation({
     mutationFn: (note?: string) => dismissOrgNotice(project!.spaceName, { projectId: project!.id, code, note }),
+    onSuccess: () => invalidate(code),
+  });
+}
+
+export function useUpstreamChanges(project: ProjectSummary | undefined, code: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["dingze", "upstream-changes", project?.id ?? 0, code],
+    queryFn: () => getUpstreamChanges(project!.id, project!.spaceName, code),
+    enabled: !!project && enabled,
+  });
+}
+
+export function useAcknowledgeUpstream(project: ProjectSummary | undefined, code: string) {
+  const invalidate = useInvalidateProject(project);
+  return useMutation({
+    mutationFn: (note?: string) => acknowledgeUpstream(project!.spaceName, { projectId: project!.id, code, note }),
     onSuccess: () => invalidate(code),
   });
 }

@@ -15,6 +15,7 @@ import {
   emptyTheme,
   parseAmount,
   targetsOf,
+  themesFromStrategyMap,
 } from "@dingze/shared";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { FIGURE_3_7, type Figure37Item } from "@/lib/dingze/figure-3-7";
 
 import { FIND_PATH_STEPS, Figure37Card } from "./find-path";
-import { AddButton, EditorToolbar, RowActions, TextCell } from "./kit";
+import { AddButton, EditorToolbar, ImportButton, RowActions, TextCell } from "./kit";
 import { sumText } from "./path-system-editor";
 import { PERSPECTIVE_STYLE } from "./perspective-style";
 import { MapDiagram } from "./map-diagram";
@@ -50,7 +51,7 @@ type Props = {
   onChange: (next: DecodeMap) => void;
   readOnly: boolean;
   issues: Issue[];
-  upstream: { "S2-03"?: GoalPathSystem };
+  upstream: { "S2-03"?: GoalPathSystem; "S1-02"?: StrategyMap };
 };
 
 const RANK: Record<Perspective, number> = { learning: 0, process: 1, customer: 2, financial: 3 };
@@ -158,7 +159,11 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
 
   return (
     <section aria-label="年度战略解码地图" className="flex flex-col gap-4">
-      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。完成后在 S2-03 子步骤 5 一键导入路径系统表。思维导图和表格是同一份数据。" />
+      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。完成后在 S2-03 子步骤 5 一键导入路径系统表。思维导图和表格是同一份数据。">
+        {upstream["S1-02"] ? (
+          <ImportButton label="从战略地图带入目标" count={themesFromStrategyMap(upstream["S1-02"], value).length} readOnly={readOnly} onClick={() => setThemes([...themes, ...themesFromStrategyMap(upstream["S1-02"], value)])} />
+        ) : null}
+      </EditorToolbar>
 
       {view === "diagram" ? (
         <MapDiagram map={asStrategyMap(value)} label="年度战略解码地图" />

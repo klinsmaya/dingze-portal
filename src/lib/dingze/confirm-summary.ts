@@ -12,6 +12,15 @@ const show = (v: unknown): string => {
   return typeof label === "string" && label ? label : "一条";
 };
 
+/** Readable change lines between two payloads (上游改了什么、定版前对比共用)。 */
+export function describeChanges(before: unknown, after: unknown, nameOf: (path: string) => string = (p) => p, limit = 12) {
+  const entries = diffPayloads(before, after);
+  return {
+    total: entries.length,
+    changes: entries.slice(0, limit).map((e) => ({ where: nameOf(e.path), kind: e.kind, before: show(e.before), after: show(e.after) })),
+  };
+}
+
 export type ConfirmSummary = {
   firstLock: boolean;
   lockedRev: number | null;

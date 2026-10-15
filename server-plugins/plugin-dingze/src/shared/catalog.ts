@@ -90,7 +90,7 @@ export const ARTIFACTS: ArtifactDef[] = [
   {
     code: 'S1-03', specId: 'S1-03', name: '企业战略、策略逻辑表', plain: '战略与策略对照表', stage: 'strategy',
     task: '衡量共识：逻辑战略指标化', step: '第一步 导出企业的战略和策略', bookRef: '表 2-7',
-    priority: 'P0', editor: 'table', unlockAfter: ['S1-02'], dependsOn: ['S1-01'],
+    priority: 'P0', editor: 'table', unlockAfter: ['S1-02'], dependsOn: ['S1-01', 'S1-02'],
   },
   {
     code: 'S1-04', specId: 'S1-04', name: 'IPOOC 指标设计表', plain: '衡量指标设计', stage: 'strategy',
@@ -129,7 +129,7 @@ export const ARTIFACTS: ArtifactDef[] = [
   {
     code: 'S2-01', specId: 'S2-01', name: '年度战略解码地图', plain: '年度目标解码图', stage: 'goal',
     task: '路径支撑，确保结果必赢', step: '第二步 找路径（解码地图子步骤 1–4）', bookRef: '图 3-3、图 3-7～3-10',
-    priority: 'P0', editor: 'decode-map', unlockAfter: [], dependsOn: [], reads: ['S2-03'],
+    priority: 'P0', editor: 'decode-map', unlockAfter: [], dependsOn: [], reads: ['S2-03', 'S1-02'],
   },
   {
     code: 'S2-08', specId: 'S2-08', name: '关键项目列表', plain: '关键项目清单', stage: 'goal',

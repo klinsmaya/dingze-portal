@@ -1,6 +1,7 @@
 // Structural validation of artifact payloads. `error` issues block “本步完成” and
 // confirmation (Q3); `warning` issues are shown while editing but never block.
 
+import { chartersVsSources, decodeVsStrategyMap, goalsVsBreakdown, ipoocVsLogic, kpisVsScreening, logicVsMap, pathsVsDecodeMap, screeningVsIpooc, planVsCharters, raciVsSources, resourcesVsCharters, scorecardsVsUndertaking, undertakingVsRaci } from './coherence';
 import {
   type IpoocDesign,
   type KpiBreakdown,
@@ -60,6 +61,13 @@ export interface Issue {
   anchor?: string;
   /** The step zone of a table split in steps (S2-03: targets / paths), so locating can switch to it. */
   zone?: string;
+  /** 一键修正：按上游更新等，`changes` 是对草稿的 set 操作（路径同修改卡）。 */
+  fix?: IssueFix;
+}
+
+export interface IssueFix {
+  label: string;
+  changes: { path: string; value: unknown; label?: string }[];
 }
 
 const PENDING_MARK = '待补';
@@ -388,13 +396,13 @@ function validateArtifactUnsafe(code: string, payload: unknown, upstream: Record
     case 'S1-02':
       return validateStrategyMap(payload as StrategyMap);
     case 'S1-03':
-      return validateStrategyLogic(payload as StrategyLogic);
+      return [...validateStrategyLogic(payload as StrategyLogic), ...logicVsMap(payload as StrategyLogic, upstream['S1-02'] as StrategyMap | undefined)];
     case 'S1-04':
-      return validateIpooc(payload as IpoocDesign);
+      return [...validateIpooc(payload as IpoocDesign), ...ipoocVsLogic(payload as IpoocDesign, upstream['S1-03'] as StrategyLogic | undefined)];
     case 'S1-05':
-      return validateKpiScreening(payload as KpiScreening);
+      return [...validateKpiScreening(payload as KpiScreening), ...screeningVsIpooc(payload as KpiScreening, upstream['S1-04'] as IpoocDesign | undefined)];
     case 'S1-06':
-      return validateStrategyKpis(payload as StrategyKpiTable);
+      return [...validateStrategyKpis(payload as StrategyKpiTable), ...kpisVsScreening(payload as StrategyKpiTable, upstream['S1-05'] as KpiScreening | undefined)];
     case 'S1-07':
       return validateKpiBreakdown(payload as KpiBreakdown, upstream['S1-06'] as StrategyKpiTable | undefined);
     case 'M-MISSION':
@@ -404,13 +412,18 @@ function validateArtifactUnsafe(code: string, payload: unknown, upstream: Record
     case 'M-BUDGET':
       return validateBudgetWorksheet(payload as BudgetWorksheet);
     case 'S2-01':
-      return validateDecodeMap(payload as DecodeMap, targetsOf(upstream['S2-03']));
+      return [...validateDecodeMap(payload as DecodeMap, targetsOf(upstream['S2-03'])), ...decodeVsStrategyMap(payload as DecodeMap, upstream['S1-02'] as StrategyMap | undefined)];
     case 'S2-03': {
       // 第一步 定目标 first: without goals there is nothing to find paths for.
       const targets = targetsOf(payload) ?? { year: 0, strategyReview: '', lastPeriodIssues: '', goals: [] };
       const targetIssues = validateGoalTargets(targets).map((i) => ({ ...i, message: `定目标：${i.message}`, zone: 'targets' }));
       const goals = (targets.goals ?? []).map((g) => ({ id: g.id, label: g.task || g.metric }));
-      return [...targetIssues, ...validateGoalPathSystem(payload as GoalPathSystem, goals).map((i) => ({ ...i, message: `找路径：${i.message}`, zone: 'paths' }))];
+      return [
+        ...targetIssues,
+        ...goalsVsBreakdown(payload as GoalPathSystem, upstream['S1-07'] as KpiBreakdown | undefined).map((i) => ({ ...i, message: `定目标：${i.message}` })),
+        ...validateGoalPathSystem(payload as GoalPathSystem, goals).map((i) => ({ ...i, message: `找路径：${i.message}`, zone: 'paths' })),
+        ...pathsVsDecodeMap(payload as GoalPathSystem, upstream['S2-01'] as DecodeMap | undefined).map((i) => ({ ...i, message: `找路径：${i.message}` })),
+      ];
     }
     case 'S2-06': {
       const rows = (upstream['S2-05'] as DeptUndertakingTable | undefined)?.rows ?? [];
@@ -420,17 +433,17 @@ function validateArtifactUnsafe(code: string, payload: unknown, upstream: Record
     case 'S2-08':
       return validateKeyProjects(payload as KeyProjectList);
     case 'S2-04':
-      return validateRaciTable(payload as RaciTable);
+      return [...validateRaciTable(payload as RaciTable), ...raciVsSources(payload as RaciTable, upstream['S2-08'] as KeyProjectList | undefined, upstream['S2-03'] as GoalPathSystem | undefined)];
     case 'S2-05':
-      return validateDeptUndertaking(payload as DeptUndertakingTable, upstream['S2-04'] as RaciTable | undefined);
+      return [...validateDeptUndertaking(payload as DeptUndertakingTable, upstream['S2-04'] as RaciTable | undefined), ...undertakingVsRaci(payload as DeptUndertakingTable, upstream['S2-04'] as RaciTable | undefined)];
     case 'S2-07':
-      return validateScorecards(payload as ScorecardSet);
+      return [...validateScorecards(payload as ScorecardSet), ...scorecardsVsUndertaking(payload as ScorecardSet, upstream['S2-05'] as DeptUndertakingTable | undefined)];
     case 'S3-02':
-      return validateCharterSet(payload as ProjectCharterSet);
+      return [...validateCharterSet(payload as ProjectCharterSet), ...chartersVsSources(payload as ProjectCharterSet, upstream['S2-08'] as KeyProjectList | undefined, upstream['S2-04'] as RaciTable | undefined)];
     case 'S3-05':
-      return validateProgressPlan(payload as ProgressPlan, upstream['S3-02'] as ProjectCharterSet | undefined);
+      return [...validateProgressPlan(payload as ProgressPlan, upstream['S3-02'] as ProjectCharterSet | undefined), ...planVsCharters(payload as ProgressPlan, upstream['S3-02'] as ProjectCharterSet | undefined)];
     case 'S3-06':
-      return validateResourceMatch(payload as ResourceMatch, upstream['S3-02'] as ProjectCharterSet | undefined);
+      return [...validateResourceMatch(payload as ResourceMatch, upstream['S3-02'] as ProjectCharterSet | undefined), ...resourcesVsCharters(payload as ResourceMatch, upstream['S3-02'] as ProjectCharterSet | undefined)];
     case 'S3-07':
       return validateCompanyPlanBook(payload as CompanyPlanBook);
     case 'S3-08':

@@ -187,6 +187,8 @@ export interface DecodeTheme {
   supports: string[];
   /** For financial themes: the annual goal they close the gap of. */
   goalId: string | null;
+  /** 来自战略地图（S1-02）的目标。 */
+  objectiveId?: string | null;
 }
 
 export interface DecodeMap {
@@ -256,7 +258,8 @@ export function themeGoal(map: DecodeMap, themeId: string, seen = new Set<string
  * paths under S2-05 rows.
  */
 export interface GoalPathSystem extends PathSystem {
-  nodes: (PathNode & { goalId?: string | null })[];
+  /** `themeId`：从解码地图（S2-01）导入的路径记下来源主题，改名、删除可追溯。 */
+  nodes: (PathNode & { goalId?: string | null; themeId?: string | null })[];
   /** S2-03 only: 第一步 定目标 (表 3-4/3-5) — the goals the company paths start from. */
   targets?: GoalTargets;
 }
@@ -277,7 +280,7 @@ export function targetsOf(system: unknown): GoalTargets | undefined {
   return Array.isArray(s.goals) ? (s as unknown as GoalTargets) : undefined;
 }
 
-export function pathNode(patch: Partial<PathNode & { goalId?: string | null }> = {}): PathNode & { goalId?: string | null } {
+export function pathNode(patch: Partial<PathNode & { goalId?: string | null; themeId?: string | null }> = {}): PathNode & { goalId?: string | null; themeId?: string | null } {
   return { id: newRowId('n'), parentId: null, goalId: null, level: 1, path: '', metric: '', value: '', amount: null, unit: '', ...patch };
 }
 
@@ -342,10 +345,11 @@ export function orderedPaths<T extends PathNode & { goalId?: string | null }>(no
 export function pathsFromDecodeMap(map: DecodeMap | null | undefined, goals: GoalTargets | null | undefined, existing: GoalPathSystem): GoalPathSystem {
   const fallbackGoal = goals?.goals?.[0]?.id ?? null;
   const imported = new Set(existing.nodes.map((n) => n.path.trim()));
+  const importedThemes = new Set(existing.nodes.map((n) => n.themeId).filter(Boolean));
   const order: Perspective[] = ['financial', 'customer', 'process', 'learning'];
   const themes = [...(map?.themes ?? [])].sort((a, b) => order.indexOf(a.perspective) - order.indexOf(b.perspective));
   const nodes = themes
-    .filter((t) => filled(t.title) && !imported.has(t.title.trim()))
+    .filter((t) => filled(t.title) && !imported.has(t.title.trim()) && !importedThemes.has(t.id))
     .map((t) =>
       pathNode({
         level: 1,
@@ -355,9 +359,19 @@ export function pathsFromDecodeMap(map: DecodeMap | null | undefined, goals: Goa
         metric: t.metric,
         value: t.value,
         amount: parseAmount(t.value),
+        themeId: t.id,
       }),
     );
   return { ...existing, nodes: [...existing.nodes, ...nodes] };
+}
+
+/** 战略地图（S1-02）里还没进解码地图的目标，按层面带成主题（客户反馈：各表要可承接）。 */
+export function themesFromStrategyMap(strategyMap: { objectives?: { id: string; perspective: Perspective; title: string }[] } | null | undefined, map: DecodeMap): DecodeTheme[] {
+  const linked = new Set((map.themes ?? []).map((t) => t.objectiveId).filter(Boolean));
+  const titles = new Set((map.themes ?? []).map((t) => t.title.trim()));
+  return (strategyMap?.objectives ?? [])
+    .filter((o) => filled(o.title) && !linked.has(o.id) && !titles.has(o.title.trim()))
+    .map((o) => emptyTheme(o.perspective, { title: o.title.trim(), objectiveId: o.id, category: '战略地图' }));
 }
 
 // ── S2-08 关键项目列表（表 3-13） ──

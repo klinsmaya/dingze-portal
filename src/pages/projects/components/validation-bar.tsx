@@ -2,13 +2,28 @@ import { CircleAlert, CircleCheck, LocateFixed, TriangleAlert } from "lucide-rea
 import { useState } from "react";
 import { toast } from "sonner";
 
-import type { Issue } from "@dingze/shared";
+import type { Issue, IssueFix } from "@dingze/shared";
 
 import { locateIssue } from "@/lib/dingze/locate";
 import { cn } from "@/lib/utils";
 
-function IssueItem({ issue }: { issue: Issue }) {
-  if (!issue.anchor) return <li>{issue.message}</li>;
+function FixButton({ issue, onFix }: { issue: Issue; onFix?: (fix: IssueFix) => void }) {
+  if (!issue.fix || !onFix) return null;
+  return (
+    <button type="button" onClick={() => onFix(issue.fix!)} className="ml-1.5 rounded border border-current/30 px-1.5 py-px text-[11px] font-semibold whitespace-nowrap hover:bg-background/60">
+      {issue.fix.label}
+    </button>
+  );
+}
+
+function IssueItem({ issue, onFix }: { issue: Issue; onFix?: (fix: IssueFix) => void }) {
+  if (!issue.anchor)
+    return (
+      <li>
+        {issue.message}
+        <FixButton issue={issue} onFix={onFix} />
+      </li>
+    );
   return (
     <li>
       <button
@@ -24,15 +39,29 @@ function IssueItem({ issue }: { issue: Issue }) {
         <LocateFixed className="mt-0.5 size-3.5 shrink-0 opacity-70" />
         {issue.message}
       </button>
+      <FixButton issue={issue} onFix={onFix} />
     </li>
   );
 }
 
 /** Errors block “本步完成” and confirmation; warnings never block (Q3). Each issue with an anchor jumps to its row. */
-export function ValidationBar({ issues, hasRules, optional = false }: { issues: Issue[]; hasRules: boolean; /** P1 tables can be skipped: their gaps are not shown as 必须改 (验收 E D04). */ optional?: boolean }) {
+export function ValidationBar({
+  issues,
+  hasRules,
+  optional = false,
+  onFix,
+}: {
+  issues: Issue[];
+  hasRules: boolean;
+  /** P1 tables can be skipped: their gaps are not shown as 必须改 (验收 E D04). */
+  optional?: boolean;
+  /** Applies an issue's one-click fix (按上游更新…) to the draft; absent when the table is read-only. */
+  onFix?: (fix: IssueFix) => void;
+}) {
   const [showAllWarnings, setShowAllWarnings] = useState(false);
   const errors = issues.filter((i) => i.level === "error");
-  const warnings = issues.filter((i) => i.level === "warning");
+  // 能一键修正的上下游不一致排在前面，免得被折叠。
+  const warnings = issues.filter((i) => i.level === "warning").sort((a, b) => Number(!!b.fix) - Number(!!a.fix));
   if (!hasRules) return null;
   const shownWarnings = showAllWarnings ? warnings : warnings.slice(0, 3);
 
@@ -60,7 +89,7 @@ export function ValidationBar({ issues, hasRules, optional = false }: { issues: 
       {errors.length ? (
         <ul className="flex flex-col gap-1">
           {errors.slice(0, 12).map((issue, i) => (
-            <IssueItem key={`${issue.anchor}-${i}`} issue={issue} />
+            <IssueItem key={`${issue.anchor}-${i}`} issue={issue} onFix={onFix} />
           ))}
           {errors.length > 12 ? <li>……另有 {errors.length - 12} 处</li> : null}
         </ul>
@@ -78,7 +107,7 @@ export function ValidationBar({ issues, hasRules, optional = false }: { issues: 
           </div>
           <ul className="flex flex-col gap-0.5 pl-5">
             {shownWarnings.map((issue, i) => (
-              <IssueItem key={`${issue.anchor}-w${i}`} issue={issue} />
+              <IssueItem key={`${issue.anchor}-w${i}`} issue={issue} onFix={onFix} />
             ))}
           </ul>
         </div>

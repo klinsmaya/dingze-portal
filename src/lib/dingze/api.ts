@@ -169,6 +169,30 @@ export async function transitionArtifact(
   );
 }
 
+export type UpstreamChange = {
+  code: string;
+  specId: string;
+  name: string;
+  /** The upstream was reopened and is being edited: its new content is not settled yet. */
+  reopened: boolean;
+  from: { rev: number; payload: unknown; at: string } | null;
+  to: { rev: number; payload: unknown; at: string } | null;
+};
+
+/** 上游改了什么：核对基线读的上游版本与现在应读的版本。 */
+export async function getUpstreamChanges(projectId: number, spaceName: string, code: string) {
+  return nocobaseClient.action<{ stale: boolean; staleReason: string | null; changes: UpstreamChange[] }>("dingze", "upstreamChanges", {
+    method: "GET",
+    query: { projectId, code },
+    headers: spaceHeaders(spaceName),
+  });
+}
+
+/** 已核对：看过上游改了什么，确认本表已按新内容调整或不受影响。 */
+export async function acknowledgeUpstream(spaceName: string, values: { projectId: number; code: string; note?: string }) {
+  return nocobaseClient.action("dingze", "acknowledgeUpstream", { body: values, headers: spaceHeaders(spaceName) });
+}
+
 /** 组织已变更 → 主咨询师判断已定版的表不需要重开。 */
 export async function dismissOrgNotice(spaceName: string, values: { projectId: number; code: string; note?: string }) {
   return nocobaseClient.action("dingze", "dismissOrgNotice", { body: values, headers: spaceHeaders(spaceName) });

@@ -151,6 +151,12 @@ function chartersBlock(charters: ProjectCharter[]): Block {
   };
 }
 
+/** 关键节点只取一处：推进表（S3-05）有这个项目的节点就用它，否则用任务书里写的关键节点。 */
+export function keyNodesOf(charter: ProjectCharter, plan: ProgressPlan | undefined): string {
+  const nodes = (plan?.rows ?? []).filter((r) => r.charterId === charter.id).flatMap((r) => r.nodes ?? []);
+  return nodes.length ? nodes.map((n) => [n.time, n.name].filter(Boolean).join(" ")).join("\n") : charter.milestones;
+}
+
 function nodesBlock(plan: ProgressPlan | undefined, charters: ProjectCharter[]): Block | null {
   const ids = new Set(charters.map((c) => c.id));
   const rows = (plan?.rows ?? []).filter((r) => r.charterId && ids.has(r.charterId));
@@ -293,7 +299,7 @@ export function buildCompanyPlanBook(params: {
       : { kind: "note", text: "S1-07 没有本年度目标值" },
     { kind: "heading", text: "1.3 本年度关键项目清单及关键节点" },
     charters.length
-      ? { kind: "table", headers: ["项目编号", "项目名称", "项目目标", "起止时间", "关键节点", "负责人"], rows: charters.map((c) => [c.code, c.name, c.objective, [c.start, c.end].filter(Boolean).join(" ~ "), c.milestones, c.owner]) }
+      ? { kind: "table", headers: ["项目编号", "项目名称", "项目目标", "起止时间", "关键节点", "负责人"], rows: charters.map((c) => [c.code, c.name, c.objective, [c.start, c.end].filter(Boolean).join(" ~ "), keyNodesOf(c, u["S3-05"]), c.owner]) }
       : { kind: "note", text: "S3-02 还没有项目任务书" },
   ];
   chapters[1].blocks = [text(t.lastYear)];

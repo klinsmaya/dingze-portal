@@ -201,23 +201,26 @@ export function WhereRow({
         ))}
       </nav>
       <div className="flex shrink-0 items-center gap-2" role="status">
-        {states.map((s) =>
-          s.detail ? (
-            <Popover key={s.text}>
-              <PopoverTrigger className={cn("flex items-center gap-1 font-semibold underline-offset-2 hover:underline", TONE[s.tone])}>
-                <span className="size-1.5 rounded-full bg-current" /> {s.text} · {s.detailLabel ?? "查看原因"}
-              </PopoverTrigger>
-              <PopoverContent align="end" className="max-w-sm text-sm whitespace-pre-line">
-                {s.detail}
-                {s.actions ? <div className="mt-3 flex flex-wrap gap-2 whitespace-normal">{s.actions}</div> : null}
-              </PopoverContent>
-            </Popover>
-          ) : (
-            <span key={s.text} className={cn("flex items-center gap-1 font-semibold", TONE[s.tone])}>
-              <span className="size-1.5 rounded-full bg-current" /> {s.text}
-            </span>
-          ),
-        )}
+        {states.map((s) => (
+          <span key={s.text} className="flex items-center gap-1.5">
+            {s.detail ? (
+              <Popover>
+                <PopoverTrigger className={cn("flex items-center gap-1 font-semibold underline-offset-2 hover:underline", TONE[s.tone])}>
+                  <span className="size-1.5 rounded-full bg-current" /> {s.text} · {s.detailLabel ?? "查看原因"}
+                </PopoverTrigger>
+                <PopoverContent align="end" className="max-w-sm text-sm whitespace-pre-line">
+                  {s.detail}
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span className={cn("flex items-center gap-1 font-semibold", TONE[s.tone])}>
+                <span className="size-1.5 rounded-full bg-current" /> {s.text}
+              </span>
+            )}
+            {/* 处理按钮（看上游改了什么、影响清单、不需要重开）直接放在提示旁边，不藏进弹层。 */}
+            {s.actions ? <span className="flex items-center gap-1 [&_button]:h-6 [&_button]:px-2 [&_button]:text-xs">{s.actions}</span> : null}
+          </span>
+        ))}
         <span className="text-muted-foreground">
           {saving ? "保存中…" : unsaved ? null : savedAt ? `已保存 ${formatTime(savedAt).slice(-5)}` : "还没保存过"}
           {rev ? ` · v${rev}` : ""}
@@ -243,6 +246,7 @@ export function TitleRow({
   openComments,
   onComments,
   exportMenu,
+  history,
   actions,
 }: {
   title: string;
@@ -254,6 +258,8 @@ export function TitleRow({
   openComments: number;
   onComments: () => void;
   exportMenu: ReactNode;
+  /** 历史：版本、轮次与查看任意一版。 */
+  history?: ReactNode;
   actions: ReactNode;
 }) {
   return (
@@ -302,6 +308,7 @@ export function TitleRow({
             <MessageSquarePlus /> 批注
             {openComments ? <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: "var(--dz-comment)" }}>{openComments}</span> : null}
           </Button>
+          {history}
           {exportMenu}
         </div>
         {actions}

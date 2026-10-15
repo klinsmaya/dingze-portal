@@ -38,7 +38,7 @@ export function wasReturned(a: ArtifactProgress): boolean {
  * edited, so whoever may reopen it decides whether to.
  */
 export function staleAdvice(status: string, service: ServiceMode = 'guided'): string {
-  if (status !== 'locked') return '上游表有改动，请核对后保存一次';
+  if (status !== 'locked') return '上游表有改动：看上游改了什么，核对后点“已核对”';
   return service === 'self'
     ? '已定版，但上游表有改动：由企业项目负责人判断是否解锁重开'
     : '已定版，但上游表有改动：由企业项目负责人或主咨询师判断是否解锁重开';
@@ -118,12 +118,12 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
     if (a) return { kind: 'returned', code: a.code, label: `改退回的表：${title(a.code)}`, hint: a.lastEvent?.reason ? `退回原因：${a.lastEvent.reason}` : '顾问退回了这张表，改好后再提交' };
   }
   // A draft is checked and saved by whoever edits it; a locked table only by whoever may reopen it.
-  const mayReopen = service === 'self' ? role === 'ent_lead' : role === 'lead_consultant';
+  const mayReopen = service === 'self' ? role === 'ent_lead' : role === 'lead_consultant' || role === 'ent_lead';
   const stale = first((x) => x.stale && x.status !== 'not_started' && (x.status === 'locked' ? mayReopen : isEnterprise || role === 'lead_consultant'));
   if (stale) {
     return stale.status === 'locked'
-      ? { kind: 'stale', code: stale.code, label: `判断是否重开：${title(stale.code)}`, hint: '已定版的表引用的上游改过了，看变化后决定解锁重开还是保持原版' }
-      : { kind: 'stale', code: stale.code, label: `核对：${title(stale.code)}`, hint: '它引用的上游表改过了，核对后保存一次即可' };
+      ? { kind: 'stale', code: stale.code, label: `判断是否重开：${title(stale.code)}`, hint: '已定版的表引用的上游改过了，看上游改了什么后决定解锁重开，还是点“已核对”保持原版' }
+      : { kind: 'stale', code: stale.code, label: `核对：${title(stale.code)}`, hint: '它引用的上游表改过了，核对后点“已核对”即可' };
   }
   const done = first((x) => x.status === 'step_done');
   if (service === 'self') {

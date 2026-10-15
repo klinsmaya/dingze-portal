@@ -15,3 +15,4 @@ export * from './next-action';
 export * from './org';
 export * from './self-review';
 export * from './startup';
+export * from './coherence';
