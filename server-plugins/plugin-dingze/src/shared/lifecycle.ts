@@ -114,7 +114,8 @@ const RULES: Record<LifecycleAction, TransitionRule> = {
   selfReview: { from: ['step_done'], to: 'pending_confirm', roles: ['ent_lead'], validates: true, service: 'self' },
   returnToEdit: { from: ['in_review', 'pending_confirm'], to: 'in_progress', roles: ['lead_consultant', 'ent_lead'], requiresReason: true },
   confirm: { from: ['pending_confirm'], to: 'locked', roles: ['ent_lead'], validates: true },
-  reopen: { from: ['locked'], to: 'in_progress', roles: ['lead_consultant'], selfRoles: ['ent_lead'], consultAdmin: true, requiresReason: true },
+  // 企业项目负责人也可以自己解锁重开（写原因，全员含咨询师收到通知）；重新定版仍要复核和确认。
+  reopen: { from: ['locked'], to: 'in_progress', roles: ['lead_consultant', 'ent_lead'], consultAdmin: true, requiresReason: true },
   // 强制定版 skips review and enterprise confirmation, never the content checks (定版门禁).
   forceLock: {
     from: ['in_progress', 'step_done', 'in_review', 'pending_confirm'],

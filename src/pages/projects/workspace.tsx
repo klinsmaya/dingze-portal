@@ -193,6 +193,8 @@ function Workspace({ code }: { code: string }) {
   const [searchParams] = useSearchParams();
   const highlightComment = Number(searchParams.get("comment")) || null;
   const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
+  // Opens the right panel on a tab; set once the panel preference is known (below).
+  const openAside = useRef<(tab: AsideTab) => void>(setAsideTab);
   const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
   const identity = useGetIdentity<{ id: number }>();
   const comments = useComments(project, code);
@@ -415,7 +417,7 @@ function Workspace({ code }: { code: string }) {
       versions,
       validate,
       nameOf,
-      openPanel: setAsideTab,
+      openPanel: (tab: AsideTab) => openAside.current(tab),
       nextMeta: (meta: CommandMeta) => {
         pendingMeta.current = meta;
       },
@@ -656,6 +658,10 @@ function Workspace({ code }: { code: string }) {
   const [railPref, setRailPref] = usePersistentFlag("dingze:rail-collapsed");
   const railCollapsed = railPref ?? narrowRail;
   const [panelPref, setPanelPref] = usePersistentFlag("dingze:panel-open");
+  openAside.current = (tab: AsideTab) => {
+    setPanelPref(true);
+    setAsideTab(tab);
+  };
   const panelOpen = panelPref ?? !narrowPanel;
   useEffect(() => {
     if (highlightComment && narrowPanel) setPanelPref(true);
@@ -686,7 +692,7 @@ function Workspace({ code }: { code: string }) {
   const returned = progress?.status === "in_progress" && progress.lastEvent && ["returnToEdit", "forceReturn"].includes(progress.lastEvent.action);
   const headerStates: HeaderState[] = [];
   if (returned) headerStates.push({ tone: "warn", text: "已退回", detail: progress?.lastEvent?.reason || "顾问退回了这张表，请按批注修改后重新提交。" });
-  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由主咨询师解锁重开，下游会标“上游已变更”。", detailLabel: "说明" });
+  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由企业项目负责人或主咨询师解锁重开（写原因），项目成员和咨询师都会收到通知，下游会标“上游已变更”。", detailLabel: "说明" });
   else if (collab) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
   if (artifact?.stale)
@@ -700,13 +706,13 @@ function Workspace({ code }: { code: string }) {
     });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
   // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
-  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || (service === "self" && role === "ent_lead");
+  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead";
   if (progress?.orgNotice && status === "locked") {
     headerStates.push({
       tone: "warn",
       text: "组织已变更",
       detailLabel: "看变化",
-      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : service === "self" ? "由企业项目负责人判断是否需要重开。" : "由主咨询师判断是否需要重开。"}`,
+      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : service === "self" ? "由企业项目负责人判断是否需要重开。" : "由企业项目负责人或主咨询师判断是否需要重开。"}`,
       actions: canJudgeOrg ? (
         <Button
           size="sm"
@@ -741,8 +747,8 @@ function Workspace({ code }: { code: string }) {
       <TopbarTitle
         slot={topbar?.main ?? null}
         projectId={project.id}
-        title={`${route.current?.short ?? def.plain} · ${project.name}`}
-        subtitle={`${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} › ${route.stageName}`}
+        title={`${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} · ${project.name}`}
+        subtitle={`${route.stageName} › ${route.current?.short ?? def.plain}`}
         items={topbarItems(route)}
       />
       <PanelToggle slot={topbar?.actions ?? null} open={panelOpen} onToggle={() => setPanelPref(!panelOpen)} count={openThreads.length} />
@@ -1040,6 +1046,7 @@ function Workspace({ code }: { code: string }) {
                 ) : null}
 
                 {EDITABLE_CODES.has(code) ? (
+                  <div data-dz-readonly={readOnly && !previewDraft ? "" : undefined} className="contents">
                   <RegionErrorBoundary
                     title={previewDraft ? "这条修改建议预览不了" : "这张表显示出错"}
                     description={previewDraft ? "建议的内容不完整，表里没有任何改动。收起预览后可以在修改卡上不采纳。" : "可以刷新页面重试；未保存的修改在“修改”里。"}
@@ -1061,6 +1068,7 @@ function Workspace({ code }: { code: string }) {
                     enterprise={project.enterprise?.name ?? "企业"}
                   />
                   </RegionErrorBoundary>
+                  </div>
                 ) : (
                   <Alert>
                     <AlertTitle>这张表暂无在线编辑器</AlertTitle>
@@ -1101,6 +1109,7 @@ function Workspace({ code }: { code: string }) {
               }}
               onRevision={() => revisionToggle.current()}
               onShortcuts={() => setShortcutsOpen(true)}
+              onBook={() => openAside.current("book")}
             />
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

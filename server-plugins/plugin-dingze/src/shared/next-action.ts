@@ -41,7 +41,7 @@ export function staleAdvice(status: string, service: ServiceMode = 'guided'): st
   if (status !== 'locked') return '上游表有改动，请核对后保存一次';
   return service === 'self'
     ? '已定版，但上游表有改动：由企业项目负责人判断是否解锁重开'
-    : '已定版，但上游表有改动：由主咨询师判断是否解锁重开';
+    : '已定版，但上游表有改动：由企业项目负责人或主咨询师判断是否解锁重开';
 }
 
 /** Collaboration status as the enterprise sees it (spec 二(三): no black-box waiting). */
@@ -77,7 +77,7 @@ export function collaborationStatus(
         ? { tone: 'act', text: `顾问已审过${since(a, '通过')}，待你定版` }
         : { tone: 'wait', text: isEnterprise ? `顾问已审过${since(a, '通过')}，等企业项目负责人定版` : `等企业项目负责人定版${since(a, '通过')}` };
     case 'locked':
-      return { tone: 'done', text: '已定版（锁定）：如需修改，请主咨询师解锁重开' };
+      return { tone: 'done', text: '已定版（锁定）：如需修改，企业项目负责人或主咨询师可解锁重开' };
     default:
       return null;
   }

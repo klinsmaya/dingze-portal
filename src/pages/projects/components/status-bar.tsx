@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText, TriangleAlert } from "lucide-react";
+import { BookOpen, CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ export function StatusBar({
   onComments,
   onRevision,
   onShortcuts,
+  onBook,
   summary,
   optional = false,
 }: {
@@ -36,6 +37,8 @@ export function StatusBar({
   onComments: () => void;
   onRevision: () => void;
   onShortcuts: () => void;
+  /** 打开右栏“书中方法”。 */
+  onBook: () => void;
 }) {
   return (
     <div
@@ -73,7 +76,10 @@ export function StatusBar({
           </span>
         ))}
       </span>
-      <Button size="xs" variant="ghost" className="ml-auto 2xl:ml-0" onClick={onShortcuts} aria-label="全部快捷键（?）">
+      <Button size="xs" variant="ghost" className="ml-auto 2xl:ml-0" onClick={onBook} title="在右栏打开这张表的书中方法：目的、怎么做、完成检查">
+        <BookOpen /> 书中方法
+      </Button>
+      <Button size="xs" variant="ghost" onClick={onShortcuts} aria-label="全部快捷键（?）">
         <Keyboard /> ? 全部快捷键
       </Button>
     </div>

@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useMatch, useParams } from "react-router";
 
 import { UserDropdown } from "@/components/app-shell/header";
 import { NotificationBell } from "@/components/dingze/notification-bell";
-import { ThemeModeSwitch } from "@/components/dingze/theme-mode-switch";
+import { DisplayMenu } from "@/components/dingze/display-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PROJECT_ROLE_LABELS } from "@dingze/shared";
@@ -48,8 +48,7 @@ export default function ProjectLayout() {
           </Link>
           <div ref={setSlotMain} className="flex min-w-0 flex-1 items-center gap-4" />
           <div className="flex shrink-0 items-center gap-2.5">
-            <ThemeModeSwitch className="hidden lg:flex" />
-            <ThemeModeSwitch compact className="lg:hidden" />
+            <DisplayMenu />
             {team.length ? (
               <div className="hidden -space-x-1.5 md:flex" aria-label="项目成员">
                 {team.slice(0, 5).map((m) => (
@@ -144,7 +143,7 @@ export default function ProjectLayout() {
             </span>
           ) : null}
           <NotificationBell className="text-band-foreground hover:bg-white/10 hover:text-band-foreground" />
-          <ThemeModeSwitch compact />
+          <DisplayMenu />
           <UserDropdown />
         </div>
       </header>

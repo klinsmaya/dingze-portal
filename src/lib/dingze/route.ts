@@ -209,7 +209,17 @@ export function buildRoute(stage: StageKey, artifacts: ArtifactOverview[], where
       const isCurrent =
         def.codes.includes(where.code) &&
         (where.code !== "S2-03" || !def.zone || (where.zone ?? "targets") === def.zone);
-      const state = combine(def.codes.filter((c) => getArtifactDef(c).priority !== "method" || def.method).map((c) => stateOf(byCode.get(c))));
+      const counted = def.codes.filter((c) => getArtifactDef(c).priority !== "method" || def.method);
+      let state = combine(counted.map((c) => stateOf(byCode.get(c))));
+      // 可选表（P1）没动过时不拖累本步：必做表都定版了，左栏就写“已定版”，与表头一致（开营前 UX 改版 F8）。
+      const required = counted.filter((c) => getArtifactDef(c).priority !== "P1");
+      if (
+        required.length &&
+        required.length < counted.length &&
+        required.every((c) => stateOf(byCode.get(c)) === "final") &&
+        counted.every((c) => required.includes(c) || ["todo", "locked"].includes(stateOf(byCode.get(c))))
+      )
+        state = "final";
       const subs = subsOf(def, where, byCode, payloads);
       const a = byCode.get(main);
       let badge = BADGE[state];

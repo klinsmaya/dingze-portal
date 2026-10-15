@@ -50,7 +50,7 @@ export type EditSession = {
   validate: (payload: unknown) => Issue[];
   /** Human name of a payload path, e.g. “开拓点供新业务 · 指标值”. */
   nameOf: (path: string) => string;
-  openPanel: (tab: "coach" | "comments" | "changes") => void;
+  openPanel: (tab: "coach" | "comments" | "changes" | "book") => void;
   /** Label the next edit coming through the editor's onChange (e.g. 调结构 · 移动到…). */
   nextMeta: (meta: CommandMeta) => void;
   /** Open the comment composer on a row / node / cell. */

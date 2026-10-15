@@ -81,6 +81,7 @@ export const appRoutes = defineAppRoutes([
     },
   },
   { name: "expert.detail", path: "/expert/:requestId", lazy: () => import("@/pages/expert/detail") },
+  { name: "settings", path: "/settings", lazy: () => import("@/pages/settings") },
   {
     name: "ops",
     path: "/ops",

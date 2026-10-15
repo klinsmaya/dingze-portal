@@ -31,9 +31,10 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { formatTime } from "@/lib/dingze/records";
@@ -48,16 +49,49 @@ import type { EditorChrome } from "./edit-session";
 const SUB_ICONS: Record<string, typeof Check> = { financial: CircleDollarSign, customer: UsersRound, process: Workflow, learning: Sprout, import: Table2 };
 
 /** Step title and sub-step bar, rendered into the project top bar. */
+/** 子步骤多（如六分法六项）时，中等宽度收进“本表小节”下拉，免得和右侧按钮抢一行（开营前 UX 改版 T3）。 */
+function SubsMenu({ projectId, items, className }: { projectId: number; items: RouteSub[]; className?: string }) {
+  const navigate = useNavigate();
+  const at = items.findIndex((i) => i.current);
+  const done = items.filter((i) => i.done).length;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className={cn("flex h-8 min-w-0 items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 text-xs text-band-foreground hover:bg-white/20", className)}>
+        <span className="truncate">本表小节{at >= 0 ? `：${items[at].short}` : ""}</span>
+        <span className="text-band-muted">
+          {done}/{items.length}
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        {items.map((item, i) => (
+          <DropdownMenuItem key={item.key} disabled={!item.to} onClick={() => item.to && navigate(routePath(projectId, item.to))} className={cn("gap-2", item.current && "font-semibold")}>
+            <span className="w-4 text-center text-xs text-muted-foreground">{item.done ? <Check className="size-3.5" /> : i + 1}</span>
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function TopbarTitle({ slot, projectId, title, subtitle, items }: { slot: HTMLElement | null; projectId: number; title: string; subtitle: string; items: RouteSub[] }) {
   if (!slot) return null;
+  const many = items.length > 4;
   return createPortal(
     <>
-      <div className="min-w-0 shrink-0 leading-tight">
-        <div className="truncate font-heading text-[15px] font-bold tracking-wide">{title}</div>
-        <div className="truncate text-xs text-band-muted">{subtitle}</div>
+      <div className="min-w-0 max-w-[16rem] shrink leading-tight">
+        <div className="truncate font-heading text-[15px] font-bold tracking-wide" title={title}>
+          {title}
+        </div>
+        <div className="truncate text-xs text-band-muted" title={subtitle}>
+          {subtitle}
+        </div>
       </div>
       {items.length ? (
-        <ol aria-label="子步骤" className="hidden min-w-0 flex-1 items-center gap-1.5 overflow-hidden lg:flex">
+        <>
+        {many ? <SubsMenu projectId={projectId} items={items} className="hidden lg:flex 2xl:hidden" /> : null}
+        {many ? <span className="hidden flex-1 lg:block 2xl:hidden" /> : null}
+        <ol aria-label="子步骤" className={cn("hidden min-w-0 flex-1 items-center gap-1.5 overflow-hidden", many ? "2xl:flex" : "lg:flex")}>
           {items.map((item, i) => {
             const Icon = item.icon ? SUB_ICONS[item.icon] : null;
             const body = (
@@ -90,6 +124,7 @@ export function TopbarTitle({ slot, projectId, title, subtitle, items }: { slot:
             );
           })}
         </ol>
+        </>
       ) : (
         <span className="flex-1" />
       )}

@@ -63,7 +63,7 @@ const ACTIONS: ActionSpec[] = [
     label: "解锁重开",
     from: ["locked"],
     variant: "outline",
-    reason: { title: "解锁重开", description: "保留原定版版本；重开后引用它的下游成果会标“上游已变更”。原因会记入审计。" },
+    reason: { title: "解锁重开", description: "保留原定版版本；重开后引用它的下游成果会标“上游已变更”。原因会记入审计，并通知项目成员和咨询师。重开后要重新复核、确认才能定版。" },
   },
 ];
 
@@ -176,7 +176,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         title={title}
         warnings={warnings}
         openComments={openComments}
-        reopener={actor.service === "self" ? "企业项目负责人" : "主咨询师"}
+        reopener={actor.service === "self" ? "企业项目负责人" : "企业项目负责人或主咨询师"}
         detail={detail}
         project={project}
         code={code}
@@ -210,7 +210,7 @@ const FLOW = [
   ["本步完成", "你这边填完了。表格仍可修改，下一步把它提交给顾问。"],
   ["顾问复核", "顾问看过后，要么通过，要么写明原因退回给你改。"],
   ["企业定版", "顾问通过后，由企业项目负责人确认定版。"],
-  ["锁定", "定版后只读，作为后面各表的依据；要改只能请主咨询师解锁重开。"],
+  ["锁定", "定版后只读，作为后面各表的依据；要改由企业项目负责人或主咨询师解锁重开（写原因，咨询师会收到通知）。"],
 ] as const;
 
 /** First “本步完成”: explain what happens after it, once per browser (usability #7). */

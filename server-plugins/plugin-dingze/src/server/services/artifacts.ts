@@ -534,7 +534,7 @@ export async function grantStepException(ctx: Context, pc: ProjectContext, def: 
  */
 export async function dismissOrgNotice(ctx: Context, pc: ProjectContext, code: string, note?: string) {
   const selfLead = pc.actor.service === 'self' && pc.projectRole === 'ent_lead';
-  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || selfLead)) throw new HttpError(403, '只有主咨询师（自助项目为企业项目负责人）可以确认不需要重开');
+  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || pc.projectRole === 'ent_lead' || selfLead)) throw new HttpError(403, '只有主咨询师或企业项目负责人可以确认不需要重开');
   const projectId = pc.project.get('id');
   return ctx.db.sequelize.transaction(async (transaction: any) => {
     const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });

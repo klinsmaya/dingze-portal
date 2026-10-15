@@ -498,3 +498,31 @@ body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
 [data-dingze-chat] .ai-chat-window > div > header {
   display: none;
 }
+
+/* 已定版 / 只读的表：控件看起来就是文字，不伪装成可编辑（开营前 UX 改版 F7）。 */
+[data-dz-readonly] [data-slot="native-select-wrapper"] {
+  opacity: 1;
+}
+[data-dz-readonly] select:disabled {
+  border-color: transparent;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  color: inherit;
+  cursor: default;
+}
+[data-dz-readonly] [data-slot="native-select-icon"] {
+  display: none;
+}
+[data-dz-readonly] input:disabled:not([type="checkbox"]):not([type="radio"]),
+[data-dz-readonly] textarea:disabled,
+[data-dz-readonly] input[readonly]:not([type="checkbox"]):not([type="radio"]),
+[data-dz-readonly] textarea[readonly] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  opacity: 1;
+  color: inherit;
+  cursor: default;
+}

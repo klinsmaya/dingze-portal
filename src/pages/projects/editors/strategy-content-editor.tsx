@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useEditorChrome } from "@/pages/projects/components/edit-session";
+import { useEditSession, useEditorChrome } from "@/pages/projects/components/edit-session";
 
 import { EditorToolbar } from "./kit";
 
@@ -280,15 +280,23 @@ export function StrategyContentEditor(props: EditorProps) {
           </dl>
         </details>
       ) : (
-        <details className="rounded-xl border border-book-border bg-book px-4 py-3 text-sm text-book-foreground">
-          <summary className="cursor-pointer font-semibold">书中方法 · 战略屋怎么填（图 2-3）</summary>
-          <ul className="mt-2 list-disc pl-5">
-            <li>经营目标含财务与非财务，按一年、三年、五年分布。</li>
-            <li>主要战场即业务组合：吃着碗里的、看着锅里的、想着田里的。</li>
-            <li>如何致胜按每个战场分别写打法；必赢之战是致胜策略的年度落地抓手。</li>
-          </ul>
-        </details>
+        <BookLink label="书中方法 · 战略屋怎么填（图 2-3）" />
       )}
     </div>
+  );
+}
+
+/** 方法内容统一放在右栏“书中方法”，这里只留一个打开它的入口。 */
+function BookLink({ label }: { label: string }) {
+  const session = useEditSession();
+  if (!session) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => session.openPanel("book")}
+      className="flex w-fit items-center gap-1.5 rounded-xl border border-book-border bg-book px-4 py-2 text-sm font-semibold text-book-foreground hover:underline"
+    >
+      <BookOpen className="size-4" /> {label} → 在右栏打开
+    </button>
   );
 }

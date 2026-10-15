@@ -9,10 +9,14 @@ import {
   DropdownMenuItem,
   DropdownMenuContent,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NotificationBell } from "@/components/dingze/notification-bell";
-import { ThemeModeSwitch } from "@/components/dingze/theme-mode-switch";
+import { DisplayMenu, DisplayRadioGroups } from "@/components/dingze/display-menu";
+import { ShortcutsDialog } from "@/pages/projects/components/status-bar";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -23,7 +27,8 @@ import { UserAvatar } from "@/components/app-shell/user-avatar";
 import { UserInfo } from "@/components/app-shell/user-info";
 import { CanAccess } from "@/components/access-control/can-access";
 import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
-import { LogOutIcon, SettingsIcon } from "lucide-react";
+import { ALargeSmall, Keyboard, LogOutIcon, SettingsIcon } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/app-shell/brand";
 import { extensionUserMenuItems } from "@/app/extensions";
@@ -76,7 +81,7 @@ function DesktopHeader() {
       <div className="flex items-center gap-2">
         <SettingsLink />
         <NotificationBell />
-        <ThemeModeSwitch tone="surface" />
+        <DisplayMenu tone="surface" />
         <UserDropdown />
       </div>
     </header>
@@ -115,7 +120,7 @@ function MobileHeader() {
       <div className="flex shrink-0 items-center gap-1">
         <SettingsLink className="size-9" />
         <NotificationBell className="size-9" />
-        <ThemeModeSwitch tone="surface" compact />
+        <DisplayMenu tone="surface" />
         <UserDropdown />
       </div>
     </header>
@@ -159,6 +164,7 @@ function SettingsLink({ className }: { className?: string }) {
 
 export const UserDropdown = () => {
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
+  const [shortcuts, setShortcuts] = useState(false);
   const translate = useTranslate();
 
   const authProvider = useActiveAuthProvider();
@@ -168,6 +174,8 @@ export const UserDropdown = () => {
   }
 
   return (
+    <>
+    <ShortcutsDialog open={shortcuts} onOpenChange={setShortcuts} />
     <DropdownMenu>
       <DropdownMenuTrigger>
         <UserAvatar />
@@ -179,6 +187,18 @@ export const UserDropdown = () => {
         {extensionUserMenuItems.map(({ id, Component }) => (
           <Component key={id} />
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="min-h-9 gap-2 px-2">
+            <ALargeSmall /> 显示设置（主题与字号）
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-52">
+            <DisplayRadioGroups />
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuItem className="min-h-9 cursor-pointer gap-2 px-2" onClick={() => setShortcuts(true)}>
+          <Keyboard /> 快捷键与帮助
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="mt-1 min-h-9 cursor-pointer gap-2 px-2 text-muted-foreground focus:text-foreground"
@@ -195,6 +215,7 @@ export const UserDropdown = () => {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 };
 
