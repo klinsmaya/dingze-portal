@@ -16,7 +16,7 @@ export default function ResultsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 md:p-6">
       <div>
         <h1 className="font-heading text-2xl font-bold text-brand">成果</h1>
-        <p className="mt-1 text-sm text-muted-foreground">每张表的状态、版本和修改记录在“成果清单”；计划书 Word、Excel 和图片在“交付包”。定版的表同时进入资料里的“已确认成果”。</p>
+        <p className="mt-1 text-sm text-muted-foreground">已确认的交付：每张表的状态、版本和修改记录在“成果清单”；计划书 Word、Excel 和图片在“交付包”。定版的表同时进入资料里的“已确认成果”。</p>
       </div>
       <Tabs value={tab} onValueChange={(v) => setParams(v === "delivery" ? { tab: "delivery" } : {}, { replace: true })}>
         <TabsList>

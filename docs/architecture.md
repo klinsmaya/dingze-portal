@@ -21,7 +21,7 @@
 
 | 路径 | 内容 |
 |---|---|
-| `src/routes.tsx` | 应用路由与菜单：我的项目、项目（工作台 / 咨询工作区 / 成果与定版 / 交付）、咨询师工作台、本企业、运营管理 |
+| `src/routes.tsx` | 应用路由与菜单：我的项目、项目（待办 / 定责 / 资料 / 成果 / 专家咨询）、咨询师工作台、本企业、运营管理 |
 | `src/pages/projects/` | 项目页面：list、overview、workspace、artifacts、delivery、project-layout；`editors/` 每张表的编辑器；`components/` 步骤条、动作、校验条、导出、数字咨询师面板、书中方法、历史 |
 | `src/pages/board/` | 咨询师工作台 |
 | `src/pages/ops/`、`src/pages/enterprise/` | 运营管理、本企业 |
@@ -89,7 +89,7 @@
 
 ## 6. 数字咨询师
 
-- 三位 AI 员工按阶段挂在咨询工作区右侧，页面上下文自动附带当前成果（代码、状态、草稿、校验结果）。
+- 三位 AI 员工按阶段挂在“定责”工作区右侧，页面上下文自动附带当前成果（代码、状态、草稿、校验结果）。
 - 前端工具 `dingzeProposeChanges`（需用户确认）：按点号路径写入成果，数组条目按 `id` 定位，`数组名.+` 追加。界面上渲染为修改卡（原值 → 新值 → 影响），确认后作为一条“对话”来源的修改写入草稿，用户保存时生成版本（含对话修改时记为 `ai_draft`）。
 - Skill `dingze-workspace/SKILLS.md` 记录每张表的 payload 路径；阶段 Skill 来自书稿方法论包。
 - 书中方法在 `shared/book-notes.ts`：要点、常见的坑，以及六区指引 `guide`（本步目的、准备、怎么做、示例与反例、完成检查、来源与下一步）。S2-01 按子步骤、S2-03 按分区的指引放在 `parts` 里，用 `taskGuide(code, { sub, zone })` 取当前那一份。`gate` 由完成检查拼成，供对话起步卡使用。前端面板、运营“方法与规则包”页、自查复核清单（`shared/self-review.ts`）共用这一份。

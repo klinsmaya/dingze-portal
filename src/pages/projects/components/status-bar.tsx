@@ -15,8 +15,6 @@ export function StatusBar({
   selected,
   hints,
   onIssues,
-  onComments,
-  onRevision,
   onShortcuts,
   onBook,
   summary,
@@ -34,8 +32,6 @@ export function StatusBar({
   hints: [string, string][];
   selected: string | null;
   onIssues: () => void;
-  onComments: () => void;
-  onRevision: () => void;
   onShortcuts: () => void;
   /** 打开右栏“书中方法”。 */
   onBook: () => void;
@@ -61,13 +57,14 @@ export function StatusBar({
         {errors ? (optional ? `可选表 · 做完还差 ${errors} 处` : `${errors} 处必须改`) : "校验通过"}
         {warnings ? <span className="text-muted-foreground">· {warnings} 条建议</span> : null}
       </button>
-      <button type="button" onClick={onComments} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+      {/* 只显示状态，开关在表头（开营前 UX 改版 F6）。 */}
+      <span className="flex items-center gap-1 text-muted-foreground">
         <MessageSquareText className="size-3.5" style={{ color: openComments ? "var(--dz-comment)" : undefined }} />
         批注 {openComments} 未解决
-      </button>
-      <button type="button" onClick={onRevision} className={cn("flex items-center gap-1", revisionOn ? "font-semibold" : "text-muted-foreground hover:text-foreground")} style={revisionOn ? { color: "var(--dz-changed)" } : undefined}>
+      </span>
+      <span className={cn("flex items-center gap-1", revisionOn ? "font-semibold" : "text-muted-foreground")} style={revisionOn ? { color: "var(--dz-changed)" } : undefined}>
         <GitCompareArrows className="size-3.5" /> 修订 {revisionOn ? `开${revisionLabel ? ` · 对比 ${revisionLabel}` : ""}` : "关"}
-      </button>
+      </span>
       {selected ? <span className="hidden max-w-64 truncate text-muted-foreground sm:inline">选中：{selected}</span> : null}
       <span className="ml-auto hidden items-center gap-2 text-muted-foreground 2xl:flex">
         {hints.map(([keys, what]) => (

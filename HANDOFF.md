@@ -19,7 +19,7 @@
 
 - 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
 - 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.27.0** 已部署启用，门户已用最新代码发布。
-- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（225 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
+- 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（229 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
 - 用户提出的需求已全部完成，并在线上用演示账号实测：
   - 规格硬伤 5 条：六分法 P0 阻断、关闭公开注册、编号对齐附录 B、资料原件、S2-08 空字段与例外不绕过校验。
   - 小白易用性 10 条。
@@ -36,7 +36,7 @@
 | 路径 | 内容 |
 |---|---|
 | `src/routes.tsx` | 应用路由（`defineAppRoutes`；`registryRoutesEnabled = false`） |
-| `src/pages/projects/` | 项目相关页面：`list`（我的项目）、`overview`（今天要做的 / 工作台）、`workspace`（填写，核心页面）、`artifacts`（成果与定版）、`delivery`（导出 / 交付）、`materials`、`expert`、`project-layout`（企业端 4 个入口 / 顾问端完整导航） |
+| `src/pages/projects/` | 项目相关页面：`list`（我的项目）、`overview`（待办）、`workspace`（定责，核心页面）、`artifacts`（成果与定版）、`delivery`（导出 / 交付）、`materials`、`expert`、`project-layout`（企业端 4 个入口 / 顾问端完整导航） |
 | `src/pages/projects/editors/` | 每张表的编辑器，`artifact-editor.tsx` 按编码分发；`kit.tsx`（TextCell / RowActions 等）；`tree-editor.tsx`（调结构 UI、思维导图、移动到…）；`find-path.tsx`（找路径五子步导航、图 3-7 参考卡） |
 | `src/pages/projects/components/` | 工作区部件：`edit-session`（编辑会话上下文）、`edit-markers`（画布标记与批注钉）、`changes-panel`（修改记录与修订）、`comments-panel`、`coach-panel`（数字咨询师、修改卡、三句开头）、`status-bar`（状态条与快捷键）、`artifact-actions`（流转按钮、首次“本步完成”说明） |
 | `src/lib/dingze/` | 前端逻辑：`edit-log`（修改 = 命令）、`tree-ops`（树操作，纯函数）、`api` / `queries` / `records-*`（接口）、`export/`（Excel / Word）、`diagram-*`（SVG / PNG）、`locate`（定位）、`progress`（下一步链接） |

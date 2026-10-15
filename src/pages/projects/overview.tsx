@@ -47,12 +47,13 @@ export default function ProjectOverviewPage() {
           {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
           {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
-        <h1 className="font-heading text-3xl font-bold text-brand">今天要做的</h1>
+        <h1 className="font-heading text-3xl font-bold text-brand">待办</h1>
+        <p className="mt-1 text-sm text-muted-foreground">先做最上面那件事；下面是正在流转的表和项目启动还缺的准备。</p>
       </div>
 
       <StartupCard projectId={project.id} />
 
-      <section aria-label="今天要做的" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
+      <section aria-label="待办" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         <Link
           to={nextActionPath(project.id, next)}
           className={cn(

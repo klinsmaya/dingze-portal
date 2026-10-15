@@ -1,4 +1,3 @@
-import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useParams } from "react-router";
 
@@ -13,20 +12,14 @@ import { cn } from "@/lib/utils";
 
 import type { ProjectContextValue } from "./project-context";
 
-// Enterprise members get four plain entries; the consulting side keeps the full set.
+// 一级入口两端同名（开营前 UX 改版 IA1）：待办 · 定责 · 资料 · 成果；咨询方另有专家咨询。
 const ENTERPRISE_NAV = [
-  { to: "overview", label: "今天要做的" },
-  { to: "workspace", label: "填写" },
-  { to: "materials", label: "资料" },
-  { to: "results", label: "成果" },
+  { to: "overview", label: "待办", title: "待办：要你处理的表、等别人处理的表和项目启动事项" },
+  { to: "workspace", label: "定责", title: "定责：逐表填写三张检查表，完成后提交复核、定版" },
+  { to: "materials", label: "资料", title: "资料：填表前的准备与参考——资料库、组织与职责、企业画像" },
+  { to: "results", label: "成果", title: "成果：每张表的状态与版本，已定版的交付文件" },
 ];
-const FULL_NAV = [
-  { to: "overview", label: "工作台" },
-  { to: "workspace", label: "咨询工作区" },
-  { to: "materials", label: "资料与画像" },
-  { to: "results", label: "成果" },
-  { to: "expert", label: "专家咨询" },
-];
+const FULL_NAV = [...ENTERPRISE_NAV, { to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }];
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];
 
 export default function ProjectLayout() {
@@ -97,25 +90,18 @@ export default function ProjectLayout() {
   return (
     <div data-dingze-project className="flex min-h-svh flex-col">
       <header
-        className="flex min-h-15 flex-wrap items-center gap-x-6 gap-y-2 border-b-2 border-gold px-4 text-band-foreground md:px-6"
+        className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-1 border-b-2 border-gold px-3 text-band-foreground md:flex-nowrap md:px-4"
         style={{ background: "var(--band)" }}
       >
-        <div className="flex items-center gap-3">
-          <Link
-            to="/projects"
-            aria-label="返回我的项目"
-            className="flex size-9 items-center justify-center rounded-lg text-band-muted hover:bg-white/10 hover:text-band-foreground"
-          >
-            <ChevronLeft className="size-5" />
-          </Link>
-          <span className="flex size-8 items-center justify-center rounded-lg bg-gold font-heading text-lg font-bold text-brand">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link to="/projects" aria-label="返回我的项目" title="我的项目" className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/25 font-heading text-lg font-bold text-gold hover:bg-white/10">
             责
-          </span>
-          <div className="leading-tight">
-            <div className="font-heading text-base font-bold tracking-wide">自驱战略 · 定三责</div>
-            <div className="text-xs text-band-muted">
-              {project ? `${project.enterprise?.shortName ?? ""} · ${project.name}` : "加载项目…"}
+          </Link>
+          <div className="min-w-0 max-w-[16rem] leading-tight">
+            <div className="truncate font-heading text-[15px] font-bold tracking-wide">
+              {project ? `${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} · ${project.name}` : "加载项目…"}
             </div>
+            <div className="truncate text-xs text-band-muted">自驱战略 · 定三责</div>
           </div>
         </div>
         <nav aria-label="项目导航" className="flex flex-wrap">
@@ -123,9 +109,10 @@ export default function ProjectLayout() {
             <NavLink
               key={item.to}
               to={item.to}
+              title={item.title}
               className={({ isActive }) =>
                 cn(
-                  "border-b-2 px-3 py-4 text-sm",
+                  "border-b-2 px-3 py-3.5 text-sm",
                   isActive
                     ? "border-gold font-bold text-band-foreground"
                     : "border-transparent text-band-muted hover:text-band-foreground"

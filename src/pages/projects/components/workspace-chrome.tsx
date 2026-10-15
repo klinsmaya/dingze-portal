@@ -292,15 +292,18 @@ export function TitleRow({
             ))}
           </select>
         ) : null}
-        <label className={cn("flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm", revisionOn && "border-[color:var(--dz-changed)]")} title="修订（Ctrl / ⌘ + Shift + E）：和任意一版对比">
-          <Switch checked={revisionOn} disabled={!canRevise} onCheckedChange={onRevision} aria-label="修订开关" />
-          修订
-        </label>
-        <Button variant="outline" size="sm" onClick={onComments} title="批注（Ctrl / ⌘ + Alt + M）">
-          <MessageSquarePlus /> 批注
-          {openComments ? <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: "var(--dz-comment)" }}>{openComments}</span> : null}
-        </Button>
-        {exportMenu}
+        {/* 次要组：修订、批注、导出只在这里有入口（页脚只显示状态）；流程按钮固定在最右（开营前 UX 改版 F6、F10）。 */}
+        <div role="group" aria-label="修订、批注与导出" className="flex items-center gap-0.5 rounded-lg border p-0.5">
+          <label className={cn("flex h-7 items-center gap-1.5 rounded-md px-2 text-sm", revisionOn && "text-[color:var(--dz-changed)]")} title="修订（Ctrl / ⌘ + Shift + E）：和任意一版对比">
+            <Switch checked={revisionOn} disabled={!canRevise} onCheckedChange={onRevision} aria-label="修订开关" />
+            修订
+          </label>
+          <Button variant="ghost" size="sm" onClick={onComments} title="批注（Ctrl / ⌘ + Alt + M）">
+            <MessageSquarePlus /> 批注
+            {openComments ? <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: "var(--dz-comment)" }}>{openComments}</span> : null}
+          </Button>
+          {exportMenu}
+        </div>
         {actions}
       </div>
     </div>
@@ -310,7 +313,7 @@ export function TitleRow({
 export function ExportMenu({ children }: { children: ReactNode }) {
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="icon-sm" aria-label="导出" title="导出" />}>
+      <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label="导出" title="导出" />}>
         <Download />
       </PopoverTrigger>
       <PopoverContent align="end" className="flex w-60 flex-col items-stretch gap-1.5 p-2 [&_button]:w-full [&_button]:justify-start">

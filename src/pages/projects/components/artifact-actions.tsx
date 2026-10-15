@@ -1,4 +1,3 @@
-import { Ellipsis } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -7,7 +6,6 @@ import {
   type ArtifactStatus,
   type LifecycleAction,
   type SelfReviewAnswer,
-  canPerform,
   missingSelfReview,
   selfReviewChecklist,
   validationApplies,
@@ -15,7 +13,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +28,7 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { useRecordDissent, useTransitionArtifact } from "@/lib/dingze/queries";
 
 import { confirmSummary } from "@/lib/dingze/confirm-summary";
+import { type FlowAction, flowLabel, flowPlan, mainAction, whoCan } from "@/lib/dingze/flow-plan";
 
 import { askCoach } from "./coach-panel";
 import { pathNamer } from "./edit-session";
@@ -89,8 +87,17 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
   const [confirming, setConfirming] = useState(false);
   const [introFor, setIntroFor] = useState<ActionSpec | null>(null);
 
-  const visible = ACTIONS.filter((a) => a.from.includes(status) && canPerform(a.action, actor));
-  if (visible.length === 0) return null;
+  const plan = flowPlan(status, actor);
+  const specOf = (action: FlowAction): ActionSpec => {
+    const spec = ACTIONS.find((a) => a.action === action)!;
+    const label = flowLabel(action, status, actor);
+    return label === "撤回修改"
+      ? { ...spec, label, reason: { title: "撤回修改", description: "把已提交复核的表拉回来继续改，主咨询师的复核会中止。写一句为什么撤回。" } }
+      : { ...spec, label };
+  };
+  const primary = plan.primary ? specOf(plan.primary) : null;
+  const rest = plan.others.filter((a) => ACTIONS.some((x) => x.action === a)).map(specOf);
+  if (!primary && !rest.length && !plan.blocked && !plan.waiting) return null;
 
   const run = (spec: ActionSpec, reason?: string, answers?: SelfReviewAnswer[]) =>
     transition.mutate(
@@ -112,7 +119,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
     return dirty && needsCleanDraft
       ? "请先保存修改"
       : blocking > 0 && needsCleanDraft && validationApplies(spec.action, !!detail.artifact?.exception)
-        ? `还有 ${blocking} 处未通过校验`
+        ? `还差 ${blocking} 处必须改`
         : undefined;
   };
   const trigger = (spec: ActionSpec) => {
@@ -122,34 +129,40 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
     else if (spec.action === "stepDone" && !flowIntroSeen()) setIntroFor(spec);
     else run(spec);
   };
-  // One clear next action (design 10 header); the rest under “⋯”.
-  const primary = visible.find((a) => !a.variant || a.variant === "default") ?? visible[0];
-  const rest = visible.filter((a) => a !== primary);
-  const primaryReason = disabledReasonOf(primary);
+  const primaryReason = primary ? disabledReasonOf(primary) : undefined;
+  const main = mainAction(status, actor);
+  const who = main ? whoCan(main, actor) : undefined;
 
   return (
-    <div className="flex items-center gap-1">
-      <Button disabled={transition.isPending || !!primaryReason} title={primaryReason} onClick={() => trigger(primary)} size="sm">
-        {primary.label}
-      </Button>
-      {rest.length ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" aria-label="更多流转操作" />}>
-            <Ellipsis />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-44">
-            {rest.map((spec) => {
-              const reason = disabledReasonOf(spec);
-              return (
-                <DropdownMenuItem key={spec.action} disabled={transition.isPending || !!reason} onClick={() => trigger(spec)} title={reason}>
-                  {spec.label}
-                  {reason ? <span className="ml-auto text-[11px] text-muted-foreground">{reason}</span> : null}
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <div className="flex items-center gap-1.5">
+      {rest.map((spec) => {
+        const reason = disabledReasonOf(spec);
+        return (
+          <span key={spec.action} title={reason ?? whoCan(spec.action, actor)}>
+            <Button variant="outline" size="sm" disabled={transition.isPending || !!reason} onClick={() => trigger(spec)}>
+              {spec.label}
+            </Button>
+          </span>
+        );
+      })}
+      {primary ? (
+        <span title={primaryReason ?? who} className="flex items-center gap-1.5">
+          <Button disabled={transition.isPending || !!primaryReason} onClick={() => trigger(primary)} size="sm">
+            {primary.label}
+          </Button>
+        </span>
+      ) : plan.waiting ? (
+        <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground" title={who}>
+          {plan.waiting}
+        </span>
+      ) : plan.blocked ? (
+        <span title={`${who ?? ""}${who ? " · " : ""}你当前的角色不能点`}>
+          <Button size="sm" disabled>
+            {flowLabel(plan.blocked, status, actor)}
+          </Button>
+        </span>
       ) : null}
+      {main === "confirm" ? <span className="hidden text-[11px] text-muted-foreground xl:inline">仅企业项目负责人可定版</span> : null}
 
       <FlowIntroDialog
         open={!!introFor}

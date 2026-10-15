@@ -327,9 +327,9 @@ export default function MaterialsPage() {
       <div className="flex flex-1 flex-wrap items-stretch">
         <main ref={page.ref} className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 p-4 md:p-6">
           <div>
-            <h1 className="font-heading text-2xl font-bold text-brand">资料与企业画像</h1>
+            <h1 className="font-heading text-2xl font-bold text-brand">资料</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              资料越全，数字咨询师起草越准、要企业补的“待补”越少。画像由咨询师复核、企业项目负责人确认。
+              填表前的准备与参考：资料库、组织与职责、企业画像。资料越全，数字咨询师起草越准、要企业补的“待补”越少；画像由咨询师复核、企业项目负责人确认。
             </p>
           </div>
 

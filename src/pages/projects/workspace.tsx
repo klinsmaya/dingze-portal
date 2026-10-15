@@ -671,13 +671,13 @@ function Workspace({ code }: { code: string }) {
   const base = `/projects/${project.id}`;
   const railLinks: RailLink[] = isEnterprise || role === "readonly"
     ? [
-        { to: `${base}/overview`, label: "今天要做的", icon: "today" },
+        { to: `${base}/overview`, label: "待办", icon: "today" },
         { to: `${base}/materials`, label: "资料", icon: "materials" },
         { to: `${base}/materials#org`, label: "组织", icon: "org" },
         { to: `${base}/results`, label: "成果", icon: "artifacts" },
       ]
     : [
-        { to: `${base}/overview`, label: "工作台", icon: "today" },
+        { to: `${base}/overview`, label: "待办", icon: "today" },
         { to: `${base}/materials`, label: "资料", icon: "materials" },
         { to: `${base}/materials#org`, label: "组织", icon: "org" },
         { to: `${base}/results`, label: "成果", icon: "artifacts" },
@@ -740,6 +740,13 @@ function Workspace({ code }: { code: string }) {
     ["changes", "修改", edit.log.length],
     ["book", "书中方法", 0],
   ];
+  // 右栏四个页签各管一件事（开营前 UX 改版 F12）。
+  const TAB_DUTY: Record<AsideTab, string> = {
+    coach: "对话：问数字咨询师，答疑和改表都在这里，改动以修改卡确认后才写入",
+    comments: "批注：在格子或节点上圈出来讨论，@ 成员",
+    changes: "修改：这张表的修改记录和历史版本，可定位、可撤销",
+    book: "书中方法：这一步的目的、怎么做和完成检查",
+  };
 
   return (
     <EditSessionContext.Provider value={session}>
@@ -1103,11 +1110,6 @@ function Workspace({ code }: { code: string }) {
               selected={chrome?.tools?.selectedLabel ?? (focusAnchor ? nameOf(focusAnchor) : null)}
               hints={hints}
               onIssues={() => document.querySelector("[data-dingze-validation]")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              onComments={() => {
-                setPanelPref(true);
-                setAsideTab("comments");
-              }}
-              onRevision={() => revisionToggle.current()}
               onShortcuts={() => setShortcutsOpen(true)}
               onBook={() => openAside.current("book")}
             />
@@ -1132,6 +1134,7 @@ function Workspace({ code }: { code: string }) {
                 type="button"
                 role="tab"
                 aria-selected={asideTab === key}
+                title={TAB_DUTY[key]}
                 onClick={() => setAsideTab(key)}
                 className={cn(
                   "flex items-center gap-1 border-b-2 px-2.5 pb-2 text-sm",
@@ -1147,6 +1150,7 @@ function Workspace({ code }: { code: string }) {
               </button>
             ))}
           </div>
+          <p className="shrink-0 border-b px-3 py-1 text-[11px] text-muted-foreground">{TAB_DUTY[asideTab]}</p>
           <div className={cn("flex min-h-0 flex-1 flex-col", asideTab !== "coach" && "hidden")}>
             <CoachPanel stage={def.stage} chatId={`dingze-${project.id}-${code}`} />
           </div>
