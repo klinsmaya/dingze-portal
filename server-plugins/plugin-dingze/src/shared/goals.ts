@@ -473,7 +473,7 @@ export function raciRowsFrom(
     .map((n) => ({ id: newRowId('ra'), name: n.path.trim(), cells: {}, sourceId: n.id, sourceKind: 'path' as const }));
 }
 
-/** Toggle one letter in a cell; A stays unique per row by moving it. */
+/** Toggle one letter in a cell; A stays unique per row by moving it, and R never shares a cell with C / I (书：R 不兼任 C / I). */
 export function toggleRaciLetter(table: RaciTable, rowId: string, columnId: string, letter: RaciLetter): RaciTable {
   return {
     ...table,
@@ -485,7 +485,9 @@ export function toggleRaciLetter(table: RaciTable, rowId: string, columnId: stri
       if (letter === 'A' && !has) {
         for (const key of Object.keys(cells)) cells[key] = (cells[key] ?? []).filter((l) => l !== 'A');
       }
-      const base = cells[columnId] ?? [];
+      let base = cells[columnId] ?? [];
+      if (!has && letter === 'R') base = base.filter((l) => l !== 'C' && l !== 'I');
+      if (!has && (letter === 'C' || letter === 'I')) base = base.filter((l) => l !== 'R');
       cells[columnId] = has ? base.filter((l) => l !== letter) : [...base, letter].sort((a, b) => 'RACI'.indexOf(a) - 'RACI'.indexOf(b));
       return { ...row, cells };
     }),

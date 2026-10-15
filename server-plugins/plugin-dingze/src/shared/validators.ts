@@ -335,8 +335,9 @@ export function validateRaci(matrix: RaciMatrix): Issue[] {
       if (letters.includes('R') && letters.includes('A')) {
         issues.push({ level: 'warning', message: `“${row.name}”由${col.name}同时担任 R 与 A，确认是否有意为之`, anchor: row.id });
       }
+      // 书第 3 章 RACI 第二步“R 不兼任 C / I 原则”（客户 2026-10-15 要求按书执行，阻断）。
       if (letters.includes('R') && (letters.includes('C') || letters.includes('I'))) {
-        issues.push({ level: 'warning', message: `“${row.name}”里${col.name}既是 R 又是 C / I：执行者不必再被征询或知会`, anchor: row.id });
+        issues.push({ level: 'error', message: `“${row.name}”里${col.name}既是 R 又是 C / I：R 不兼任 C / I，执行者与建议者、知情人应相对独立，去掉其中一个`, anchor: row.id });
       }
     }
     if (a === 0) issues.push({ level: 'error', message: `“${row.name}”没有 A（最终负责人）`, anchor: row.id });

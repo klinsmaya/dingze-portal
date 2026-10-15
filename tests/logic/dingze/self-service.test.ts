@@ -19,11 +19,11 @@ describe("自助 projects", () => {
 
   it("builds the checklist from the step's completion checks, pitfalls and open suggestions", () => {
     const items = selfReviewChecklist("S2-04", ["“二期扩容”的 C 偏多"]);
-    expect(items.map((i) => i.kind)).toEqual(["gate", "gate", "gate", "pitfall", "pitfall", "warning"]);
-    expect(items[0].text).toBe("每行 A 恰好一个、R 至少一个（本步完成和定版时强制，草稿可先保存）");
-    const answers = items.map((i, n) => ({ key: i.key, ok: n !== 5, note: "" }));
+    expect(items.map((i) => i.kind)).toEqual(["gate", "gate", "gate", "gate", "pitfall", "pitfall", "warning"]);
+    expect(items[0].text).toBe("A 唯一：每行 A 恰好一个（本步完成和定版时强制，草稿可先保存）");
+    const answers = items.map((i, n) => ({ key: i.key, ok: n !== 6, note: "" }));
     expect(missingSelfReview(items, answers).map((i) => i.kind)).toEqual(["warning"]);
-    answers[5].note = "二期扩容涉及部门多，C 多是有意的";
+    answers[6].note = "二期扩容涉及部门多，C 多是有意的";
     expect(missingSelfReview(items, answers)).toEqual([]);
   });
 

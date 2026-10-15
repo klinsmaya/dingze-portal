@@ -133,6 +133,18 @@ describe("projects, RACI, undertaking and scorecards", () => {
     expect(errors(validateArtifact("S2-04", { columns: table.columns, rows: [table.rows[0]] }))).toEqual([]);
   });
 
+  it("never lets R share a cell with C / I (书：R 不兼任 C / I)", () => {
+    let table: RaciTable = { columns: [{ id: "d1", name: "燃气运营部" }], rows: raciRowsFrom({ paths: system.nodes }) };
+    const rowId = table.rows[0].id;
+    table = toggleRaciLetter(table, rowId, "d1", "C");
+    table = toggleRaciLetter(table, rowId, "d1", "I");
+    table = toggleRaciLetter(table, rowId, "d1", "R");
+    expect(table.rows[0].cells.d1).toEqual(["R"]);
+    table = toggleRaciLetter(table, rowId, "d1", "A");
+    table = toggleRaciLetter(table, rowId, "d1", "C");
+    expect(table.rows[0].cells.d1).toEqual(["A", "C"]);
+  });
+
   it("turns A/R cells into department undertakings, then into weighted scorecards", () => {
     const raci: RaciTable = {
       columns: [{ id: "d1", name: "燃气运营部" }, { id: "d2", name: "市场部" }],

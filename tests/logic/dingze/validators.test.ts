@@ -113,39 +113,45 @@ describe("RACI matrix", () => {
     expect(issues).toContainEqual(expect.objectContaining({ level: "error", message: expect.stringContaining(text) }));
   });
 
-  it("only warns about multiple R, R with A in one cell, and R doubling as C", () => {
-    const issues = validateArtifact("S2-04", matrix({ p1: { ops: ["R", "A"], dispatch: ["R"], it: ["R", "C"] } }));
+  it("only warns about multiple R and R with A in one cell", () => {
+    const issues = validateArtifact("S2-04", matrix({ p1: { ops: ["R", "A"], dispatch: ["R"] } }));
     expect(hasBlockingIssues(issues)).toBe(false);
     expect(issues.filter((i) => i.level === "warning").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("blocks R doubling as C / I in one cell (书：R 不兼任 C / I)", () => {
+    const issues = validateArtifact("S2-04", matrix({ p1: { ops: ["A"], it: ["R", "C"] } }));
+    expect(hasBlockingIssues(issues)).toBe(true);
+    expect(issues.find((i) => i.level === "error")?.message).toContain("R 不兼任 C / I");
   });
 });
 
 describe("RACI 验证优化表 (表 3-18)", () => {
   const big = () =>
     matrix({
-      p1: { ops: ["R"], dispatch: ["A"], it: ["R", "I"] },
+      p1: { ops: ["R"], dispatch: ["A"], it: ["R"] },
       p2: { ops: ["R"], dispatch: ["A"], it: ["C"] },
       p3: { ops: ["R"], dispatch: ["A"], it: ["C"] },
       p4: { ops: ["R", "A"], dispatch: ["C"], it: ["C"] },
     });
   const wide: RaciMatrix = {
     columns: ["ops", "dispatch", "it", "hr", "fin"].map((id) => ({ id, name: id })),
-    rows: [{ id: "p1", name: "项目 p1", cells: { ops: ["A"], dispatch: ["R", "I"], it: ["C"], hr: ["C"], fin: ["C"] } }],
+    rows: [{ id: "p1", name: "项目 p1", cells: { ops: ["A"], dispatch: ["R"], it: ["C"], hr: ["C"], fin: ["C"] } }],
   };
 
   it("counts the horizontal and vertical checks", () => {
     const v = verifyRaci(big());
-    expect(v.horizontal).toMatchObject({ noR: 0, noA: 0, multiA: 0, multiR: 1, rWithCI: 1 });
+    expect(v.horizontal).toMatchObject({ noR: 0, noA: 0, multiA: 0, multiR: 1, rWithCI: 0 });
     expect(v.verticalApplies).toBe(true);
     expect(v.vertical.rOverload).toEqual(["运营部"]);
     expect(v.vertical.aSprawl).toEqual(["调度中心"]);
     expect(v.vertical.noRA).toEqual([]);
   });
 
-  it("warns, never blocks, on R doubling as C / I, too many C, an overloaded R and a sprawling A", () => {
+  it("warns, never blocks, on too many C, an overloaded R and a sprawling A", () => {
     const issues = validateArtifact("S2-04", wide);
     expect(hasBlockingIssues(issues)).toBe(false);
-    expect(issues.map((i) => i.message)).toEqual(expect.arrayContaining([expect.stringContaining("既是 R 又是 C / I"), expect.stringContaining("顾问过多")]));
+    expect(issues.map((i) => i.message)).toEqual(expect.arrayContaining([expect.stringContaining("顾问过多")]));
     const columnIssues = validateArtifact("S2-04", big());
     expect(hasBlockingIssues(columnIssues)).toBe(false);
     expect(columnIssues.map((i) => i.message)).toEqual(expect.arrayContaining([expect.stringContaining("执行超载"), expect.stringContaining("担任 A 的事项过多")]));
