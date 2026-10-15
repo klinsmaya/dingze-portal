@@ -1,5 +1,6 @@
 import {
-  ArrowLeft,
+  ListTodo,
+  PencilLine,
   Building2,
   Check,
   ChevronDown,
@@ -44,8 +45,8 @@ function StepIcon({ step, className }: { step: RouteStep; className?: string }) 
   return <Circle className={cn("size-3.5", STATE_DOT[step.state], className)} />;
 }
 
-export type RailLink = { to: string; label: string; icon: "today" | "materials" | "org" | "export" | "artifacts" | "expert" };
-const LINK_ICONS = { today: ArrowLeft, materials: FolderOpen, org: Building2, export: FileDown, artifacts: Library, expert: UsersRound };
+export type RailLink = { to: string; label: string; icon: "today" | "fill" | "materials" | "org" | "export" | "artifacts" | "expert"; current?: boolean };
+const LINK_ICONS = { today: ListTodo, fill: PencilLine, materials: FolderOpen, org: Building2, export: FileDown, artifacts: Library, expert: UsersRound };
 
 /** 项目路线 (design 10 left rail): 工作任务 → 实施步骤 → 子步骤, collapsible to an icon bar. */
 export function RouteRail({
@@ -71,8 +72,7 @@ export function RouteRail({
 }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
-  const back = links[0];
-  const others = links.slice(1);
+  const anyStale = route.tasks.some((t) => t.steps.some((s) => s.stale));
   const products = route.current ? route.current.codes.filter((c) => getArtifactDef(c).priority !== "method") : [];
 
   if (collapsed) {
@@ -81,11 +81,14 @@ export function RouteRail({
         <button type="button" onClick={onToggle} aria-label="展开项目路线" className="flex size-9 items-center justify-center rounded-md border hover:bg-muted">
           <ChevronsRight className="size-4" />
         </button>
-        {back ? (
-          <Link to={back.to} aria-label={back.label} title={back.label} className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-            <ArrowLeft className="size-4" />
-          </Link>
-        ) : null}
+        {links.map((l) => {
+          const Icon = LINK_ICONS[l.icon];
+          return (
+            <Link key={l.to} to={l.to} aria-label={l.label} title={l.label} aria-current={l.current ? "page" : undefined} className={cn("flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground", l.current && "bg-brand text-brand-foreground hover:bg-brand hover:text-brand-foreground")}>
+              <Icon className="size-4" />
+            </Link>
+          );
+        })}
         <div className="h-px w-8 bg-border" />
         {route.tasks.map((task) => (
           <div key={task.label} className={cn("flex flex-col items-center gap-1 rounded-lg p-1", task.current && "bg-muted")}>
@@ -111,17 +114,20 @@ export function RouteRail({
 
   return (
     <nav aria-label="项目路线" className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-col gap-1 border-b px-3 py-2">
-        {back ? (
-          <Link to={back.to} className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
-            <ArrowLeft className="size-4 shrink-0" /> <span className="truncate">{back.label}</span>
-          </Link>
-        ) : null}
-        <div className="grid grid-cols-4 gap-0.5" aria-label="项目入口">
-          {others.map((l) => {
+      <div className="shrink-0 border-b px-3 py-2">
+        <div className={cn("grid gap-0.5", links.length > 4 ? "grid-cols-5" : "grid-cols-4")} aria-label="项目入口">
+          {links.map((l) => {
             const Icon = LINK_ICONS[l.icon];
             return (
-              <Link key={l.to} to={l.to} className="flex flex-col items-center gap-0.5 rounded-md px-1 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground">
+              <Link
+                key={l.to}
+                to={l.to}
+                aria-current={l.current ? "page" : undefined}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 rounded-md px-1 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground",
+                  l.current && "bg-brand font-semibold text-brand-foreground hover:bg-brand hover:text-brand-foreground",
+                )}
+              >
                 <Icon className="size-4" />
                 {l.label}
               </Link>
@@ -183,7 +189,7 @@ export function RouteRail({
                       >
                         <StepIcon step={s} />
                         <span className="min-w-0 flex-1 truncate">{s.label}</span>
-                        {s.stale ? <span className="size-1.5 shrink-0 rounded-full bg-destructive" title="上游有改动" /> : null}
+                        {s.stale ? <span className="size-1.5 shrink-0 rounded-full bg-[color:var(--dz-warn)]" title="上游已变更，需要核对" aria-label="上游已变更" /> : null}
                         {s.badge ? <span className={cn("shrink-0 text-[11px]", s.state === "returned" ? "text-destructive" : "text-muted-foreground")}>{s.optional && s.state === "todo" ? "可跳过" : s.badge}</span> : null}
                       </Link>
                       {s.current && s.subs.length && s.subs.some((x) => x.to) ? (
@@ -211,9 +217,17 @@ export function RouteRail({
         })}
       </div>
 
+      {anyStale ? (
+        <p className="flex shrink-0 items-center gap-1.5 border-t px-4 py-1.5 text-[11px] text-muted-foreground">
+          <span className="size-1.5 shrink-0 rounded-full bg-[color:var(--dz-warn)]" /> 圆点：上游已变更，需要核对
+        </p>
+      ) : null}
       <div className="shrink-0 border-t px-4 py-2.5 text-xs text-muted-foreground">
         <div className="mb-1 flex items-center gap-1">
           <FolderOpen className="size-3" /> 参考资料
+          <Link to={`/projects/${projectId}/materials#org`} className="ml-2 hover:text-foreground hover:underline" title="组织与职责：部门、负责人和职责">
+            · 组织与职责
+          </Link>
           <Link to={`/projects/${projectId}/materials#library`} className="ml-auto text-primary hover:underline">
             {materials.length ? "全部 / 上传" : "去上传"}
           </Link>

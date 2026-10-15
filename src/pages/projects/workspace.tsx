@@ -669,20 +669,14 @@ function Workspace({ code }: { code: string }) {
   const chrome = chromeRef.current;
   const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
   const base = `/projects/${project.id}`;
-  const railLinks: RailLink[] = isEnterprise || role === "readonly"
-    ? [
-        { to: `${base}/overview`, label: "待办", icon: "today" },
-        { to: `${base}/materials`, label: "资料", icon: "materials" },
-        { to: `${base}/materials#org`, label: "组织", icon: "org" },
-        { to: `${base}/results`, label: "成果", icon: "artifacts" },
-      ]
-    : [
-        { to: `${base}/overview`, label: "待办", icon: "today" },
-        { to: `${base}/materials`, label: "资料", icon: "materials" },
-        { to: `${base}/materials#org`, label: "组织", icon: "org" },
-        { to: `${base}/results`, label: "成果", icon: "artifacts" },
-        { to: `${base}/expert`, label: "专家", icon: "expert" },
-      ];
+  // 与项目顶栏同一组入口、同名（开营前 UX 改版 IA1）：待办 · 定责 · 资料 · 成果，当前页“定责”高亮。
+  const railLinks: RailLink[] = [
+    { to: `${base}/overview`, label: "待办", icon: "today" },
+    { to: `${base}/workspace`, label: "定责", icon: "fill", current: true },
+    { to: `${base}/materials`, label: "资料", icon: "materials" },
+    { to: `${base}/results`, label: "成果", icon: "artifacts" },
+    ...(isEnterprise || role === "readonly" ? [] : [{ to: `${base}/expert`, label: "专家", icon: "expert" } as RailLink]),
+  ];
   const stageLinks = STAGES.map((st) => {
     const first = ARTIFACTS.find((a) => a.stage === st.key && a.priority !== "method")!;
     return { key: st.key, to: workspacePath(project.id, first.code), open: !!overview.artifacts.find((a) => a.code === first.code)?.unlock.unlocked };
@@ -693,12 +687,13 @@ function Workspace({ code }: { code: string }) {
   const headerStates: HeaderState[] = [];
   if (returned) headerStates.push({ tone: "warn", text: "已退回", detail: progress?.lastEvent?.reason || "顾问退回了这张表，请按批注修改后重新提交。" });
   else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由企业项目负责人或主咨询师解锁重开（写原因），项目成员和咨询师都会收到通知，下游会标“上游已变更”。", detailLabel: "说明" });
-  else if (collab) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
+  // 上游已变更只说一次（下面那枚带原因的标签），不再和协作状态各写一遍。
+  else if (collab && !artifact?.stale) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
   if (artifact?.stale)
     headerStates.push({
       tone: "warn",
-      text: "上游已变更",
+      text: status === "locked" ? "上游已变更" : "上游已变更 · 核对后保存一次",
       detail:
         status === "locked"
           ? `${artifact.staleReason ?? "引用的上游表改过了"}。${staleAdvice(status, actor.service)}；重开后核对并保存，再重新定版。在那之前，这张表和它的导出仍是原定版内容。`

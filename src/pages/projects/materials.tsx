@@ -281,7 +281,7 @@ export default function MaterialsPage() {
   );
   const page = useAIPageElementHandle({
     id: `dingze-materials-${project.id}`,
-    title: "资料与画像",
+    title: "资料",
     kind: "record-detail",
     tools,
     getContext: () => ({
