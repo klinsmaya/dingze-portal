@@ -10,7 +10,7 @@
 
 | 部分 | 位置 | 说明 |
 |---|---|---|
-| AI 门户 `dingze` | 本仓库根目录（React 19 + Refine + shadcn / Base UI + Tailwind v4 + Vite） | 部署在 `https://ziqu.aihupo.cn/x/dingze/` |
+| AI 门户 `dingze` | 本仓库根目录（React 19 + Refine + shadcn / Base UI + Tailwind v4 + Vite） | 部署在 `https://ziqu-dev.aihupo.cn/x/dingze/` |
 | 服务端插件 `@ziqu/plugin-dingze` | `server-plugins/plugin-dingze` | 数据表、业务动作（资源 `dingze`）、AI 员工与 Skill；前后端共用的模型与校验在 `src/shared`（门户里用别名 `@dingze/shared` 引入） |
 
 需求基线：《企业战略咨询平台需求规格说明书》V1.2、附录 B 成果编号；交互基线：设计稿《10 思维导图 / 表格：修改调整与批注》（OPS-72 v1.3）。

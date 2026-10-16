@@ -1,6 +1,6 @@
 # 演示账号
 
-测试环境：https://ziqu.aihupo.cn/x/dingze/
+测试环境：https://ziqu-dev.aihupo.cn/x/dingze/
 
 状态核对日期：2026-10-13（插件 0.26.0）。
 

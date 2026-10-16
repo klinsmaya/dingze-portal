@@ -2,7 +2,7 @@
 
 **项目**：企业战略咨询平台「自驱战略 · 定三责」V1
 **依据**：《企业战略咨询平台需求规格说明书》V1.2、《自驱战略落地》第 2—4 章（定战略责 / 定目标责 / 定行动责）、`ziqu-dingze` 方法论包
-**测试环境**：https://ziqu.aihupo.cn/x/dingze/ （NocoBase 2.4.0-alpha.9，插件 `@ziqu/plugin-dingze` 0.26.0）
+**测试环境**：https://ziqu-dev.aihupo.cn/x/dingze/ （NocoBase 2.4.0-alpha.9，插件 `@ziqu/plugin-dingze` 0.26.0）
 **更新记录 / 路线图**：[changelog.md](changelog.md)、[roadmap.md](roadmap.md)
 **代码**：仓库 `klinsmaya/portal-template-default`，分支 `claude/serene-hawking-jgi7rn`
 
