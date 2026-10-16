@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, CircleHelp, Import, Plus, Trash2 } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, createContext, useContext, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,23 +65,39 @@ export function TextCell({
   );
 }
 
-/** The editor's own small row: a 怎么填 tip (kept out of the way) and table-specific buttons. */
+/** 工具栏里给“怎么填”留的位置（2026-10-16 页头规整）：有位置时提示放进工具栏，不再占编辑区一行。 */
+export const HowToSlotContext = createContext<HTMLElement | null>(null);
+
+/** The editor's own small row: a 怎么填 tip and table-specific buttons; the tip goes into the toolbar when it can. */
 export function EditorToolbar({ children, hint }: { children?: ReactNode; hint?: ReactNode }) {
+  const slot = useContext(HowToSlotContext);
+  const tip = hint ? (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground",
+          slot && "h-8 shrink-0 rounded-md border px-2 hover:bg-muted",
+        )}
+      >
+        <CircleHelp className="size-3.5" /> 怎么填
+      </PopoverTrigger>
+      <PopoverContent align={slot ? "end" : "start"} className="max-w-md text-sm leading-relaxed">
+        {hint}
+      </PopoverContent>
+    </Popover>
+  ) : null;
+  if (slot) {
+    return (
+      <>
+        {tip ? createPortal(tip, slot) : null}
+        {children ? <div className="flex flex-wrap justify-end gap-2">{children}</div> : null}
+      </>
+    );
+  }
   if (!children && !hint) return null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      {hint ? (
-        <Popover>
-          <PopoverTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <CircleHelp className="size-3.5" /> 怎么填
-          </PopoverTrigger>
-          <PopoverContent align="start" className="max-w-md text-sm leading-relaxed">
-            {hint}
-          </PopoverContent>
-        </Popover>
-      ) : (
-        <span />
-      )}
+      {tip ?? <span />}
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );

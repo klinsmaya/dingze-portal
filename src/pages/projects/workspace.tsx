@@ -59,6 +59,7 @@ import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { RouteRail } from "./components/route-rail";
+import { HowToSlotContext } from "./editors/kit";
 import { ExportMenu, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
@@ -204,6 +205,8 @@ function Workspace({ code }: { code: string }) {
   const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
   const [upstreamOpen, setUpstreamOpen] = useState(false);
   const [impactOpen, setImpactOpen] = useState(false);
+  // 编辑器的“怎么填”放进工具栏右侧（2026-10-16）。
+  const [howToSlot, setHowToSlot] = useState<HTMLElement | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Opens the right panel on a tab; set once the panel preference is known (below).
   const openAside = useRef<(tab: AsideTab) => void>(setAsideTab);
@@ -772,6 +775,22 @@ function Workspace({ code }: { code: string }) {
   );
   const bookOpen = panelOpen && asideTab === "book";
   const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
+  // 交出去以后的下一张：一个小链接放在状态行，不再占编辑区一整行（2026-10-16）。
+  const handedOff = ["step_done", "in_review", "pending_confirm", "locked"].includes(status);
+  const allP0Locked = ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked");
+  const nextLink = !handedOff ? null : next ? (
+    <Link
+      to={workspacePath(project.id, next.code)}
+      className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted"
+      title={`这一步${status === "locked" ? "已定版" : status === "step_done" ? "本步已完成" : "已交出去"}，可以接着做《${next.name}》`}
+    >
+      下一张《{next.name}》 <ArrowRight className="size-3.5" />
+    </Link>
+  ) : allP0Locked ? (
+    <Link to={`${base}/results`} className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted" title="全部 P0 成果都已定版">
+      去成果下载交付物 <ArrowRight className="size-3.5" />
+    </Link>
+  ) : null;
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
@@ -793,6 +812,7 @@ function Workspace({ code }: { code: string }) {
 
   return (
     <EditSessionContext.Provider value={session}>
+    <HowToSlotContext.Provider value={howToSlot}>
     <AIPageContextScope context={page.context}>
       <PanelToggle slot={topbar?.actions ?? null} open={panelOpen} onToggle={() => setPanelPref(!panelOpen)} count={openThreads.length} />
       <div className="flex min-h-0 flex-1">
@@ -814,6 +834,7 @@ function Workspace({ code }: { code: string }) {
             <WhereRow
               crumbs={crumbs}
               links={links}
+              next={nextLink}
               subs={railCollapsed && topbarItems(route).length ? <SubsMenu projectId={project.id} items={topbarItems(route)} /> : null}
               states={headerStates}
               savedAt={artifact?.currentVersion?.createdAt ?? null}
@@ -918,11 +939,15 @@ function Workspace({ code }: { code: string }) {
                   }}
                   onShortcuts={() => setShortcutsOpen(true)}
                   method={methodButton}
+                  setHowToSlot={setHowToSlot}
                 />
               </div>
-            ) : methodButton ? (
-              <div className="-mx-4 flex min-h-10 items-center justify-end border-t px-3 md:-mx-5">{methodButton}</div>
-            ) : null}
+            ) : (
+              <div className="-mx-4 flex min-h-10 items-center justify-end gap-1 border-t px-3 md:-mx-5">
+                {methodButton}
+                <span ref={setHowToSlot} className="contents" />
+              </div>
+            )}
           </div>
 
           <main
@@ -1069,35 +1094,6 @@ function Workspace({ code }: { code: string }) {
               </Alert>
             ) : (
               <>
-                {["step_done", "in_review", "pending_confirm", "locked"].includes(status) ? (
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed bg-background px-3 py-1.5 text-sm">
-                    {next ? (
-                      <>
-                        <span className="text-muted-foreground">
-                          这一步{status === "locked" ? "已定版" : status === "step_done" ? (actor.service === "self" ? "本步已完成（还没自查复核）" : "本步已完成（还没交给顾问复核）") : "已交出去"}，可以接着做：
-                        </span>
-                        <Link to={workspacePath(project.id, next.code)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
-                          《{next.name}》 <ArrowRight className="size-4" />
-                        </Link>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">
-                        {ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked") ? (
-                          <>
-                            全部 P0 成果都已定版，可以到
-                            <Link to={`${base}/results`} className="mx-1 font-semibold text-brand underline">
-                              导出
-                            </Link>
-                            页下载正式交付物。
-                          </>
-                        ) : (
-                          "本阶段已解锁的表都做完了；下一阶段在本阶段 P0 全部定版后开启。"
-                        )}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-
                 {viewRev ? (
                   <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--dz-changed)] bg-card px-4 py-2 text-sm">
                     <History className="size-4" style={{ color: "var(--dz-changed)" }} />
@@ -1296,6 +1292,7 @@ function Workspace({ code }: { code: string }) {
         </aside>
       </div>
     </AIPageContextScope>
+    </HowToSlotContext.Provider>
     </EditSessionContext.Provider>
   );
 }

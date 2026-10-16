@@ -131,6 +131,7 @@ export function WhereRow({
   crumbs,
   subs,
   links,
+  next,
   states,
   savedAt,
   rev,
@@ -144,6 +145,8 @@ export function WhereRow({
   subs?: ReactNode;
   /** 上下游按钮（上游输入、上游已变更、下游影响），放在状态旁。 */
   links?: ReactNode;
+  /** 本表交出去后的下一张（一个小链接，不再占整行）。 */
+  next?: ReactNode;
   states: HeaderState[];
   savedAt: string | null;
   rev: number;
@@ -185,6 +188,7 @@ export function WhereRow({
           </span>
         ))}
         {links}
+        {next}
         <span className="text-muted-foreground">
           {saving ? "保存中…" : unsaved ? null : savedAt ? `已保存 ${formatTime(savedAt).slice(-5)}` : "还没保存过"}
           {rev ? ` · v${rev}` : ""}
@@ -423,7 +427,10 @@ export function StructureToolbar({
   onLasso,
   onShortcuts,
   method,
+  setHowToSlot,
 }: {
+  /** 编辑器的“怎么填”放进这里。 */
+  setHowToSlot?: (el: HTMLElement | null) => void;
   /** 书中方法一句话，点开右栏“书中方法”（打开时高亮）。 */
   method?: ReactNode;
   chrome: EditorChrome | null;
@@ -485,6 +492,7 @@ export function StructureToolbar({
         </div>
       ) : null}
       {method}
+      <span ref={setHowToSlot} className="contents" />
       <ToolButton label="快捷键" shortcut="?" icon={<Keyboard />} onClick={onShortcuts} />
     </div>
   );
