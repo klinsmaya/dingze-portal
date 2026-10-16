@@ -19,6 +19,7 @@ import {
   importSources,
 } from './services/artifacts';
 import { consultantBoard } from './services/board';
+import { exportSnapshot, importSnapshot } from './services/snapshot';
 import { opsBoard } from './services/usage';
 import { checkInvite, listInvites, registerWithInvite, registrationStatus, reviewRegistration, saveInvite } from './services/invites';
 import { campAccounts, campAttach, campClose, campDetail, campEnroll, campRemind, listCamps, saveCamp } from './services/camps';
@@ -241,6 +242,9 @@ export class PluginDingzeServer extends Plugin {
         listEnterprises: action((ctx) => listEnterprises(ctx)),
         createProject: action((ctx) => createProject(ctx, values(ctx) as any)),
         createOwnProject: action((ctx) => createOwnProject(ctx, values(ctx) as any)),
+        // 演示数据迁移（dev → 准生产），只给超级管理员。
+        exportSnapshot: action((ctx) => exportSnapshot(ctx, values(ctx) as any)),
+        importSnapshot: action((ctx) => importSnapshot(ctx, values(ctx) as any)),
         importSources: action(async (ctx) => importSources(ctx, await loadProjectContext(ctx, ctx.action.params.projectId))),
         importArtifacts: action(async (ctx) => {
           const v = values(ctx);
