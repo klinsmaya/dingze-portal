@@ -39,3 +39,15 @@ it("swaps material originals to the ids uploaded on the target", () => {
   const out = remapFiles(rows, { "9": 3 });
   expect(out.dz_materials.map((m) => m.fileId)).toEqual([3, null]);
 });
+
+it("initial passwords always mix upper, lower, digits and a symbol", async () => {
+  const { initialPassword } = await import("../../../server-plugins/plugin-dingze/src/server/services/snapshot");
+  for (let i = 0; i < 200; i++) {
+    const p = initialPassword();
+    expect(p).toMatch(/[A-Z]/);
+    expect(p).toMatch(/[a-z]/);
+    expect(p).toMatch(/[0-9]/);
+    expect(p).toMatch(/[^A-Za-z0-9]/);
+    expect(p.length).toBeGreaterThanOrEqual(16);
+  }
+});

@@ -187,6 +187,13 @@ function quoted(ctx: Context, collection: string): string {
 
 class DryRun extends Error {}
 
+/** 演示账号的随机初始密码：满足常见密码策略（大小写字母 + 数字 + 符号，16 位）。 */
+export function initialPassword(): string {
+  const pick = (set: string) => set[randomBytes(1)[0] % set.length];
+  const body = randomBytes(12).toString('base64url').replace(/[-_]/g, 'x');
+  return `${pick('ABCDEFGHJKLMNPQRSTUVWXYZ')}${pick('abcdefghijkmnpqrstuvwxyz')}${pick('23456789')}${body}!`;
+}
+
 /**
  * 导入：目标实例上定责表必须是空的（新装的插件）。按原编号写入，写完校正自增序号。
  * dryRun 时整个事务回滚，只返回将写入的条数和检查结果。
@@ -216,7 +223,7 @@ export async function importSnapshot(ctx: Context, input: { snapshot: Snapshot; 
       }
       counts.spaces = snap.spaces.length;
       for (const u of snap.users) {
-        const password = randomBytes(9).toString('base64url');
+        const password = initialPassword();
         passwords[u.username] = password;
         await ctx.db.getRepository('users').create({
           values: { id: u.id, username: u.username, nickname: u.nickname, email: u.email, phone: u.phone, password, roles: u.roles },

@@ -18,7 +18,7 @@
 ## 2. 当前状态（2026-10-13）
 
 - 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
-- 测试环境：NocoBase 2.4.0-alpha.9，插件 **0.32.1**（dev） 已部署启用，门户已用最新代码发布。
+- 环境：dev（ziqu-dev.aihupo.cn）和准生产（ziqu.aihupo.cn）都是 NocoBase 2.4.0-alpha.11，插件 **0.32.2** 已部署启用，门户已用最新代码发布；准生产见 docs/preprod.md。
 - 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（246 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
 - 用户提出的需求已全部完成，并在线上用演示账号实测：
   - 规格硬伤 5 条：六分法 P0 阻断、关闭公开注册、编号对齐附录 B、资料原件、S2-08 空字段与例外不绕过校验。
