@@ -14,7 +14,6 @@ import {
   isArtifactCode,
   validateArtifact,
   ARTIFACTS,
-  STAGES,
   profileBrief,
   canPerform,
   staleAdvice,
@@ -30,7 +29,7 @@ import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { nextStep, workspacePath } from "@/lib/dingze/progress";
+import { nextStep, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
@@ -58,8 +57,8 @@ import { DiagramExportButton } from "./components/diagram-export";
 import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
-import { type RailLink, RouteRail } from "./components/route-rail";
-import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, TitleRow, TopbarTitle, WhereRow, useMediaQuery } from "./components/workspace-chrome";
+import { RouteRail } from "./components/route-rail";
+import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
 import { ImpactDialog } from "./components/impact-list";
@@ -688,18 +687,13 @@ function Workspace({ code }: { code: string }) {
   const chrome = chromeRef.current;
   const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
   const base = `/projects/${project.id}`;
-  // 与项目顶栏同一组入口、同名（开营前 UX 改版 IA1）：待办 · 定责 · 资料 · 成果，当前页“定责”高亮。
-  const railLinks: RailLink[] = [
-    { to: `${base}/overview`, label: "待办", icon: "today" },
-    { to: `${base}/workspace`, label: "定责", icon: "fill", current: true },
-    { to: `${base}/materials`, label: "资料", icon: "materials" },
-    { to: `${base}/results`, label: "成果", icon: "artifacts" },
-    ...(isEnterprise || role === "readonly" ? [] : [{ to: `${base}/expert`, label: "专家", icon: "expert" } as RailLink]),
-  ];
-  const stageLinks = STAGES.map((st) => {
-    const first = ARTIFACTS.find((a) => a.stage === st.key && a.priority !== "method")!;
-    return { key: st.key, to: workspacePath(project.id, first.code), open: !!overview.artifacts.find((a) => a.code === first.code)?.unlock.unlocked };
+  // 三阶段条与本阶段进度（参考稿左栏）：入口取每阶段第一张表，进度与待办页同口径（必做表定版数）。
+  const stageLinks = stageProgress(overview.artifacts).map((st) => {
+    const first = ARTIFACTS.find((a) => a.stage === st.stage && a.priority !== "method")!;
+    return { key: st.stage, to: workspacePath(project.id, first.code), open: st.open, complete: st.complete, locked: st.locked, gateTotal: st.gateTotal };
   });
+  const inStage = overview.artifacts.filter((a) => getArtifactDef(a.code).stage === route.stage && getArtifactDef(a.code).priority !== "method");
+  const railStats = { ready: inStage.filter((a) => a.status === "step_done").length, review: inStage.filter((a) => a.status === "in_review" || a.status === "pending_confirm").length };
   const currentSub = route.current?.subs.find((x) => x.current);
   const crumbs = [route.stageName, route.current?.label ?? def.step, ...(currentSub ? [currentSub.label] : [])];
   const returned = progress?.status === "in_progress" && progress.lastEvent && ["returnToEdit", "forceReturn"].includes(progress.lastEvent.action);
@@ -784,13 +778,6 @@ function Workspace({ code }: { code: string }) {
   return (
     <EditSessionContext.Provider value={session}>
     <AIPageContextScope context={page.context}>
-      <TopbarTitle
-        slot={topbar?.main ?? null}
-        projectId={project.id}
-        title={`${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} · ${project.name}`}
-        subtitle={`${route.stageName} › ${route.current?.short ?? def.plain}`}
-        items={topbarItems(route)}
-      />
       <PanelToggle slot={topbar?.actions ?? null} open={panelOpen} onToggle={() => setPanelPref(!panelOpen)} count={openThreads.length} />
       <div className="flex min-h-0 flex-1">
         <aside className={cn("shrink-0 border-r bg-card", railCollapsed ? "w-14" : "w-[248px]")}>
@@ -798,7 +785,7 @@ function Workspace({ code }: { code: string }) {
             projectId={project.id}
             route={route}
             stages={stageLinks}
-            links={railLinks}
+            stats={railStats}
             collapsed={railCollapsed}
             onToggle={() => setRailPref(!railCollapsed)}
                 materials={materialList}
@@ -810,6 +797,7 @@ function Workspace({ code }: { code: string }) {
           <div className="shrink-0 border-b bg-background px-4 pt-1.5 md:px-5">
             <WhereRow
               crumbs={crumbs}
+              subs={railCollapsed && topbarItems(route).length ? <SubsMenu projectId={project.id} items={topbarItems(route)} /> : null}
               states={headerStates}
               savedAt={artifact?.currentVersion?.createdAt ?? null}
               rev={artifact?.currentRev ?? 0}

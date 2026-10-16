@@ -3,8 +3,8 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  ChevronDown,
   ChevronRight,
-  CircleDollarSign,
   Combine,
   CornerDownRight,
   Download,
@@ -19,19 +19,15 @@ import {
   PanelRightOpen,
   Plus,
   Redo2,
-  Sprout,
   Split,
-  Table2,
   Trash2,
   Undo2,
-  UsersRound,
-  Workflow,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -43,24 +39,21 @@ import { cn } from "@/lib/utils";
 
 import type { EditorChrome } from "./edit-session";
 
-// The workspace chrome from design 10: the step title and sub-steps in the top bar, a
-// three-row header over the canvas (where you are · title and view · structure toolbar).
+// The workspace chrome from design 10: a three-row header over the canvas (where you are · title and view · structure toolbar).
 
-const SUB_ICONS: Record<string, typeof Check> = { financial: CircleDollarSign, customer: UsersRound, process: Workflow, learning: Sprout, import: Table2 };
-
-/** Step title and sub-step bar, rendered into the project top bar. */
-/** 子步骤多（如六分法六项）时，中等宽度收进“本表小节”下拉，免得和右侧按钮抢一行（开营前 UX 改版 T3）。 */
-function SubsMenu({ projectId, items, className }: { projectId: number; items: RouteSub[]; className?: string }) {
+/** 本表小节：左栏收起（窄屏）时，在位置行给一个下拉，代替左栏里的小节列表。 */
+export function SubsMenu({ projectId, items }: { projectId: number; items: RouteSub[] }) {
   const navigate = useNavigate();
   const at = items.findIndex((i) => i.current);
   const done = items.filter((i) => i.done).length;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn("flex h-8 min-w-0 items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 text-xs text-band-foreground hover:bg-white/20", className)}>
+      <DropdownMenuTrigger className="flex h-6 min-w-0 shrink-0 items-center gap-1 rounded-full border px-2 text-xs text-muted-foreground hover:text-foreground">
         <span className="truncate">本表小节{at >= 0 ? `：${items[at].short}` : ""}</span>
-        <span className="text-band-muted">
+        <span>
           {done}/{items.length}
         </span>
+        <ChevronDown className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         {items.map((item, i) => (
@@ -71,65 +64,6 @@ function SubsMenu({ projectId, items, className }: { projectId: number; items: R
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-export function TopbarTitle({ slot, projectId, title, subtitle, items }: { slot: HTMLElement | null; projectId: number; title: string; subtitle: string; items: RouteSub[] }) {
-  if (!slot) return null;
-  const many = items.length > 4;
-  return createPortal(
-    <>
-      <div className="min-w-0 max-w-[16rem] shrink leading-tight">
-        <div className="truncate font-heading text-[15px] font-bold tracking-wide" title={title}>
-          {title}
-        </div>
-        <div className="truncate text-xs text-band-muted" title={subtitle}>
-          {subtitle}
-        </div>
-      </div>
-      {items.length ? (
-        <>
-        {many ? <SubsMenu projectId={projectId} items={items} className="hidden lg:flex 2xl:hidden" /> : null}
-        {many ? <span className="hidden flex-1 lg:block 2xl:hidden" /> : null}
-        <ol aria-label="子步骤" className={cn("hidden min-w-0 flex-1 items-center gap-1.5 overflow-hidden", many ? "2xl:flex" : "lg:flex")}>
-          {items.map((item, i) => {
-            const Icon = item.icon ? SUB_ICONS[item.icon] : null;
-            const body = (
-              <>
-                <span
-                  className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px]",
-                    item.current ? "border-gold bg-gold text-[#0c3d52]" : item.done ? "border-white/40 bg-white/15" : "border-white/30",
-                  )}
-                >
-                  {item.done && !item.current ? <Check className="size-3.5" /> : Icon ? <Icon className="size-3.5" /> : i + 1}
-                </span>
-                <span className="truncate">{item.short}</span>
-              </>
-            );
-            const cls = cn("flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 text-xs", item.current ? "font-semibold text-band-foreground" : "text-band-muted hover:text-band-foreground");
-            return (
-              <li key={item.key} className="flex min-w-0 items-center gap-1.5">
-                {i > 0 ? <span aria-hidden className="h-px w-3 shrink-0 bg-white/30" /> : null}
-                {item.to ? (
-                  <Link to={routePath(projectId, item.to)} aria-current={item.current ? "step" : undefined} className={cls} title={item.label}>
-                    {body}
-                  </Link>
-                ) : (
-                  <span className={cls} title={item.label}>
-                    {body}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        </>
-      ) : (
-        <span className="flex-1" />
-      )}
-    </>,
-    slot,
   );
 }
 
@@ -173,6 +107,7 @@ const TONE: Record<HeaderState["tone"], string> = {
 /** Row 1: where you are, and the table's state and save state (保存方式 甲: still a button). */
 export function WhereRow({
   crumbs,
+  subs,
   states,
   savedAt,
   rev,
@@ -182,6 +117,8 @@ export function WhereRow({
   onSave,
 }: {
   crumbs: string[];
+  /** 左栏收起时的“本表小节”下拉。 */
+  subs?: ReactNode;
   states: HeaderState[];
   savedAt: string | null;
   rev: number;
@@ -192,13 +129,14 @@ export function WhereRow({
 }) {
   return (
     <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <nav aria-label="位置" className="flex min-w-0 flex-1 items-center gap-1 text-muted-foreground">
+      <nav aria-label="位置" className="flex min-w-[16rem] flex-1 items-center gap-1 text-muted-foreground">
         {crumbs.map((c, i) => (
           <span key={`${c}-${i}`} className="flex min-w-0 items-center gap-1">
             {i > 0 ? <ChevronRight className="size-3 shrink-0" /> : null}
             <span className={cn("truncate", i === crumbs.length - 1 && "text-foreground")}>{c}</span>
           </span>
         ))}
+        {subs}
       </nav>
       <div className="flex shrink-0 items-center gap-2" role="status">
         {states.map((s) => (

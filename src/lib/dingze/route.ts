@@ -127,6 +127,10 @@ export type RouteStep = {
   codes: string[];
   subs: RouteSub[];
   stale: boolean;
+  /** 未解锁时在等什么，如“S2-08 本步完成后解锁”。 */
+  waiting?: string;
+  /** 本步的表号（不含方法底稿），如 S2-01/03。 */
+  codeLabel: string;
 };
 export type RouteTask = { label: string; steps: RouteStep[]; locked: boolean; current: boolean };
 export type Route = { stage: StageKey; stageName: string; tasks: RouteTask[]; done: number; total: number; current: RouteStep | null; currentTask: RouteTask | null };
@@ -191,6 +195,21 @@ function subsOf(def: StepDef, where: Where, byCode: Map<string, ArtifactOverview
   return [];
 }
 
+/** “S2-08 关键项目清单“本步完成”后解锁” → “S2-08 本步完成后解锁”，左栏一行放得下。 */
+export function waitingText(raw: string | undefined): string {
+  if (!raw) return "前面的表本步完成后解锁";
+  if (raw.startsWith("上一阶段")) return "上一阶段定版后开启";
+  const ids = raw.match(/S\d-\d\d/g);
+  return ids?.length ? `${ids.join("、")} 本步完成后解锁` : raw;
+}
+
+/** S2-01 + S2-03 → “S2-01/03”；跨阶段时照写全号。 */
+export function codeLabel(codes: string[]): string {
+  if (codes.length <= 1) return codes[0] ?? "";
+  const prefix = codes[0].slice(0, 3);
+  return codes.every((c) => c.startsWith(prefix)) ? `${codes[0]}/${codes.slice(1).map((c) => c.slice(3)).join("/")}` : codes.join("/");
+}
+
 export function buildRoute(stage: StageKey, artifacts: ArtifactOverview[], where: Where, payloads: Record<string, unknown> = {}): Route {
   const byCode = new Map(artifacts.map((a) => [a.code, a]));
   let current: RouteStep | null = null;
@@ -244,6 +263,8 @@ export function buildRoute(stage: StageKey, artifacts: ArtifactOverview[], where
         codes: def.codes,
         subs,
         stale: def.codes.some((c) => byCode.get(c)?.stale),
+        waiting: state === "locked" ? waitingText(a?.unlock.waitingFor) : undefined,
+        codeLabel: codeLabel(tables),
       };
       if (isCurrent && (!current || def.codes[0] === where.code)) current = step;
       return step;
