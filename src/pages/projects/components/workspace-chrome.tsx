@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -251,6 +251,40 @@ export function TitleRow({
         </div>
         {actions}
       </div>
+    </div>
+  );
+}
+
+export type InputItem = { code: string; name: string; state: string; tone: "done" | "doing" | "todo" | "warn"; to: string };
+
+const INPUT_TONE: Record<InputItem["tone"], string> = {
+  done: "text-[color:var(--dz-ok)]",
+  doing: "text-[color:var(--dz-cus)]",
+  todo: "text-muted-foreground",
+  warn: "text-[color:var(--dz-warn)]",
+};
+
+/** 上游输入 · 方法（参考稿）：这张表承接哪些表、照书里哪个方法做，点上游跳过去，点方法开右栏书中方法。 */
+export function InputsRow({ inputs, method, onMethod }: { inputs: InputItem[]; method: string | null; onMethod: () => void }) {
+  if (!inputs.length && !method) return null;
+  return (
+    <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-5 gap-y-0.5 text-xs text-muted-foreground">
+      {inputs.length ? (
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
+          <span className="shrink-0 font-semibold text-foreground/80">上游输入</span>
+          {inputs.map((i) => (
+            <Link key={i.code} to={i.to} className="hover:text-foreground hover:underline" title={`${i.code} ${i.name}：${i.state}`}>
+              《{i.name}》<span className={INPUT_TONE[i.tone]}>{i.state}</span>
+            </Link>
+          ))}
+        </span>
+      ) : null}
+      {method ? (
+        <button type="button" onClick={onMethod} className="flex min-w-0 max-w-full items-baseline gap-2.5 text-left hover:text-foreground" title={`${method}（点开看书中方法）`}>
+          <span className="shrink-0 font-semibold text-foreground/80">方法</span>
+          <span className="truncate underline-offset-2 hover:underline">{method}</span>
+        </button>
+      ) : null}
     </div>
   );
 }

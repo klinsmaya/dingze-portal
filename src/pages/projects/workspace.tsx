@@ -17,6 +17,7 @@ import {
   profileBrief,
   canPerform,
   staleAdvice,
+  taskGuide,
 } from "@dingze/shared";
 
 import { useAIPageElementHandle } from "@/extensions/nocobase-ai/components";
@@ -58,7 +59,7 @@ import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { RouteRail } from "./components/route-rail";
-import { ExportMenu, type HeaderState, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
+import { ExportMenu, type HeaderState, type InputItem, PanelToggle, StructureToolbar, InputsRow, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
 import { ImpactDialog } from "./components/impact-list";
@@ -756,6 +757,26 @@ function Workspace({ code }: { code: string }) {
       ) : null,
     });
   }
+  // 上游输入 · 方法（参考稿）：承接的上游表及其状态，书中方法一句话。
+  const inputItems: InputItem[] = [...new Set([...def.dependsOn, ...(def.reads ?? [])])]
+    .filter((c) => getArtifactDef(c).priority !== "method")
+    .map((c) => {
+      const up = overview.artifacts.find((a) => a.code === c);
+      const st = up?.status ?? "not_started";
+      const [state, tone]: [string, InputItem["tone"]] =
+        st === "locked"
+          ? [up?.stale ? "已定版 · 上游已变更" : "已定版", up?.stale ? "warn" : "done"]
+          : st === "in_review" || st === "pending_confirm"
+            ? ["复核中", "doing"]
+            : st === "step_done"
+              ? ["本步完成", "doing"]
+              : st === "in_progress"
+                ? ["填写中", "doing"]
+                : ["未开始", "todo"];
+      return { code: c, name: getArtifactDef(c).plain, state, tone, to: workspacePath(project.id, c) };
+    });
+  const guideNow = taskGuide(code, { sub: Number(searchParams.get("sub")) || null, zone: searchParams.get("zone") });
+  const methodLine = guideNow ? `${guideNow.title ? `${guideNow.title}：` : ""}${guideNow.guide.how.split(/[。；]/)[0]}` : null;
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
@@ -880,6 +901,7 @@ function Workspace({ code }: { code: string }) {
                   ) : null
                 }
               />
+              <InputsRow inputs={inputItems} method={methodLine} onMethod={() => openAside.current("book")} />
             </div>
             {EDITABLE_CODES.has(code) && unlocked ? (
               <div className="-mx-4 border-t px-3 md:-mx-5">

@@ -1,7 +1,9 @@
 import {
+  Building2,
   Check,
   CircleCheck,
   ChevronDown,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Circle,
@@ -13,7 +15,7 @@ import {
   Network,
   Table2,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
 
 import { STAGES, type StageKey, getArtifactDef } from "@dingze/shared";
@@ -106,6 +108,36 @@ function StageBar({ current, stages }: { current: StageKey; stages: RailStage[] 
 }
 
 
+type FootState = { materials: boolean; products: boolean };
+const FOOT_KEY = "dingze:rail-foot";
+
+/** 左栏底部两块默认收起，给路线让出高度；展开过的本机记住。 */
+function readFoot(): FootState {
+  try {
+    const v = JSON.parse(localStorage.getItem(FOOT_KEY) ?? "null");
+    if (v && typeof v === "object") return { materials: !!v.materials, products: !!v.products };
+  } catch {
+    // 读不到按默认
+  }
+  return { materials: false, products: false };
+}
+
+function FootSection({ open, onToggle, icon, title, extra, children }: { open: boolean; onToggle: () => void; icon: ReactNode; title: string; extra?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="shrink-0 border-t px-4 py-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 items-center gap-1 hover:text-foreground">
+          <ChevronRight className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")} />
+          {icon}
+          <span className="truncate">{title}</span>
+        </button>
+        {extra}
+      </div>
+      {open ? <div className="mt-1 pl-4">{children}</div> : null}
+    </div>
+  );
+}
+
 /** 项目路线 (design 10 left rail): 工作任务 → 实施步骤 → 子步骤, collapsible to an icon bar. */
 export function RouteRail({
   projectId,
@@ -130,6 +162,15 @@ export function RouteRail({
   onToggle: () => void;
 }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  const [foot, setFootState] = useState<FootState>(readFoot);
+  const setFoot = (next: FootState) => {
+    setFootState(next);
+    try {
+      localStorage.setItem(FOOT_KEY, JSON.stringify(next));
+    } catch {
+      // 无痕模式等存不了时只在本页记住
+    }
+  };
   const stage = stages.find((x) => x.key === route.stage);
   const products = route.current ? route.current.codes.filter((c) => getArtifactDef(c).priority !== "method") : [];
 
@@ -192,9 +233,10 @@ export function RouteRail({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {route.tasks.map((task) => {
-          const expanded = closed[task.label] === undefined ? task.current : !closed[task.label];
+          // 当前阶段的工作任务都展开（每节只有 1–3 步，后面要做什么一眼看清），手动收起的记住。
+          const expanded = !closed[task.label];
           return (
-            <section key={task.label} className={cn("mb-2 rounded-lg", task.current && "bg-muted/60")}>
+            <section key={task.label} className="mb-1.5">
               <button
                 type="button"
                 aria-expanded={expanded}
@@ -213,8 +255,8 @@ export function RouteRail({
                         aria-current={s.current ? "step" : undefined}
                         title={s.state === "locked" ? s.waiting : s.label}
                         className={cn(
-                          "flex min-h-8 items-start gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-background",
-                          s.current && "bg-background font-semibold shadow-[inset_3px_0_0_var(--primary)]",
+                          "flex min-h-8 items-start gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-muted",
+                          s.current && "bg-primary/8 font-semibold shadow-[inset_3px_0_0_var(--primary)] hover:bg-primary/10",
                           s.method && "py-1 pl-6 text-muted-foreground",
                         )}
                       >
@@ -238,19 +280,19 @@ export function RouteRail({
                         </span>
                       </Link>
                       {s.current && s.subs.length ? (
-                        <ol className="mt-0.5 mb-1 ml-5 flex flex-col gap-0.5 border-l pl-2" aria-label="本表小节">
+                        <ol className="mt-0.5 mb-1 ml-[15px] flex flex-col gap-0.5 border-l pl-2" aria-label="本表小节">
                           {s.subs.map((sub) => {
                             const inner = (
                               <>
-                                {sub.done && !sub.current ? <Check className="size-3 text-[color:var(--dz-ok)]" /> : <span className={cn("size-3 rounded-sm border", sub.current && "border-brand-foreground bg-brand-foreground/30")} />}
+                                {sub.done && !sub.current ? <Check className="size-3 text-[color:var(--dz-ok)]" /> : <span className={cn("size-2 rounded-full border", sub.current ? "border-primary bg-primary" : "border-muted-foreground/50")} />}
                                 <span className="truncate">{sub.label}</span>
                               </>
                             );
-                            const cls = cn("flex min-h-7 items-center gap-2 rounded px-1.5 text-xs", sub.current ? "bg-brand font-semibold text-brand-foreground hover:bg-brand" : "text-muted-foreground");
+                            const cls = cn("flex min-h-7 items-center gap-2 rounded px-1.5 text-xs", sub.current ? "font-semibold text-primary" : "text-muted-foreground");
                             return (
                               <li key={sub.key}>
                                 {sub.to ? (
-                                  <Link to={routePath(projectId, sub.to)} aria-current={sub.current ? "step" : undefined} className={cn(cls, "hover:bg-background")}>
+                                  <Link to={routePath(projectId, sub.to)} aria-current={sub.current ? "step" : undefined} className={cn(cls, "hover:bg-muted")}>
                                     {inner}
                                   </Link>
                                 ) : (
@@ -270,16 +312,20 @@ export function RouteRail({
         })}
       </div>
 
-      <div className="shrink-0 border-t px-4 py-2.5 text-xs text-muted-foreground">
-        <div className="mb-1 flex items-center gap-1">
-          <FolderOpen className="size-3" /> 参考资料
-          <Link to={`/projects/${projectId}/materials#org`} className="ml-2 hover:text-foreground hover:underline" title="组织与职责：部门、负责人和职责">
-            · 组织与职责
-          </Link>
+      <FootSection
+        open={foot.materials}
+        onToggle={() => setFoot({ ...foot, materials: !foot.materials })}
+        icon={<FolderOpen className="size-3" />}
+        title={`参考资料${materials.length ? ` · ${materials.length}` : ""}`}
+        extra={
           <Link to={`/projects/${projectId}/materials#library`} className="ml-auto text-primary hover:underline">
             {materials.length ? "全部 / 上传" : "去上传"}
           </Link>
-        </div>
+        }
+      >
+        <Link to={`/projects/${projectId}/materials#org`} className="flex items-center gap-1.5 py-0.5 hover:text-foreground" title="组织与职责：部门、负责人和职责">
+          <Building2 className="size-3 shrink-0" /> 组织与职责
+        </Link>
         {materials.length ? (
           materials.slice(0, 4).map((m) => (
             <button key={m.id} type="button" onClick={() => onOpenMaterial?.(m.id)} className="flex w-full items-center gap-1.5 py-0.5 text-left hover:text-foreground">
@@ -290,12 +336,9 @@ export function RouteRail({
         ) : (
           <p>还没有资料：企业简介、组织架构、战略规划传上来，数字咨询师起草更准。</p>
         )}
-      </div>
+      </FootSection>
       {products.length ? (
-        <div className="shrink-0 border-t px-4 py-2.5 text-xs text-muted-foreground">
-          <div className="mb-1 flex items-center gap-1">
-            <Link2 className="size-3" /> 本步产出 · 同一份数据
-          </div>
+        <FootSection open={foot.products} onToggle={() => setFoot({ ...foot, products: !foot.products })} icon={<Link2 className="size-3" />} title={`本步产出 · 同一份数据 · ${products.length}`}>
           {products.map((code) => {
             const def = getArtifactDef(code);
             const Icon = code === "S2-01" || code === "S1-02" ? Network : code === "S3-07" || code === "S3-08" ? FileText : Table2;
@@ -306,7 +349,7 @@ export function RouteRail({
               </Link>
             );
           })}
-        </div>
+        </FootSection>
       ) : null}
     </nav>
   );
