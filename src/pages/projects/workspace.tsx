@@ -59,7 +59,7 @@ import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { RouteRail } from "./components/route-rail";
-import { ExportMenu, type HeaderState, type InputItem, PanelToggle, StructureToolbar, InputsRow, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
+import { ExportMenu, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
 import { ImpactDialog } from "./components/impact-list";
@@ -704,34 +704,9 @@ function Workspace({ code }: { code: string }) {
   // 上游已变更只说一次（下面那枚带原因的标签），不再和协作状态各写一遍。
   else if (collab && !artifact?.stale) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
-  if (artifact?.stale)
-    headerStates.push({
-      tone: "warn",
-      text: status === "locked" ? "上游已变更" : "上游已变更 · 核对后点“已核对”",
-      detailLabel: "查看原因",
-      detail:
-        status === "locked"
-          ? `${artifact.staleReason ?? "引用的上游表改过了"}。${staleAdvice(status, actor.service)}；不受影响就在“上游改了什么”里点“已核对，保持定版”。在那之前，这张表和它的导出仍是原定版内容。`
-          : `${artifact.staleReason ?? "引用的上游表改过了"}。看上游改了什么，本表跟着改好后点“已核对”。只保存不会消除这个提示。`,
-      actions: (
-        <Button size="sm" variant="outline" onClick={() => setUpstreamOpen(true)}>
-          看上游改了什么
-        </Button>
-      ),
-    });
-  // 影响清单：下游还有待核对的表时，在表头给出入口。
+  // 上游已变更、下游待核对不再单独占表头，合进标题旁的“上下游”按钮（2026-10-16 页头规整）。
   const impact = impactList(code, overview.artifacts);
   const impactWaiting = impact.filter((r) => r.stale).length;
-  if (impactWaiting)
-    headerStates.push({
-      tone: "warn",
-      text: `下游 ${impactWaiting} 张待核对`,
-      actions: (
-        <Button size="sm" variant="outline" onClick={() => setImpactOpen(true)}>
-          影响清单
-        </Button>
-      ),
-    });
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
   // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
   const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead";
@@ -757,7 +732,7 @@ function Workspace({ code }: { code: string }) {
       ) : null,
     });
   }
-  // 上游输入 · 方法（参考稿）：承接的上游表及其状态，书中方法一句话。
+  // 上游输入：承接的上游表及其状态（放进“上下游”弹层）；书中方法一句话放在工具栏右侧。
   const inputItems: InputItem[] = [...new Set([...def.dependsOn, ...(def.reads ?? [])])]
     .filter((c) => getArtifactDef(c).priority !== "method")
     .map((c) => {
@@ -777,6 +752,26 @@ function Workspace({ code }: { code: string }) {
     });
   const guideNow = taskGuide(code, { sub: Number(searchParams.get("sub")) || null, zone: searchParams.get("zone") });
   const methodLine = guideNow ? `${guideNow.title ? `${guideNow.title}：` : ""}${guideNow.guide.how.split(/[。；]/)[0]}` : null;
+  const links = (
+    <LinksButton
+      inputs={inputItems}
+      stale={
+        artifact?.stale
+          ? {
+              reason: `${artifact.staleReason ?? "引用的上游表改过了"}。`,
+              advice:
+                status === "locked"
+                  ? `${staleAdvice(status, actor.service)}；不受影响就在“上游改了什么”里点“已核对，保持定版”。在那之前，这张表和它的导出仍是原定版内容。`
+                  : "看上游改了什么，本表跟着改好后点“已核对”。只保存不会消除这个提示。",
+              onView: () => setUpstreamOpen(true),
+            }
+          : null
+      }
+      downstream={impact.length ? { total: impact.length, waiting: impactWaiting, onOpen: () => setImpactOpen(true) } : null}
+    />
+  );
+  const bookOpen = panelOpen && asideTab === "book";
+  const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
@@ -790,10 +785,10 @@ function Workspace({ code }: { code: string }) {
   ];
   // 右栏四个页签各管一件事（开营前 UX 改版 F12）。
   const TAB_DUTY: Record<AsideTab, string> = {
-    coach: "对话：问数字咨询师，答疑和改表都在这里，改动以修改卡确认后才写入",
-    comments: "批注：在格子或节点上圈出来讨论，@ 成员",
-    changes: "修改：这张表的修改记录和历史版本，可定位、可撤销",
-    book: "书中方法：这一步的目的、怎么做和完成检查",
+    coach: "有不懂的、要起草的都可以问；要改表时会给修改卡，你确认后才写入",
+    comments: "圈出格子或节点来讨论，可以 @ 成员",
+    changes: "这张表改过什么、每个版本，可以定位，也可以撤销",
+    book: "这一步为什么做、怎么做、做到什么程度算完成",
   };
 
   return (
@@ -818,6 +813,7 @@ function Workspace({ code }: { code: string }) {
           <div className="shrink-0 border-b bg-background px-4 pt-1.5 md:px-5">
             <WhereRow
               crumbs={crumbs}
+              links={links}
               subs={railCollapsed && topbarItems(route).length ? <SubsMenu projectId={project.id} items={topbarItems(route)} /> : null}
               states={headerStates}
               savedAt={artifact?.currentVersion?.createdAt ?? null}
@@ -901,7 +897,6 @@ function Workspace({ code }: { code: string }) {
                   ) : null
                 }
               />
-              <InputsRow inputs={inputItems} method={methodLine} onMethod={() => openAside.current("book")} />
             </div>
             {EDITABLE_CODES.has(code) && unlocked ? (
               <div className="-mx-4 border-t px-3 md:-mx-5">
@@ -922,8 +917,11 @@ function Workspace({ code }: { code: string }) {
                     session.setSelecting(!selecting);
                   }}
                   onShortcuts={() => setShortcutsOpen(true)}
+                  method={methodButton}
                 />
               </div>
+            ) : methodButton ? (
+              <div className="-mx-4 flex min-h-10 items-center justify-end border-t px-3 md:-mx-5">{methodButton}</div>
             ) : null}
           </div>
 

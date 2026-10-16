@@ -522,7 +522,7 @@ export default function MaterialsPage() {
         {/* 和填写页一样：对话内容滚动，输入框固定在底部。 */}
         <aside aria-label="数字咨询师" data-dingze-coach className="flex h-[80svh] w-full flex-col border-t bg-card lg:h-auto lg:min-h-0 lg:w-[400px] lg:shrink-0 lg:border-t-0 lg:border-l">
           <p className="shrink-0 border-b px-3 py-2 text-[11px] text-muted-foreground">
-            对话：先把资料传进资料库（📎 或“资料库”页签），再点“从资料整理画像”“从资料整理组织架构”；数字咨询师查阅资料后给修改卡，你确认后才写入。
+            先把资料传进资料库，再让数字咨询师整理画像和组织架构；它会给修改卡，你确认后才写入。
           </p>
           <div className="flex min-h-0 flex-1 flex-col">
             <CoachPanel

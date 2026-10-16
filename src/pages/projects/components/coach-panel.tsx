@@ -15,7 +15,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { INCOMPLETE_ROW_MESSAGE, type StageKey, bookNote, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, type StageKey, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -465,25 +465,21 @@ function StarterPrompts({ host, starters }: { host: RefObject<HTMLDivElement | n
   const cell = session?.focusAnchor ? session.nameOf(session.focusAnchor) : null;
   // Each table opens with its own point (验收意见 E D07): what it is, this step, and the book's gate.
   const def = session && isArtifactCode(session.code) ? getArtifactDef(session.code) : null;
-  const note = session ? bookNote(session.code) : null;
   const prompts: [string, string][] = starters ?? [
-    ["帮我看这张表缺什么", "帮我看看这张表现在缺什么、哪里不符合书里的要求，按先后告诉我先补哪几格。"],
-    [cell ? `解释「${cell.length > 10 ? `${cell.slice(0, 10)}…` : cell}」这一格` : "解释这一格", cell ? `「${cell}」这一格应该填什么？请用大白话解释，再举一个同类企业的例子。` : "我不太懂这张表，请用大白话解释每一栏该填什么，各举一个例子。"],
-    ["建议怎么填", "结合我们企业的资料，建议这张表怎么填；先给思路，我同意后再出修改卡。"],
+    ["这张表还缺什么", "帮我看看这张表现在缺什么、哪里不符合书里的要求，按先后告诉我先补哪几格。"],
+    [cell ? `「${cell.length > 10 ? `${cell.slice(0, 10)}…` : cell}」该怎么填` : "每一栏该填什么", cell ? `「${cell}」这一格应该填什么？请用大白话解释，再举一个同类企业的例子。` : "我不太懂这张表，请用大白话解释每一栏该填什么，各举一个例子。"],
+    ["结合企业资料起草", "结合我们企业的资料，建议这张表怎么填；先给思路，我同意后再出修改卡。"],
   ];
   return (
     <div className="absolute inset-x-3 z-10 flex flex-col gap-1.5 rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur" style={{ bottom }} aria-label="可以这样开始">
-      {def ? (
-        <div className="text-xs">
-          <span className="font-semibold text-brand">《{def.plain}》</span>
-          <span className="text-muted-foreground">
-            {" "}
-            · {def.task} / {def.step}
-          </span>
-          {note?.gate ? <div className="mt-0.5 text-muted-foreground">完成检查：{note.gate}</div> : null}
-        </div>
-      ) : null}
-      <span className="text-xs text-muted-foreground">第一次用？点一句开始：</span>
+      <span className="text-xs text-muted-foreground">
+        {def ? (
+          <>
+            正在填<span className="font-semibold text-brand">《{def.plain}》</span>。
+          </>
+        ) : null}
+        点一句开始，或直接在下面输入：
+      </span>
       {prompts.map(([label, text]) => (
         <Button key={label} variant="outline" size="sm" className="justify-start whitespace-normal text-left" onClick={() => askCoach(text)}>
           {label}
@@ -624,8 +620,8 @@ export function CoachPanel({
             showEmployeeSelector={false}
             showModelSelector={false}
             composerActions={[{ key: "attach", label: "上传到资料库（写入资料库，供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]}
-            disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 上传的文件进资料库 · 修改卡确认后才写入成果"
-            placeholder="回答数字咨询师，或直接说你的想法…"
+            disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 文件存入资料库"
+            placeholder="问数字咨询师，或说说你的想法…"
           />
           <StarterPrompts host={host} starters={starters} />
         </div>

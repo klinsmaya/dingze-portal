@@ -1,5 +1,7 @@
 import {
   Map as MapIcon,
+  BookOpen,
+  Waypoints,
   ArrowDown,
   ArrowUp,
   Check,
@@ -85,6 +87,26 @@ export function PanelToggle({ slot, open, onToggle, count }: { slot: HTMLElement
   );
 }
 
+/** 工具栏右侧的“书中方法”：这一步怎么做的一句话，点开右栏书中方法。 */
+export function MethodButton({ text, active, onClick }: { text: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={`${text}（点开右栏“书中方法”）`}
+      className={cn(
+        "mx-1 flex h-8 max-w-[26rem] min-w-0 items-center gap-1.5 rounded-md border px-2 text-xs",
+        active ? "border-[color:var(--book-border,var(--border))] bg-book text-book-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <BookOpen className="size-3.5 shrink-0" />
+      <span className="shrink-0 font-semibold">书中方法</span>
+      <span className="truncate">{text}</span>
+    </button>
+  );
+}
+
 export type HeaderState = {
   tone: "act" | "wait" | "done" | "warn" | "neutral";
   text: string;
@@ -108,6 +130,7 @@ const TONE: Record<HeaderState["tone"], string> = {
 export function WhereRow({
   crumbs,
   subs,
+  links,
   states,
   savedAt,
   rev,
@@ -119,6 +142,8 @@ export function WhereRow({
   crumbs: string[];
   /** 左栏收起时的“本表小节”下拉。 */
   subs?: ReactNode;
+  /** 上下游按钮（上游输入、上游已变更、下游影响），放在状态旁。 */
+  links?: ReactNode;
   states: HeaderState[];
   savedAt: string | null;
   rev: number;
@@ -159,6 +184,7 @@ export function WhereRow({
             {s.actions ? <span className="flex items-center gap-1 [&_button]:h-6 [&_button]:px-2 [&_button]:text-xs">{s.actions}</span> : null}
           </span>
         ))}
+        {links}
         <span className="text-muted-foreground">
           {saving ? "保存中…" : unsaved ? null : savedAt ? `已保存 ${formatTime(savedAt).slice(-5)}` : "还没保存过"}
           {rev ? ` · v${rev}` : ""}
@@ -186,9 +212,12 @@ export function TitleRow({
   exportMenu,
   history,
   actions,
+  links,
 }: {
   title: string;
   chip: string;
+  /** 上下游按钮，紧跟表号。 */
+  links?: ReactNode;
   chrome: EditorChrome | null;
   revisionOn: boolean;
   canRevise: boolean;
@@ -204,6 +233,7 @@ export function TitleRow({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <h1 className="min-w-0 font-heading text-xl font-bold text-brand">《{title}》</h1>
       <span className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">{chip}</span>
+      {links}
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {chrome?.views && chrome.views.length > 1 ? (
           <div role="radiogroup" aria-label="展示方式" className="flex rounded-lg border p-0.5">
@@ -264,28 +294,86 @@ const INPUT_TONE: Record<InputItem["tone"], string> = {
   warn: "text-[color:var(--dz-warn)]",
 };
 
-/** 上游输入 · 方法（参考稿）：这张表承接哪些表、照书里哪个方法做，点上游跳过去，点方法开右栏书中方法。 */
-export function InputsRow({ inputs, method, onMethod }: { inputs: InputItem[]; method: string | null; onMethod: () => void }) {
-  if (!inputs.length && !method) return null;
+/**
+ * 上下游（2026-10-16 页头规整）：上游输入、上游已变更、下游影响合成一个按钮，按钮上只放一个状态，
+ * 点开再看每张上游表的状态、变化原因和处理入口。
+ */
+export function LinksButton({
+  inputs,
+  stale,
+  downstream,
+}: {
+  inputs: InputItem[];
+  /** 本表的上游已变更：原因、已定版与否、看上游改了什么。 */
+  stale: { reason: string; advice: string; onView: () => void } | null;
+  /** 引用本表的下游：总数、其中待核对的张数、打开影响清单。 */
+  downstream: { total: number; waiting: number; onOpen: () => void } | null;
+}) {
+  if (!inputs.length && !downstream?.total) return null;
+  const pending = inputs.filter((i) => i.tone === "todo" || i.tone === "doing").length;
+  const [tone, text] = stale
+    ? ["warn", "上游已变更"]
+    : pending
+      ? ["todo", `上游 ${pending} 张未定版`]
+      : inputs.length
+        ? ["done", `上游 ${inputs.length} 张已定版`]
+        : ["todo", "无上游"];
   return (
-    <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-5 gap-y-0.5 text-xs text-muted-foreground">
-      {inputs.length ? (
-        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
-          <span className="shrink-0 font-semibold text-foreground/80">上游输入</span>
-          {inputs.map((i) => (
-            <Link key={i.code} to={i.to} className="hover:text-foreground hover:underline" title={`${i.code} ${i.name}：${i.state}`}>
-              《{i.name}》<span className={INPUT_TONE[i.tone]}>{i.state}</span>
-            </Link>
-          ))}
-        </span>
-      ) : null}
-      {method ? (
-        <button type="button" onClick={onMethod} className="flex min-w-0 max-w-full items-baseline gap-2.5 text-left hover:text-foreground" title={`${method}（点开看书中方法）`}>
-          <span className="shrink-0 font-semibold text-foreground/80">方法</span>
-          <span className="truncate underline-offset-2 hover:underline">{method}</span>
-        </button>
-      ) : null}
-    </div>
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs hover:bg-muted",
+          stale || downstream?.waiting ? "border-[color:var(--dz-warn)]/50" : "",
+        )}
+        title="上游输入与下游影响"
+      >
+        <Waypoints className="size-3.5 text-muted-foreground" />
+        <span className={cn("size-1.5 rounded-full bg-current", INPUT_TONE[tone as InputItem["tone"]])} />
+        <span className={INPUT_TONE[tone as InputItem["tone"]]}>{text}</span>
+        {downstream?.waiting ? <span className="text-[color:var(--dz-warn)]">· 下游 {downstream.waiting} 张待核对</span> : null}
+        <ChevronDown className="size-3 text-muted-foreground" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[26rem] max-w-[92vw] p-0 text-sm">
+        {stale ? (
+          <div className="border-b bg-[color:var(--dz-warn)]/8 px-4 py-3">
+            <div className="font-semibold text-[color:var(--dz-warn)]">上游已变更</div>
+            <p className="mt-1 text-xs text-muted-foreground">{stale.reason}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{stale.advice}</p>
+            <Button size="sm" className="mt-2" onClick={stale.onView}>
+              看上游改了什么
+            </Button>
+          </div>
+        ) : null}
+        <div className="px-4 py-3">
+          <div className="mb-1.5 text-xs font-semibold text-muted-foreground">上游输入 · 这张表承接的表</div>
+          {inputs.length ? (
+            <ul className="flex flex-col gap-1">
+              {inputs.map((i) => (
+                <li key={i.code} className="flex items-baseline gap-2">
+                  <Link to={i.to} className="min-w-0 flex-1 truncate hover:underline" title={`${i.code} ${i.name}`}>
+                    《{i.name}》<span className="text-xs text-muted-foreground">{i.code}</span>
+                  </Link>
+                  <span className={cn("shrink-0 text-xs", INPUT_TONE[i.tone])}>{i.state}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">这是第一张表，没有上游。</p>
+          )}
+        </div>
+        {downstream?.total ? (
+          <div className="flex items-center gap-2 border-t px-4 py-3">
+            <span className="min-w-0 flex-1 text-xs">
+              <span className="font-semibold text-muted-foreground">下游</span> · {downstream.total} 张表引用本表
+              {downstream.waiting ? <span className="text-[color:var(--dz-warn)]">，{downstream.waiting} 张待核对</span> : null}
+            </span>
+            <Button size="sm" variant="outline" onClick={downstream.onOpen}>
+              影响清单
+            </Button>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -334,7 +422,10 @@ export function StructureToolbar({
   selecting,
   onLasso,
   onShortcuts,
+  method,
 }: {
+  /** 书中方法一句话，点开右栏“书中方法”（打开时高亮）。 */
+  method?: ReactNode;
   chrome: EditorChrome | null;
   readOnly: boolean;
   canUndo: boolean;
@@ -393,6 +484,7 @@ export function StructureToolbar({
           {z.setMinimap ? <ToolButton label="小地图" icon={<MapIcon />} onClick={() => z.setMinimap?.(!z.minimap)} active={z.minimap} /> : null}
         </div>
       ) : null}
+      {method}
       <ToolButton label="快捷键" shortcut="?" icon={<Keyboard />} onClick={onShortcuts} />
     </div>
   );
