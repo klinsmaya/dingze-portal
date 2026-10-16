@@ -2,7 +2,7 @@ import { CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, Sh
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import {
@@ -81,26 +81,6 @@ function PasteDialog({ open, onClose, onSubmit, pending }: { open: boolean; onCl
 }
 
 /** 已确认成果：只放一张链接卡，成果的唯一入口在「成果」（开营前 UX 改版 M1、M2）。规格把它列为资料分类，数字咨询师仍按定版内容引用。 */
-function ConfirmedResults() {
-  const { project, overview } = useProjectContext();
-  const locked = overview.artifacts.filter((a) => a.status === "locked" && getArtifactDef(a.code).priority !== "method");
-  return (
-    <section aria-labelledby="confirmed" className="flex flex-col gap-2">
-      <h2 id="confirmed" className="font-heading text-lg font-bold text-brand">
-        已确认成果
-      </h2>
-      <Link to={`/projects/${project.id}/results`} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-primary">
-        <FileCheck2 className="size-5 shrink-0 text-status-done-foreground" />
-        <span className="min-w-0 flex-1">
-          <span className="block font-medium">{locked.length ? `已有 ${locked.length} 张表定版` : "还没有定版的表"}</span>
-          <span className="block text-xs text-muted-foreground">表一定版就成为资料的一部分，数字咨询师和专家咨询都按定版内容引用。查看、对比和下载在「成果」。</span>
-        </span>
-        <span className="shrink-0 text-xs text-primary">去「成果」→</span>
-      </Link>
-    </section>
-  );
-}
-
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -204,6 +184,13 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
 }
 
 /** 资料与画像: the enterprise's materials and the profile (事实 / 假设 / 未知 / 待补) built from them. */
+const MATERIAL_TABS = [
+  ["profile", "① 企业画像"],
+  ["org", "② 组织与职责"],
+  ["library", "资料库"],
+] as const;
+type MaterialTab = (typeof MATERIAL_TABS)[number][0];
+
 /** 让数字咨询师从资料库整理画像或组织架构：只出修改卡，确认后才写入。 */
 const AI_ASK = {
   profile:
@@ -257,13 +244,12 @@ function OrgSection({ canEditOrg, onAI }: { canEditOrg: boolean; onAI: () => voi
 }
 
 export default function MaterialsPage() {
-  // 从工作台“组织”“资料”等入口带锚点进来时，滚到对应一节。
+  // 页签记在地址里（?tab=org），从左栏“组织与职责”“资料库”等带锚点（#org、#library）进来也打开对应页签。
   const { hash } = useLocation();
-  useEffect(() => {
-    if (!hash) return;
-    const timer = window.setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
-    return () => window.clearTimeout(timer);
-  }, [hash]);
+  const [params, setParams] = useSearchParams();
+  const fromHash = hash === "#org" ? "org" : hash === "#library" ? "library" : hash === "#profile" ? "profile" : null;
+  const tab: MaterialTab = (MATERIAL_TABS.map(([k]) => k) as string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as MaterialTab) : (fromHash ?? "profile");
+  const setTab = (next: MaterialTab) => setParams(next === "profile" ? {} : { tab: next }, { replace: true });
   const { project, overview } = useProjectContext();
   const materials = useMaterials(project);
   const profile = useProfile(project);
@@ -380,19 +366,58 @@ export default function MaterialsPage() {
   });
 
   const materialList = materials.data ?? [];
+  const lockedCount = overview.artifacts.filter((a) => a.status === "locked" && getArtifactDef(a.code).priority !== "method").length;
   const sourceTitle = (source: string) => materialList.find((m) => String(m.id) === source)?.title;
 
   return (
     <AIPageContextScope context={page.context}>
-      <div className="flex flex-1 flex-wrap items-stretch">
-        <main ref={page.ref} className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 p-4 md:p-6">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-brand">资料</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              填表前先把<strong className="font-semibold text-foreground">企业画像</strong>和<strong className="font-semibold text-foreground">组织架构</strong>备好：可以直接填，也可以先上传企业简介、组织架构图、经营复盘等资料，再让数字咨询师整理，你确认后才写入。画像由咨询师复核、企业项目负责人确认。
-            </p>
+      <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
+        <main ref={page.ref} className="flex min-w-0 flex-1 flex-col lg:min-h-0">
+          {/* 标题和页签固定在上面，内容区自己滚动（2026-10-16）。 */}
+          <div className="shrink-0 border-b bg-background px-4 pt-4 md:px-6">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="font-heading text-2xl font-bold text-brand">资料</h1>
+              <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                填表前先备好企业画像和组织架构：直接填，或先上传资料再让数字咨询师整理，你确认后才写入。
+              </p>
+            </div>
+            <nav aria-label="资料页签" role="tablist" className="mt-3 -mb-px flex flex-wrap items-end gap-1 text-sm">
+              {MATERIAL_TABS.map(([key, label]) => {
+                const count = key === "profile" ? items.length : key === "org" ? (overview.orgUnits ?? []).length : materialList.length;
+                const unit = key === "profile" ? "条" : key === "org" ? "个部门" : "份";
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === key}
+                    onClick={() => setTab(key)}
+                    className={cn(
+                      "flex items-center gap-1.5 border-b-2 px-3 py-2",
+                      tab === key ? "border-primary font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {count} {unit}
+                    </span>
+                  </button>
+                );
+              })}
+              <span className="ml-auto flex items-center gap-3 pb-2">
+                {canEdit && tab !== "library" ? (
+                  <button type="button" onClick={() => setTab("library")} className="flex items-center gap-1 text-primary hover:underline">
+                    <FileUp className="size-3.5" /> 先上传资料
+                  </button>
+                ) : null}
+                <Link to={`/projects/${project.id}/results`} className="flex items-center gap-1 text-primary hover:underline" title="表一定版就成为资料的一部分；查看、对比、下载在「成果」">
+                  <FileCheck2 className="size-3.5" /> 已定版 {lockedCount} 张 →
+                </Link>
+              </span>
+            </nav>
           </div>
 
+          <div className="flex flex-col gap-6 p-4 md:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {materials.error || profile.error ? (
             <Alert variant="destructive">
               <AlertTitle>加载失败</AlertTitle>
@@ -400,24 +425,7 @@ export default function MaterialsPage() {
             </Alert>
           ) : null}
 
-          <nav aria-label="本页目录" className="-mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {[
-              ["#profile", "① 企业画像"],
-              ["#org", "② 组织与职责"],
-              ["#library", "资料库"],
-              ["#confirmed", "已确认成果"],
-            ].map(([href, label]) => (
-              <a key={href} href={href} className="text-primary hover:underline">
-                {label}
-              </a>
-            ))}
-            {canEdit ? (
-              <a href="#library" className="ml-auto flex items-center gap-1 text-primary hover:underline">
-                <FileUp className="size-3.5" /> 先上传资料
-              </a>
-            ) : null}
-          </nav>
-
+          {tab === "profile" ? (
           <section aria-labelledby="profile" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="profile" className="font-heading text-lg font-bold text-brand">
@@ -502,18 +510,23 @@ export default function MaterialsPage() {
               })
             )}
           </section>
+          ) : null}
 
-          <OrgSection canEditOrg={canEditOrg} onAI={() => askAI("org")} />
+          {tab === "org" ? <OrgSection canEditOrg={canEditOrg} onAI={() => askAI("org")} /> : null}
 
-          {materials.isLoading ? <Skeleton className="h-32" /> : <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />}
-
-          <ConfirmedResults />
+          {tab === "library" ? (
+            materials.isLoading ? <Skeleton className="h-32" /> : <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+          ) : null}
+          </div>
         </main>
-        <aside aria-label="数字咨询师" data-dingze-coach className="flex w-full flex-col gap-3 border-t bg-card p-4 lg:w-[400px] lg:border-t-0 lg:border-l">
-          <p className="rounded-xl border border-book-border bg-book px-4 py-3 text-xs text-book-foreground">
-            先把资料传进资料库（这里的 📎 或下方“资料库”），再点“从资料整理画像”“从资料整理组织架构”：数字咨询师查阅资料后提出修改卡，你确认后才写入。
+        {/* 和填写页一样：对话内容滚动，输入框固定在底部。 */}
+        <aside aria-label="数字咨询师" data-dingze-coach className="flex h-[80svh] w-full flex-col border-t bg-card lg:h-auto lg:min-h-0 lg:w-[400px] lg:shrink-0 lg:border-t-0 lg:border-l">
+          <p className="shrink-0 border-b px-3 py-2 text-[11px] text-muted-foreground">
+            对话：先把资料传进资料库（📎 或“资料库”页签），再点“从资料整理画像”“从资料整理组织架构”；数字咨询师查阅资料后给修改卡，你确认后才写入。
           </p>
-          <CoachPanel stage="strategy" chatId={`dingze-${project.id}-materials`} />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <CoachPanel stage="strategy" chatId={`dingze-${project.id}-materials`} />
+          </div>
         </aside>
       </div>
     </AIPageContextScope>

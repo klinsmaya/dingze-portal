@@ -143,6 +143,8 @@ export default function ProjectLayout() {
   const overview = useProjectOverview(project);
   // The workspace fills the screen; its panel toggle goes into the top bar's action slot.
   const inWorkspace = !!useMatch("/projects/:projectId/workspace/*");
+  // 资料页和填写页一样：左边内容自己滚动，右边对话的输入框固定在底部（大屏）。
+  const fillScreen = !!useMatch("/projects/:projectId/materials");
   const [slotActions, setSlotActions] = useState<HTMLElement | null>(null);
   const topbar = (
     <ProjectTopbar
@@ -187,10 +189,10 @@ export default function ProjectLayout() {
   }
 
   return (
-    <div data-dingze-project className="flex min-h-svh flex-col">
+    <div data-dingze-project className={cn("flex min-h-svh flex-col", fillScreen && "lg:h-svh lg:overflow-hidden")}>
       {topbar}
 
-      <div className="flex flex-1 flex-col">
+      <div className={cn("flex flex-1 flex-col", fillScreen && "lg:min-h-0")}>
         {error || overview.error ? (
           <div className="p-6">
             <Alert variant="destructive">
