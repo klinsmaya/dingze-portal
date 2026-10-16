@@ -42,7 +42,7 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
   const pendingRegistrations = usePendingRegistrations(enterpriseId);
   const [params, setParams] = useSearchParams();
   const defaultTab = asOps ? "projects" : "members";
-  const tabs = asOps ? ["projects", "members", "org", "invites"] : ["members", "org", "invites"];
+  const tabs = ["projects", "members", "org", "invites"];
   const tab = tabs.includes(params.get("tab") ?? "") ? (params.get("tab") as string) : defaultTab;
 
   if (detail.isLoading) return <Skeleton className="h-96 rounded-xl" />;
@@ -112,7 +112,7 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === defaultTab ? {} : { tab: String(v) }, { replace: true })}>
         <TabsList>
-          {asOps ? <TabsTrigger value="projects">项目与分派</TabsTrigger> : null}
+          <TabsTrigger value="projects">{asOps ? "项目与分派" : "项目"}</TabsTrigger>
           <TabsTrigger value="members">成员</TabsTrigger>
           <TabsTrigger value="org">组织部门</TabsTrigger>
           <TabsTrigger value="invites">
@@ -120,11 +120,9 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
             {pendingRegistrations ? <Badge className="ml-1 h-4 px-1.5 text-[10px]">{pendingRegistrations}</Badge> : null}
           </TabsTrigger>
         </TabsList>
-        {asOps ? (
-          <TabsContent value="projects" className="pt-4">
-            <ProjectsTab detail={detail.data} />
-          </TabsContent>
-        ) : null}
+        <TabsContent value="projects" className="pt-4">
+          <ProjectsTab detail={detail.data} asOps={asOps} />
+        </TabsContent>
         <TabsContent value="members" className="pt-4">
           <MembersTab detail={detail.data} asOps={asOps} />
         </TabsContent>

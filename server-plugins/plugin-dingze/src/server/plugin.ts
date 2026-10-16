@@ -15,6 +15,8 @@ import {
   saveArtifact,
   toHttpError,
   transitionArtifact,
+  importArtifacts,
+  importSources,
 } from './services/artifacts';
 import { consultantBoard } from './services/board';
 import { opsBoard } from './services/usage';
@@ -28,7 +30,7 @@ import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
 import { planBookSources } from './services/plan-book-sources';
 import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff, versionPayload } from './services/registry';
-import { createProject, listEnterprises, myProjects, provisionEnterprise, setProjectMembers } from './services/enterprises';
+import { createOwnProject, createProject, listEnterprises, myProjects, provisionEnterprise, setProjectMembers } from './services/enterprises';
 import {
   addEnterpriseMembers,
   createUser,
@@ -238,6 +240,12 @@ export class PluginDingzeServer extends Plugin {
         provisionEnterprise: action((ctx) => provisionEnterprise(ctx, values(ctx) as any)),
         listEnterprises: action((ctx) => listEnterprises(ctx)),
         createProject: action((ctx) => createProject(ctx, values(ctx) as any)),
+        createOwnProject: action((ctx) => createOwnProject(ctx, values(ctx) as any)),
+        importSources: action(async (ctx) => importSources(ctx, await loadProjectContext(ctx, ctx.action.params.projectId))),
+        importArtifacts: action(async (ctx) => {
+          const v = values(ctx);
+          return importArtifacts(ctx, await loadProjectContext(ctx, v.projectId), v as any);
+        }),
         setProjectMembers: action((ctx) => setProjectMembers(ctx, values(ctx).projectId, values(ctx).members)),
         updateProject: action((ctx) => updateProject(ctx, values(ctx) as any)),
         removeProjectMember: action((ctx) => removeProjectMember(ctx, values(ctx) as any)),

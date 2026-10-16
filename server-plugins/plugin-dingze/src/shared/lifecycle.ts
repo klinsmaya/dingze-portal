@@ -70,12 +70,14 @@ export const ACTION_LABELS: Record<string, string> = {
   forceReturn: '强制退回',
   selfReview: '自查复核',
   grantException: '开例外',
+  import: '从已有项目带入',
 };
 
 export const VERSION_KIND_LABELS: Record<string, string> = {
   ai_draft: 'AI 初稿',
   enterprise_edit: '企业修改',
   consultant_revision: '咨询师修订',
+  imported: '从已有项目带入',
 };
 
 export interface Actor {

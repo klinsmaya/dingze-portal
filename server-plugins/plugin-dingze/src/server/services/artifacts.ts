@@ -21,6 +21,10 @@ import {
   canPerform,
   missingSelfReview,
   selfReviewChecklist,
+  type ImportSourceRow,
+  canImportInto,
+  importBasis,
+  importBlocker,
 } from '../../shared';
 import { HttpError, type ProjectContext, currentUserId } from './access';
 import { openCommentCounts } from './comments';
@@ -602,5 +606,128 @@ export async function acknowledgeUpstream(ctx: Context, pc: ProjectContext, def:
     await artifact.update({ stale: false, staleReason: null, upstreamBase: upstream.refs }, { transaction });
     await audit(ctx, pc, { code: def.code, action: 'acknowledgeUpstream', reason: String(note ?? '').slice(0, 500) || '已核对上游改动', meta: { refs: upstream.refs, reason: artifact.get('staleReason') } }, transaction);
     return { ok: true };
+  });
+}
+
+// ── 从已有项目带入（2026-10-16）────────────────────────────────────
+
+async function importScope(ctx: Context, pc: ProjectContext) {
+  if (!canImportInto(pc.projectRole, pc.access.isOps)) throw new HttpError(403, '只有企业项目负责人可以从已有项目带入');
+  const userId = currentUserId(ctx);
+  const projectId = pc.project.get('id');
+  // 同一企业（同一空间）的其他项目；来源项目也要是自己参与的（运营除外），不越过项目成员边界。
+  const projects = await ctx.db.getRepository('dz_projects').find({
+    filter: { spaceName: pc.spaceName, enterpriseId: pc.project.get('enterpriseId'), id: { $ne: projectId } },
+    sort: ['-year', '-createdAt'],
+  });
+  if (pc.access.isOps) return projects;
+  const mine = await ctx.db.getRepository('dz_project_members').find({ filter: { userId, projectId: { $in: projects.map((p: any) => p.get('id')) } } });
+  const ids = new Set(mine.map((m: any) => m.get('projectId')));
+  return projects.filter((p: any) => ids.has(p.get('id')));
+}
+
+async function sourceRows(ctx: Context, projectId: number, transaction?: any): Promise<ImportSourceRow[]> {
+  const rows = await ctx.db.getRepository('dz_artifacts').find({ filter: { projectId }, appends: ['lockedVersion'], transaction });
+  return rows.map((r: any) => ({
+    code: r.get('code'),
+    status: r.get('status'),
+    currentRev: (r.get('currentRev') as number) ?? 0,
+    lockedRev: (r.get('lockedVersion')?.get('rev') as number | undefined) ?? null,
+  }));
+}
+
+/** 可选的来源项目和每张表能不能带入、带哪一版。 */
+export async function importSources(ctx: Context, pc: ProjectContext) {
+  const projects = await importScope(ctx, pc);
+  const target = await loadStates(ctx, pc.project.get('id'));
+  const out = [];
+  for (const p of projects as any[]) {
+    const rows = await sourceRows(ctx, p.get('id'));
+    out.push({
+      projectId: p.get('id'),
+      name: p.get('name'),
+      year: p.get('year'),
+      artifacts: ARTIFACTS.map((def) => {
+        const source = rows.find((r) => r.code === def.code);
+        return {
+          code: def.code,
+          basis: source && source.currentRev ? importBasis(source) : null,
+          blocker: importBlocker(def.code, source, target[def.code]?.status),
+          targetStatus: target[def.code]?.status ?? 'not_started',
+        };
+      }).filter((a) => a.basis),
+    });
+  }
+  return out;
+}
+
+/**
+ * 把来源项目里选中的表带入本项目，一律作为草稿（新版本，状态“进行中”）：不跳过本步完成、复核和定版；
+ * 还没解锁的表先存着，解锁后就能看到。只带内容，不带批注、修改卡和流转记录。
+ */
+export async function importArtifacts(ctx: Context, pc: ProjectContext, input: { sourceProjectId: unknown; codes: unknown }) {
+  const projects = await importScope(ctx, pc);
+  const source = projects.find((p: any) => p.get('id') === Number(input.sourceProjectId));
+  if (!source) throw new HttpError(404, '来源项目不存在，或你不是它的成员');
+  const codes = Array.isArray(input.codes) ? [...new Set(input.codes.map(String))] : [];
+  if (codes.length === 0) throw new HttpError(400, '请选择要带入的表');
+  const projectId = pc.project.get('id');
+  const sourceId = source.get('id') as number;
+  const name = source.get('name') as string;
+  const label = name.includes(String(source.get('year'))) ? name : `${source.get('year')} · ${name}`;
+
+  return ctx.db.sequelize.transaction(async (transaction: any) => {
+    const rows = await sourceRows(ctx, sourceId, transaction);
+    const target = await loadStates(ctx, projectId, transaction);
+    const imported: string[] = [];
+    const skipped: { code: string; reason: string }[] = [];
+    for (const code of codes) {
+      const from = rows.find((r) => r.code === code);
+      const blocker = importBlocker(code, from, target[code]?.status);
+      if (blocker || !from) {
+        skipped.push({ code, reason: blocker ?? '来源项目这张表还没有内容' });
+        continue;
+      }
+      const def = getArtifactDef(code);
+      const basis = importBasis(from);
+      const sourceArtifact = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId: sourceId, code }, transaction });
+      const sourceVersion = await ctx.db.getRepository('dz_artifact_versions').findOne({
+        filter: { artifactId: sourceArtifact.get('id'), rev: basis.rev },
+        transaction,
+      });
+      if (!sourceVersion) {
+        skipped.push({ code, reason: '来源版本读取失败' });
+        continue;
+      }
+      const artifact = await ensureArtifact(ctx, pc, code, transaction);
+      const fromStatus = artifact.get('status') as ArtifactStatus;
+      const rev = ((artifact.get('currentRev') as number) ?? 0) + 1;
+      const upstream = await upstreamState(ctx, projectId, def, transaction);
+      const version = await ctx.db.getRepository('dz_artifact_versions').create({
+        values: {
+          artifactId: artifact.get('id'),
+          projectId,
+          code,
+          rev,
+          kind: 'imported',
+          payload: sourceVersion.get('payload'),
+          upstreamRefs: upstream.refs,
+          note: `从《${label}》带入（${basis.label}）`,
+          changes: [],
+          spaceName: pc.spaceName,
+        },
+        context: ctx,
+        transaction,
+      });
+      await artifact.update({ status: 'in_progress', currentRev: rev, currentVersionId: version.get('id') }, { transaction });
+      await audit(
+        ctx,
+        pc,
+        { code, action: 'import', fromStatus, toStatus: 'in_progress', rev, meta: { sourceProjectId: sourceId, sourceRev: basis.rev, sourceLocked: basis.locked } },
+        transaction,
+      );
+      imported.push(code);
+    }
+    return { imported, skipped };
   });
 }

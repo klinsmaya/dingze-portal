@@ -114,7 +114,7 @@ export async function getProjectOverview(projectId: number, spaceName: string) {
 export type ArtifactVersion = {
   id: number;
   rev: number;
-  kind: "ai_draft" | "enterprise_edit" | "consultant_revision";
+  kind: "ai_draft" | "enterprise_edit" | "consultant_revision" | "imported";
   payload: unknown;
   note?: string | null;
   createdAt: string;
@@ -231,4 +231,27 @@ export type BoardProject = {
 /** Cross-enterprise: the plugin resolves the caller's spaces itself. */
 export async function getConsultantBoard() {
   return nocobaseClient.action<{ projects: BoardProject[] }>("dingze", "consultantBoard", { method: "GET" });
+}
+
+/** 从已有项目带入：可选来源项目，每张表带哪一版、能不能带入。 */
+export type ImportSource = {
+  projectId: number;
+  name: string;
+  year: number;
+  artifacts: { code: string; basis: { rev: number; locked: boolean; label: string }; blocker: string | null; targetStatus: ArtifactStatus }[];
+};
+
+export async function getImportSources(projectId: number, spaceName: string) {
+  return nocobaseClient.action<ImportSource[]>("dingze", "importSources", {
+    method: "GET",
+    query: { projectId },
+    headers: spaceHeaders(spaceName),
+  });
+}
+
+export async function importArtifacts(spaceName: string, values: { projectId: number; sourceProjectId: number; codes: string[] }) {
+  return nocobaseClient.action<{ imported: string[]; skipped: { code: string; reason: string }[] }>("dingze", "importArtifacts", {
+    body: values,
+    headers: spaceHeaders(spaceName),
+  });
 }

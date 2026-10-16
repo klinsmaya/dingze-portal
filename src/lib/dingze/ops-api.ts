@@ -33,6 +33,8 @@ export type Enterprise = {
   status: EnterpriseStatus;
   spaceName: string;
   createdAt: string;
+  /** 运营打开后，企业管理员可以自建项目（企业内训 · 自助）。 */
+  allowSelfProject?: boolean;
 };
 
 export type OpsProject = {
@@ -158,7 +160,7 @@ export const opsApi = {
     admin?: { username: string; nickname: string; email?: string; phone?: string };
   }) =>
     post<{ enterprise: Enterprise; spaceName: string; admin: CreatedAccount | null }>("provisionEnterprise", values),
-  updateEnterprise: (values: { enterpriseId: number } & Partial<Pick<Enterprise, "name" | "shortName" | "size" | "status">>) =>
+  updateEnterprise: (values: { enterpriseId: number } & Partial<Pick<Enterprise, "name" | "shortName" | "size" | "status" | "allowSelfProject">>) =>
     post<Enterprise>("updateEnterprise", values),
   addEnterpriseMembers: (values: { enterpriseId: number; userIds: number[] }) => post("addEnterpriseMembers", values),
   removeEnterpriseMember: (values: { enterpriseId: number; userId: number }) => post("removeEnterpriseMember", values),
@@ -191,6 +193,9 @@ export const opsApi = {
   createProject: (values: Partial<OpsProject> & { enterpriseId: number; name: string; members?: { userId: number; projectRole: ProjectRole; orgUnitId?: number }[] }) =>
     post<OpsProject>("createProject", values),
   updateProject: (values: Partial<OpsProject> & { projectId: number }) => post<OpsProject>("updateProject", values),
+  /** 企业管理员自建项目：企业内训 · 自助，只分派企业侧角色。 */
+  createOwnProject: (values: { enterpriseId: number; name: string; year: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
+    post<OpsProject>("createOwnProject", values),
   setProjectMembers: (values: { projectId: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
     post("setProjectMembers", values),
   removeProjectMember: (values: { projectId: number; userId: number }) => post("removeProjectMember", values),

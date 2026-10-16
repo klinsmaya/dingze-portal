@@ -15,6 +15,8 @@ import {
   acknowledgeUpstream,
   dismissOrgNotice,
   getUpstreamChanges,
+  getImportSources,
+  importArtifacts,
   transitionArtifact,
 } from "./api";
 
@@ -166,4 +168,27 @@ export function useUpstreamPayloads(project: ProjectSummary | undefined, codes: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stamp, codes.join(",")]);
   return { payloads, isLoading: results.some((r) => r.isLoading) };
+}
+
+export function useImportSources(project: ProjectSummary | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["dingze", "import-sources", project?.id ?? 0],
+    queryFn: () => getImportSources(project!.id, project!.spaceName),
+    enabled: !!project && enabled,
+  });
+}
+
+export function useImportArtifacts(project: ProjectSummary | undefined) {
+  const invalidate = useInvalidateProject(project);
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (values: { sourceProjectId: number; codes: string[] }) => importArtifacts(project!.spaceName, { projectId: project!.id, ...values }),
+    onSuccess: () =>
+      Promise.all([
+        invalidate(),
+        client.invalidateQueries({ queryKey: ["dingze", "artifact", project?.id ?? 0] }),
+        client.invalidateQueries({ queryKey: ["dingze", "import-sources", project?.id ?? 0] }),
+        client.invalidateQueries({ queryKey: ["dingze", "projects"] }),
+      ]),
+  });
 }

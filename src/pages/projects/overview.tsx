@@ -1,9 +1,11 @@
-import { ArrowRight, CircleCheck, CircleDashed, CircleDot } from "lucide-react";
-import { Link } from "react-router";
+import { ArrowRight, CircleCheck, CircleDashed, CircleDot, Import } from "lucide-react";
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router";
 
 import { collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
 
 import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
@@ -11,6 +13,7 @@ import { STEP_ARTIFACTS, nextActionPath, progressOf, stageProgress, workspacePat
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
 import { cn } from "@/lib/utils";
 
+import { ImportDialog } from "./components/import-dialog";
 import { useProjectContext } from "./project-context";
 
 const TONE_STYLES = {
@@ -40,15 +43,32 @@ export default function ProjectOverviewPage() {
     .map((a) => ({ a, status: collaborationStatus(a, role, service) }))
     .filter((x): x is { a: (typeof steps)[number]; status: NonNullable<ReturnType<typeof collaborationStatus>> } => !!x.status && x.status.tone !== "done");
 
+  // 从已有项目带入：企业项目负责人手动触发（咨询管理员可代为操作）；新建项目后带 ?import=1 直接打开。
+  const canImport = role === "ent_lead" || overview.isConsultAdmin;
+  const [params, setParams] = useSearchParams();
+  const [importOpen, setImportOpen] = useState(canImport && params.get("import") === "1");
+  const closeImport = (open: boolean) => {
+    setImportOpen(open);
+    if (!open && params.has("import")) setParams({}, { replace: true });
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
-      <div>
+      {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
+      <div className="flex flex-wrap items-end gap-3">
+      <div className="min-w-0 flex-1">
         <p className="text-sm text-muted-foreground">
           {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
           {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
         <h1 className="font-heading text-3xl font-bold text-brand">待办</h1>
         <p className="mt-1 text-sm text-muted-foreground">先做最上面那件事；下面是正在流转的表和项目启动还缺的准备。</p>
+      </div>
+        {canImport ? (
+          <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
+            <Import /> 从已有项目带入
+          </Button>
+        ) : null}
       </div>
 
       <StartupCard projectId={project.id} />

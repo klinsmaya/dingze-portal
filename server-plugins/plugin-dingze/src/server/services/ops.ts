@@ -262,7 +262,7 @@ export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
 
 export async function updateEnterprise(
   ctx: Context,
-  input: { enterpriseId: number; name?: string; shortName?: string; size?: string; status?: string },
+  input: { enterpriseId: number; name?: string; shortName?: string; size?: string; status?: string; allowSelfProject?: boolean },
 ) {
   const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, false);
   const values: Record<string, unknown> = {};
@@ -273,6 +273,7 @@ export async function updateEnterprise(
     if (!['active', 'suspended'].includes(input.status)) throw new HttpError(400, '状态不正确');
     values.status = input.status;
   }
+  if (input.allowSelfProject !== undefined) values.allowSelfProject = input.allowSelfProject === true;
   await enterprise.update(values);
   await audit(ctx, spaceName, 'enterprise.update', { enterpriseId: enterprise.get('id'), ...values });
   return enterprise.toJSON();
