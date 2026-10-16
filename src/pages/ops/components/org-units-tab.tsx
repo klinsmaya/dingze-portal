@@ -1,5 +1,5 @@
 import { ClipboardPaste, Network, Pencil, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,24 +29,62 @@ import { ORG_KIND_LABELS } from "./labels";
 
 type Draft = { id?: number; name: string; kind: OrgUnit["kind"]; parentId: number | null; headId: number | null; headName: string; duty: string };
 
+export type OrgPerson = { id: number; name: string; username?: string };
+/** Where the org is edited: 「本企业」 (enterpriseId) or a project's 资料 page (projectId too). */
+export type OrgScope = { enterpriseId: number; enterpriseName: string; projectId?: number };
+
+const entPeople = (detail: EnterpriseDetail): OrgPerson[] =>
+  detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member")).map((m) => ({ id: m.id, name: m.nickname || m.username, username: m.username }));
+
 export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
-  const enterpriseId = detail.enterprise.id;
   const nodes = useMemo(() => flattenOrgUnits(detail.orgUnits), [detail.orgUnits]);
+  return (
+    <OrgUnitsEditor
+      scope={{ enterpriseId: detail.enterprise.id, enterpriseName: detail.enterprise.shortName }}
+      orgUnits={detail.orgUnits}
+      people={entPeople(detail)}
+      footer={<MemberDepartments detail={detail} nodes={nodes} />}
+    />
+  );
+}
+
+/** 组织部门的列表与增删改、从 Excel 粘贴；「本企业」和项目「资料」页共用。 */
+export function OrgUnitsEditor({
+  scope,
+  orgUnits,
+  people,
+  intro,
+  actions,
+  footer,
+  rowExtra,
+}: {
+  scope: OrgScope;
+  orgUnits: OrgUnit[];
+  people: OrgPerson[];
+  intro?: ReactNode;
+  /** Extra buttons next to 新增部门 (e.g. 让数字咨询师整理). */
+  actions?: ReactNode;
+  footer?: ReactNode;
+  /** Extra content under a unit (e.g. project members in it). */
+  rowExtra?: (unitId: number) => ReactNode;
+}) {
+  const nodes = useMemo(() => flattenOrgUnits(orgUnits), [orgUnits]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [importing, setImporting] = useState(false);
   const remove = useOpsMutation(opsApi.deleteOrgUnit);
-  const memberName = (id: number | null) => {
-    const user = detail.members.find((m) => m.id === id);
-    return user ? user.nickname || user.username : null;
-  };
+  const memberName = (id: number | null) => people.find((m) => m.id === id)?.name ?? null;
+  const ids = { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}) };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          部门用于成员归属、责任分工、部门承接与计分卡；可按“公司 › 部门 › 团队”分层。职责会在责任分工矩阵里作参考；已定版的部门表在组织变更后会提示主咨询师判断是否重开。
-        </p>
-        <span className="flex gap-2">
+        {intro ?? (
+          <p className="text-sm text-muted-foreground">
+            部门用于成员归属、责任分工、部门承接与计分卡；可按“公司 › 部门 › 团队”分层。职责会在责任分工矩阵里作参考；已定版的部门表在组织变更后会提示主咨询师判断是否重开。
+          </p>
+        )}
+        <span className="flex flex-wrap gap-2">
+          {actions}
           <Button variant="outline" onClick={() => setImporting(true)}>
             <ClipboardPaste /> 从 Excel 粘贴
           </Button>
@@ -63,7 +101,7 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
               <Network />
             </EmptyMedia>
             <EmptyTitle>还没有组织部门</EmptyTitle>
-            <EmptyDescription>定目标责阶段的部门承接需要先建好部门。</EmptyDescription>
+            <EmptyDescription>定目标责阶段的责任分工、部门承接需要先建好部门。可以逐个新增、从 Excel 粘贴，或上传组织架构资料后让数字咨询师整理。</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -77,13 +115,14 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
                   <Badge variant="outline" className="shrink-0">
                     {ORG_KIND_LABELS[node.kind] ?? node.kind}
                   </Badge>
-                  {memberName(node.headId) || node.headName ? (
+                  {node.headId || node.headName ? (
                     <span className="truncate text-xs text-muted-foreground">
-                      负责人：{memberName(node.headId) ?? `${node.headName}（无账号）`}
+                      负责人：{memberName(node.headId) ?? (node.headId ? "（有账号）" : `${node.headName}（无账号）`)}
                     </span>
                   ) : null}
                 </span>
                 {node.duty ? <span className="line-clamp-2 text-xs text-muted-foreground">职责：{node.duty}</span> : null}
+                {rowExtra?.(node.id)}
               </span>
               <Button
                 variant="ghost"
@@ -112,7 +151,7 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
                 destructive
                 onConfirm={() =>
                   remove.mutateAsync(
-                    { enterpriseId, id: node.id },
+                    { ...ids, id: node.id },
                     { onSuccess: () => toast.success("已删除"), onError: (error) => toast.error(errorMessage(error)) }
                   )
                 }
@@ -122,10 +161,10 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
         </ul>
       )}
 
-      <MemberDepartments detail={detail} nodes={nodes} />
+      {footer}
 
-      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} detail={detail} nodes={nodes} />
-      <OrgImportDialog open={importing} onClose={() => setImporting(false)} detail={detail} />
+      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} scope={scope} people={people} nodes={nodes} />
+      <OrgImportDialog open={importing} onClose={() => setImporting(false)} scope={scope} orgUnits={orgUnits} people={people} />
     </div>
   );
 }
@@ -133,12 +172,14 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
 function OrgUnitDialog({
   draft,
   onClose,
-  detail,
+  scope,
+  people,
   nodes,
 }: {
   draft: Draft | null;
   onClose: () => void;
-  detail: EnterpriseDetail;
+  scope: OrgScope;
+  people: OrgPerson[];
   nodes: OrgNode[];
 }) {
   const [value, setValue] = useState<Draft | null>(draft);
@@ -148,13 +189,12 @@ function OrgUnitDialog({
     setValue(draft);
   }
   const save = useOpsMutation(opsApi.saveOrgUnit);
-  const enterprisePeople = detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member"));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!value) return;
     save.mutate(
-      { enterpriseId: detail.enterprise.id, ...value, name: value.name.trim(), headName: value.headId ? null : value.headName.trim() || null, duty: value.duty.trim() || null },
+      { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}), ...value, name: value.name.trim(), headName: value.headId ? null : value.headName.trim() || null, duty: value.duty.trim() || null },
       {
         onSuccess: () => {
           toast.success(value.id ? "已保存" : "已新增");
@@ -171,7 +211,7 @@ function OrgUnitDialog({
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>{value?.id ? "编辑部门" : "新增部门"}</DialogTitle>
-            <DialogDescription>{detail.enterprise.shortName}</DialogDescription>
+            <DialogDescription>{scope.enterpriseName}{scope.projectId ? " · 组织是企业级的，改了对本企业所有项目生效" : ""}</DialogDescription>
           </DialogHeader>
           {value ? (
             <FieldGroup>
@@ -224,9 +264,11 @@ function OrgUnitDialog({
                   onChange={(e) => setValue({ ...value, headId: e.target.value ? Number(e.target.value) : null })}
                 >
                   <NativeSelectOption value="">（没有账号 / 暂不指定）</NativeSelectOption>
-                  {enterprisePeople.map((m) => (
+                  {/* 负责人有账号但不在可选名单里（如不在本项目）时保留原值，避免一保存就被清掉。 */}
+                  {value.headId && !people.some((m) => m.id === value.headId) ? <NativeSelectOption value={value.headId}>（保持现在的负责人）</NativeSelectOption> : null}
+                  {people.map((m) => (
                     <NativeSelectOption key={m.id} value={m.id}>
-                      {m.nickname || m.username}
+                      {m.name}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
@@ -318,16 +360,15 @@ function MemberDepartments({ detail, nodes }: { detail: EnterpriseDetail; nodes:
 }
 
 /** 从 Excel 粘贴组织表：先预览，再按名称新增或更新（同名部门更新职责和负责人）。 */
-function OrgImportDialog({ open, onClose, detail }: { open: boolean; onClose: () => void; detail: EnterpriseDetail }) {
+function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boolean; onClose: () => void; scope: OrgScope; orgUnits: OrgUnit[]; people: OrgPerson[] }) {
   const [text, setText] = useState("");
   const importRows = useOpsMutation(opsApi.importOrgUnits);
   const { rows, problems } = parseOrgTable(text);
-  const existing = new Map(detail.orgUnits.map((u) => [u.name, u]));
-  const people = detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member"));
-  const personId = (name: string) => people.find((p) => p.nickname === name || p.username === name)?.id ?? null;
+  const existing = new Map(orgUnits.map((u) => [u.name, u]));
+  const personId = (name: string) => people.find((p) => p.name === name || p.username === name)?.id ?? null;
   const run = () =>
     importRows.mutate(
-      { enterpriseId: detail.enterprise.id, rows },
+      { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}), rows },
       {
         onSuccess: (r) => {
           toast.success(`已导入：新增 ${r.created} 个、更新 ${r.updated} 个${r.changes ? "；已定版的部门表会提示主咨询师" : ""}`);

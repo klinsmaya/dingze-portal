@@ -29,7 +29,11 @@ import { useProjectContext } from "./project-context";
 const PLAN_BOOKS = ["S3-07", "S3-08"];
 
 /** 交付：正式交付物（定版版本，未定版为草稿）、各部门绩效计分卡和导出记录。 */
-export default function DeliveryPage({ embedded = false }: { embedded?: boolean }) {
+/** 成果页分两块用：交付成果（计划书、部门计分卡）在上，过程里的单表导出、导出记录在下。 */
+export type DeliveryPart = "deliver" | "tables" | "records";
+
+export default function DeliveryPage({ embedded = false, part }: { embedded?: boolean; part?: DeliveryPart }) {
+  const show = (p: DeliveryPart) => !part || part === p;
   const { project } = useProjectContext();
   const bundle = useDeliveryBundle(project);
   const recordExport = useRecordExport(project);
@@ -78,7 +82,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
 
   return (
     <div className={embedded ? "flex flex-col gap-6" : "mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6"}>
-      <div className="flex flex-wrap items-end gap-3">
+      {part && part !== "deliver" ? null : <div className="flex flex-wrap items-end gap-3">
         <div>
           {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>}
           <p className="mt-1 text-sm text-muted-foreground">
@@ -90,7 +94,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
             查看全部表的版本与修改记录 →
           </Link>
         )}
-      </div>
+      </div>}
 
       {bundle.error ? (
         <Alert variant="destructive">
@@ -101,7 +105,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
         <Skeleton className="h-96 rounded-xl" />
       ) : (
         <>
-          <section aria-labelledby="plan-books" className="flex flex-col gap-3">
+          {show("deliver") ? <section aria-labelledby="plan-books" className="flex flex-col gap-3">
             <h2 id="plan-books" className="sr-only">年度经营计划书</h2>
             {PLAN_BOOKS.map((code) => {
               const def = getArtifactDef(code);
@@ -142,9 +146,9 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                 </div>
               );
             })}
-          </section>
+          </section> : null}
 
-          <details className="group rounded-xl border bg-card" open={false}>
+          {show("tables") ? <details className="group rounded-xl border bg-card" open={part === "tables" ? true : undefined}>
             <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
               其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG（按需导出）</span>
             </summary>
@@ -221,9 +225,9 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
             })}
             {deliverables.length === 0 ? <p className="text-sm text-muted-foreground">还没有可以导出的成果。</p> : null}
           </section>
-          </details>
+          </details> : null}
 
-          <section aria-labelledby="scorecards" className="flex flex-col gap-3">
+          {show("deliver") ? <section aria-labelledby="scorecards" className="flex flex-col gap-3">
             <h2 id="scorecards" className="font-heading text-lg font-bold text-brand">
               各部门绩效计分卡
             </h2>
@@ -271,9 +275,9 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                 ))}
               </div>
             )}
-          </section>
+          </section> : null}
 
-          <section aria-labelledby="exports" className="flex flex-col gap-3">
+          {show("records") ? <section aria-labelledby="exports" className="flex flex-col gap-3">
             <h2 id="exports" className="font-heading text-lg font-bold text-brand">
               导出记录
             </h2>
@@ -307,7 +311,7 @@ export default function DeliveryPage({ embedded = false }: { embedded?: boolean 
                 </table>
               </div>
             )}
-          </section>
+          </section> : null}
         </>
       )}
     </div>

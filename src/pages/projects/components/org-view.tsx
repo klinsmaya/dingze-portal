@@ -22,10 +22,10 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
     <section aria-labelledby="org" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 id="org" className="font-heading text-lg font-bold text-brand">
-          组织与职责
+          ② 组织与职责
         </h2>
         <span className="text-xs text-muted-foreground">
-          由企业管理员在
+          由企业项目负责人、主咨询师在这里维护，或企业管理员在
           <Link to="/enterprise" className="mx-1 text-primary hover:underline">
             「本企业 › 组织部门」
           </Link>
@@ -34,7 +34,7 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
       </div>
       {nodes.length === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          还没有组织部门。定目标责的责任分工和部门承接要先有部门，请企业管理员建好。
+          还没有组织部门。定目标责的责任分工和部门承接要先有部门，请企业项目负责人或企业管理员建好。
         </p>
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">

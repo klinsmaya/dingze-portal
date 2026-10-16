@@ -1087,7 +1087,7 @@ function Workspace({ code }: { code: string }) {
                         {ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked") ? (
                           <>
                             全部 P0 成果都已定版，可以到
-                            <Link to={`${base}/results?tab=delivery`} className="mx-1 font-semibold text-brand underline">
+                            <Link to={`${base}/results`} className="mx-1 font-semibold text-brand underline">
                               导出
                             </Link>
                             页下载正式交付物。

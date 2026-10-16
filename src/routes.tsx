@@ -40,7 +40,7 @@ export const appRoutes = defineAppRoutes([
       { name: "project.results", path: "results", lazy: () => import("@/pages/projects/results") },
       // 「成果与定版」和「导出」合并为「成果」；旧链接（通知、书签）跳到对应页签。
       { name: "project.artifacts", path: "artifacts", element: <Navigate to="../results" replace /> },
-      { name: "project.delivery", path: "delivery", element: <Navigate to="../results?tab=delivery" replace /> },
+      { name: "project.delivery", path: "delivery", element: <Navigate to="../results" replace /> },
       { name: "project.expert", path: "expert", lazy: () => import("@/pages/projects/expert") },
     ],
   },

@@ -94,7 +94,7 @@ export function todosFor(artifacts: ArtifactOverview[], role: ProjectRole | null
 /** Where a next action leads: the table, the export page, or the project home. */
 export function nextActionPath(projectId: number, next: NextAction): string {
   if (next.code) return workspacePath(projectId, next.code);
-  return next.kind === "deliver" ? `/projects/${projectId}/results?tab=delivery` : `/projects/${projectId}/overview`;
+  return next.kind === "deliver" ? `/projects/${projectId}/results` : `/projects/${projectId}/overview`;
 }
 
 /** The table states next-action and status helpers need, from the project overview. */

@@ -166,6 +166,8 @@ export const opsApi = {
   removeEnterpriseMember: (values: { enterpriseId: number; userId: number }) => post("removeEnterpriseMember", values),
   saveOrgUnit: (values: {
     enterpriseId: number;
+    /** 在项目「资料」页维护时带上（企业项目负责人、主咨询师）。 */
+    projectId?: number;
     id?: number;
     name: string;
     kind?: OrgUnit["kind"];
@@ -175,10 +177,10 @@ export const opsApi = {
     duty?: string | null;
     sort?: number;
   }) => post<OrgUnit>("saveOrgUnit", values),
-  importOrgUnits: (values: { enterpriseId: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] }) =>
+  importOrgUnits: (values: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] }) =>
     post<{ created: number; updated: number; changes: number }>("importOrgUnits", values),
   setMemberDepartment: (values: { enterpriseId: number; userId: number; orgUnitId: number | null }) => post<{ updated: number }>("setMemberDepartment", values),
-  deleteOrgUnit: (values: { enterpriseId: number; id: number }) => post("deleteOrgUnit", values),
+  deleteOrgUnit: (values: { enterpriseId: number; projectId?: number; id: number }) => post("deleteOrgUnit", values),
   listUsers: (query: { q?: string; role?: SystemRole } = {}) => get<DzUser[]>("listUsers", query),
   createUser: (values: {
     username: string;

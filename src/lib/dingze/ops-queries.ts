@@ -52,6 +52,8 @@ export function useOpsMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TRes
       Promise.all([
         client.invalidateQueries({ queryKey: opsKeys.all }),
         client.invalidateQueries({ queryKey: ["dingze", "projects"] }),
+        // 组织也在项目「资料」页维护：项目概览里的组织与职责跟着刷新。
+        client.invalidateQueries({ queryKey: ["dingze", "overview"] }),
       ]),
   });
 }

@@ -3,7 +3,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import type { Context } from '@nocobase/actions';
 
 import { ORG_DEPENDENT_CODES, type OrgUnitFacts, appendOrgNotice, describeOrgChange, getArtifactDef } from '../../shared';
-import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
+import { HttpError, SYSTEM_ROLES, currentUserId, loadProjectContext, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
 import { notify, projectMemberIds } from './notify';
 
 // 运营管理：账号、企业档案、空间成员、组织部门与项目成员。
@@ -344,9 +344,25 @@ async function flagOrgChange(ctx: Context, enterpriseId: number, line: string | 
   }
 }
 
+/**
+ * 组织在哪维护：运营和企业管理员在「本企业」；项目里的企业项目负责人、主咨询师在项目「资料」页
+ * （带 projectId，2026-10-16 资料页调整）。组织是企业级的，改了对本企业所有项目生效。
+ */
+async function loadOrgScope(ctx: Context, input: { enterpriseId: number; projectId?: number }) {
+  if (!input.projectId) return loadEnterpriseScope(ctx, input.enterpriseId, true);
+  const pc = await loadProjectContext(ctx, input.projectId);
+  if (!pc.access.isOps && !['ent_lead', 'lead_consultant'].includes(pc.projectRole ?? '')) {
+    throw new HttpError(403, '只有企业项目负责人或主咨询师可以在项目里维护组织');
+  }
+  const enterprise = await ctx.db.getRepository('dz_enterprises').findOne({ filterByTk: pc.project.get('enterpriseId') });
+  if (!enterprise || (input.enterpriseId && Number(input.enterpriseId) !== enterprise.get('id'))) throw new HttpError(404, '企业不存在');
+  return { enterprise, spaceName: pc.spaceName };
+}
+
 export async function saveOrgUnit(
   ctx: Context,
   input: {
+    projectId?: number;
     enterpriseId: number;
     id?: number;
     name: string;
@@ -358,7 +374,7 @@ export async function saveOrgUnit(
     sort?: number;
   },
 ) {
-  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
+  const { enterprise, spaceName } = await loadOrgScope(ctx, input);
   const repo = ctx.db.getRepository('dz_org_units');
   const enterpriseId = enterprise.get('id');
   const parentId = input.parentId ? positiveId(input.parentId, '上级部门') : null;
@@ -395,9 +411,9 @@ export async function saveOrgUnit(
  */
 export async function importOrgUnits(
   ctx: Context,
-  input: { enterpriseId: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] },
+  input: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] },
 ) {
-  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
+  const { enterprise, spaceName } = await loadOrgScope(ctx, input);
   const enterpriseId = enterprise.get('id') as number;
   const rows = Array.isArray(input.rows) ? input.rows.slice(0, 200) : [];
   if (!rows.length) throw new HttpError(400, '没有可导入的部门');
@@ -462,8 +478,8 @@ export async function setMemberDepartment(ctx: Context, input: { enterpriseId: n
   return { updated: rows.length };
 }
 
-export async function deleteOrgUnit(ctx: Context, input: { enterpriseId: number; id: number }) {
-  const { enterprise } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
+export async function deleteOrgUnit(ctx: Context, input: { enterpriseId: number; projectId?: number; id: number }) {
+  const { enterprise } = await loadOrgScope(ctx, input);
   const id = positiveId(input.id, '部门');
   const enterpriseId = enterprise.get('id');
   const repo = ctx.db.getRepository('dz_org_units');
