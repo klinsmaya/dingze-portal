@@ -525,7 +525,15 @@ export default function MaterialsPage() {
             对话：先把资料传进资料库（📎 或“资料库”页签），再点“从资料整理画像”“从资料整理组织架构”；数字咨询师查阅资料后给修改卡，你确认后才写入。
           </p>
           <div className="flex min-h-0 flex-1 flex-col">
-            <CoachPanel stage="strategy" chatId={`dingze-${project.id}-materials`} />
+            <CoachPanel
+              stage="strategy"
+              chatId={`dingze-${project.id}-materials`}
+              starters={[
+                ["从资料整理企业画像", AI_ASK.profile],
+                ["从资料整理组织架构", AI_ASK.org],
+                ["资料库里有什么、还缺什么", "请看一下资料库里的资料各讲了什么，哪些对定战略、定目标、定行动有用，还缺哪些资料需要企业补。"],
+              ]}
+            />
           </div>
         </aside>
       </div>

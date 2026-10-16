@@ -446,7 +446,7 @@ function CoachBridge() {
 }
 
 /** Cold start: three first sentences a newcomer can click (design 10 / usability #6). */
-function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
+function StarterPrompts({ host, starters }: { host: RefObject<HTMLDivElement | null>; starters?: [string, string][] }) {
   const { messages } = useAIChatMessages();
   const { messagesLoading } = useAIChatBase();
   const session = useEditSession();
@@ -466,7 +466,7 @@ function StarterPrompts({ host }: { host: RefObject<HTMLDivElement | null> }) {
   // Each table opens with its own point (验收意见 E D07): what it is, this step, and the book's gate.
   const def = session && isArtifactCode(session.code) ? getArtifactDef(session.code) : null;
   const note = session ? bookNote(session.code) : null;
-  const prompts: [string, string][] = [
+  const prompts: [string, string][] = starters ?? [
     ["帮我看这张表缺什么", "帮我看看这张表现在缺什么、哪里不符合书里的要求，按先后告诉我先补哪几格。"],
     [cell ? `解释「${cell.length > 10 ? `${cell.slice(0, 10)}…` : cell}」这一格` : "解释这一格", cell ? `「${cell}」这一格应该填什么？请用大白话解释，再举一个同类企业的例子。` : "我不太懂这张表，请用大白话解释每一栏该填什么，各举一个例子。"],
     ["建议怎么填", "结合我们企业的资料，建议这张表怎么填；先给思路，我同意后再出修改卡。"],
@@ -567,9 +567,12 @@ function ChatMenu({ onUpload }: { onUpload: () => void }) {
 export function CoachPanel({
   stage,
   chatId,
+  starters,
 }: {
   stage: StageKey;
   chatId: string;
+  /** 不在填写页时（如资料页）换成这一页的开场句：[按钮文字, 发出的话]。 */
+  starters?: [string, string][];
 }) {
   const ai = useAI();
   const controller = useAIChatController();
@@ -624,7 +627,7 @@ export function CoachPanel({
             disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 上传的文件进资料库 · 修改卡确认后才写入成果"
             placeholder="回答数字咨询师，或直接说你的想法…"
           />
-          <StarterPrompts host={host} />
+          <StarterPrompts host={host} starters={starters} />
         </div>
       </AIChatProvider>
     </AIToolRendererProvider>
