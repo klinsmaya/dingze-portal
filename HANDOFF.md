@@ -65,7 +65,7 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
   3. 插件端可以在 NocoBase 源码里做类型检查：把插件复制到 `packages/plugins/@ziqu/plugin-dingze`，再对 `src/server`、`src/shared` 跑 `tsc --noEmit`。
 - **发布门户：** `NODE_USE_ENV_PROXY=1 nb portal deploy dingze`。
   - 本机经代理出网时，必须带 `NODE_USE_ENV_PROXY=1`。
-  - 报 `TOKEN_RENEW_FAILED` 是 nb 的登录过期了：执行 `nb env auth ziqu -a token -t <管理员令牌>` 后重试。
+  - 报 `TOKEN_RENEW_FAILED` 是 nb 的登录过期了：执行 `nb env auth ziqu-dev -a token -t <管理员令牌>` 后重试。
   - 只有用户要求发布时才部署。
 - **门户入口授权**（新环境才需要）：见 `docs/deploy.md` 第 3 节。2.4.0-alpha.9 上必须用 `--body '["dingze"]'`。
 
