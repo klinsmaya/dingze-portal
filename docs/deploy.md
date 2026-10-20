@@ -2,6 +2,51 @@
 
 平台由两部分组成，发布顺序固定：先插件，后门户，最后给角色开门户入口。
 
+## 0. 分支、版本与发布流程
+
+### 分支与 tag
+
+| 分支 / tag | 用途 |
+|---|---|
+| `main` | 主线。准生产和生产只从 `main` 发布 |
+| `claude/*` 等工作分支 | 一批修改一个分支，从 `main` 拉出；在 dev 验证通过后提 PR 合入 `main` |
+| `v<插件版本>-rc.<n>` | 打在 `main` 上，对应一次准生产发布，如 `v0.32.2-rc.1`。只改门户不升插件版本时，`n` 加 1 |
+| `v<插件版本>` | 正式生产发布 |
+| `v<版本>-beta.<n>` | 阶段性快照（可选），如 `v0.31.0-beta.1` |
+
+- 插件版本只在 `server-plugins/plugin-dingze/package.json` 里维护；改了插件就加 1，只改门户不升。
+- 根目录 `package.json` 的版本是门户模板的版本，不随业务发布改动。
+- `.github/workflows/publish.yml` 是门户模板发 npm 包用的（只能手动触发），本项目不用，不要运行。
+
+### 一次升级
+
+1. **开发**：从 `main` 拉工作分支修改。改插件的同时把插件版本号加 1。
+2. **自检**（全部通过才往下）：
+
+   ```bash
+   npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests/logic tests/components
+   ```
+
+   改了插件还要做插件类型检查（`HANDOFF.md` 第 4 节）；改了关键流程，更新并运行 `e2e/` 下对应用例。
+3. **发 dev**：先插件（第 1 节，`NOCOBASE_API_URL=https://ziqu-dev.aihupo.cn/api`），后门户（`nb portal deploy dingze`，默认环境就是 `ziqu-dev`）。在 dev 上自测；需要时请甲方在 dev 验证。
+4. **记录**：在[更新记录](changelog.md)写清改了什么、试用者要注意什么；试用期间同步更新《试用意见登记表》的“状态 / 修复版本”。
+5. **合入主线**：提 PR 合入 `main`。PR 描述写插件版本、门户改动、要不要数据迁移。
+6. **打 tag**：在合并后的 `main` 提交上打 `v<插件版本>-rc.<n>`。
+7. **发准生产**（按[准生产发布](preprod.md)）：
+   1. 备份准生产的数据库和上传文件；
+   2. 插件：`NOCOBASE_API_URL=https://ziqu.aihupo.cn/api`，令牌用准生产管理员令牌；
+   3. 门户：`NODE_USE_ENV_PROXY=1 nb portal deploy dingze -e ziqu-preprod -y`；
+   4. 发完把 `.env.local` 改回 dev 地址（`NOCOBASE_API_URL=https://ziqu-dev.aihupo.cn/api`）。
+8. **发布后验证**：按 `preprod.md` 第 3 节逐项检查，并在 `preprod.md` 记一笔发布记录（日期、版本、tag、验证结果）。
+9. **回滚**：见 `preprod.md` 第 4 节。门户回到上一个 tag 重新部署；插件装回上一版。做过数据合并的版本，回滚前先恢复备份。
+
+### 数据与平台升级
+
+- 准生产的数据按真实数据对待。演示数据的快照导入（`importSnapshot`）只能用在空库上，不能重复导入。
+- 插件改了数据结构或要改已有数据，写成插件的升级迁移（`server/upgrade/`），在 dev 上先跑通，再随插件发准生产。
+- 升级 NocoBase 本身：dev 先升、跑一遍第 4 节和 `preprod.md` 第 3 节的检查，通过后再升准生产。构建插件用的 NocoBase 源码（`NOCOBASE_SRC`）也换成同一版本。
+- 门户模板上游有更新时，单开一个分支合并，按 `AGENTS.md` 的要求对比后选择性合入，不要直接覆盖本项目改过的文件。
+
 ## 1. 定责业务插件 `@ziqu/plugin-dingze`
 
 源码在 `server-plugins/plugin-dingze`。改动后先在 `package.json` 里提升版本号，再执行：

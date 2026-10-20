@@ -17,7 +17,7 @@
 
 ## 2. 当前状态（2026-10-13）
 
-- 分支 `claude/serene-hawking-jgi7rn`，已推送；**没有开 PR**（用户没要求就不要开）。
+- 主线 `main`（2026-10-20 起，工作分支 `claude/serene-hawking-jgi7rn` 经 PR 合入）。分支、tag 和发布流程见 `docs/deploy.md` 第 0 节。
 - 环境：dev（ziqu-dev.aihupo.cn）和准生产（ziqu.aihupo.cn）都是 NocoBase 2.4.0-alpha.11，插件 **0.32.2** 已部署启用，门户已用最新代码发布；准生产见 docs/preprod.md。
 - 检查：`npx tsc --noEmit`、`npx eslint src --quiet`、`npx vitest run tests/logic tests/components`（246 项）全部通过。`npx vitest run tests` 还会捡到 `registry/nocobase-ai-knowledge-base/tests` 下两个用 `node:test` 写的文件，它们一直跑不了，与本项目无关。
 - 用户提出的需求已全部完成，并在线上用演示账号实测：
@@ -78,7 +78,7 @@ npx tsc --noEmit && npx eslint src --quiet && npx vitest run tests
 ## 6. 用户给过的硬约束
 
 1. 用中文和用户交流；文档、界面文案用中文，说人话，书里的编号用小字。
-2. 只在 `claude/serene-hawking-jgi7rn` 上提交、推送；不开 PR，除非用户要求。提交信息里不写模型名。
+2. 只在会话指定的工作分支上提交、推送，经 PR 合入 `main`；不直接推 `main`，用户没要求不开 PR。提交信息里不写模型名。
 3. 不动测试实例上的其他应用和其他门户（main / ziqu / admin / mobile），不碰别的数据；只改 `dingze` 门户、本插件和本插件的数据。
 4. **不要给 AI 员工 nathan、dara、lina、orin 绑定任何东西**（它们是开发用 AI 员工）。本项目只用三位数字咨询师：`dingze-strategy-coach`、`dingze-goal-coach`、`dingze-action-coach`。
 5. **不削弱逐表解锁、定版门禁、角色隔离**；规格问题不能用放宽校验来混过去。
