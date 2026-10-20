@@ -4,7 +4,7 @@
 **依据**：《企业战略咨询平台需求规格说明书》V1.2、《自驱战略落地》第 2—4 章（定战略责 / 定目标责 / 定行动责）、`ziqu-dingze` 方法论包
 **测试环境**：https://ziqu-dev.aihupo.cn/x/dingze/ （NocoBase 2.4.0-alpha.9，插件 `@ziqu/plugin-dingze` 0.26.0）
 **更新记录 / 路线图**：[changelog.md](changelog.md)、[roadmap.md](roadmap.md)
-**代码**：仓库 `klinsmaya/portal-template-default`，主线 `main`（发布流程见[发布与部署](deploy.md)第 0 节）
+**代码**：仓库 `klinsmaya/dingze-portal`（原名 portal-template-default，2026-10-20 改名），主线 `main`（发布流程见[发布与部署](deploy.md)第 0 节）
 
 ## 1. 做了什么
 
