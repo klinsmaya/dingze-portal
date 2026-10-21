@@ -1,8 +1,8 @@
 export const starter = {
-  "shell.workspace": "AI 应用工作区",
+  "shell.workspace": "企业战略咨询平台",
   "shell.settings": "设置",
-  "shell.footer.freedom": "AI 自由构建。",
-  "shell.footer.reliabilitySuffix": "保障可靠运行。",
+  "shell.footer.freedom": "定战略责 · 定目标责 · 定行动责",
+  "shell.footer.reliabilitySuffix": "上下同欲，责任到人",
   "auth.signOut": "退出登录",
   "auth.signingOut": "正在退出...",
   "acl.portalAccessDenied.title": "无权访问此门户",

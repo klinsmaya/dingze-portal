@@ -307,21 +307,10 @@ function SidebarFooter() {
               {translate("shell.footer.freedom", "AI builds freely.")}
             </div>
             <div className="text-muted-foreground">
-              <a
-                href="https://nocobase.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-sidebar-foreground hover:underline"
-              >
-                NocoBase
-              </a>{" "}
               {translate(
                 "shell.footer.reliabilitySuffix",
                 "keeps it reliable."
               )}
-            </div>
-            <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
-              {__PORTAL_TEMPLATE_NAME__} v{__PORTAL_TEMPLATE_VERSION__}
             </div>
           </div>
         )}

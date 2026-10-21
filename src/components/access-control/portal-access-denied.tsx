@@ -1,5 +1,5 @@
-import { useGetIdentity, useTranslate } from "@refinedev/core";
-import { ShieldX } from "lucide-react";
+import { useGetIdentity, useLogout, useTranslate } from "@refinedev/core";
+import { LogOut, ShieldX } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { useAclState, type AclIdentity } from "@nocobase/portal-sdk/acl";
 
@@ -10,6 +10,7 @@ import {
   UNION_ROLE,
 } from "@/extensions/nocobase-acl";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -33,6 +34,7 @@ export function PortalAccessDeniedView({
   roleSwitcher,
 }: PortalAccessDeniedViewProps) {
   const translate = useTranslate();
+  const { mutate: logout } = useLogout();
   const switchRoleTitle = translate(
     "acl.roleSwitcher.switchRole",
     "Switch role"
@@ -53,6 +55,13 @@ export function PortalAccessDeniedView({
         <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-muted-foreground">
           {description}
         </p>
+
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+          账号由平台统一开通。如果你应该能进入，请联系本企业管理员或平台运营；也可以换一个账号登录。
+        </p>
+        <Button className="mt-5" variant="outline" onClick={() => logout()}>
+          <LogOut /> 退出并换个账号
+        </Button>
 
         {roleSwitcher && currentRoleTitle ? (
           <Card

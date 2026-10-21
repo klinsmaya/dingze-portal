@@ -18,6 +18,7 @@ import { DocumentTitleHandler } from "./components/app-shell/document-title-hand
 import { useNotificationProvider } from "./components/notifications/use-notification-provider";
 import { Toaster } from "./components/notifications/toaster";
 import { ThemeProvider } from "./components/theme/theme-provider";
+import { applyFontSize, storedFontSize } from "./lib/dingze/font-size";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { BrandLogo } from "./components/app-shell/brand";
 import {
@@ -41,6 +42,9 @@ const basename = getPortalBase().replace(/\/+$/, "");
 const ReactGrabPicker = import.meta.env.DEV
   ? lazy(() => import("./components/development/react-grab-picker"))
   : null;
+
+// 字号偏好在第一帧前生效，避免先按“中”渲染再跳一下。
+applyFontSize(storedFontSize());
 
 function App() {
   return (
@@ -73,7 +77,7 @@ function App() {
 
                     <Toaster />
                     <UnsavedChangesNotifier />
-                    <DocumentTitleHandler appName="NocoBase" />
+                    <DocumentTitleHandler appName="定三责" />
                   </Refine>
                 </AclStoreProvider>
               </SystemSettingsProvider>

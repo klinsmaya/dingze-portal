@@ -1,0 +1,308 @@
+import { ArrowDown, ArrowUp, CircleHelp, Import, Plus, Trash2 } from "lucide-react";
+import { type ReactNode, createContext, useContext, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { useEditSession } from "@/pages/projects/components/edit-session";
+import { Link } from "react-router";
+
+const pendingTone = "border-suggestion-border bg-suggestion text-suggestion-foreground";
+
+/** A compact table cell editor; “待补” renders in the suggestion tone. */
+export function TextCell({
+  label,
+  value,
+  onChange,
+  readOnly,
+  invalid,
+  multiline = false,
+  placeholder,
+  className,
+  anchor,
+}: {
+  /** Issue / comment anchor (row or field id) so the cell can be scrolled to. */
+  anchor?: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  readOnly: boolean;
+  invalid?: boolean;
+  multiline?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  if (readOnly) {
+    const text = (value ?? "").trim();
+    return (
+      <div
+        aria-label={label}
+        data-anchor={anchor}
+        className={cn("min-h-9 rounded-md px-2 py-1.5 text-sm whitespace-pre-wrap", text ? "text-foreground" : "text-muted-foreground/60", text === "待补" && pendingTone, className)}
+      >
+        {text || "—"}
+      </div>
+    );
+  }
+  const shared = {
+    "data-anchor": anchor,
+    "aria-label": label,
+    value: value ?? "",
+    readOnly,
+    "aria-invalid": invalid || undefined,
+    placeholder: readOnly ? "" : (placeholder ?? ""),
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
+    className: cn((value ?? "").trim() === "待补" && pendingTone, className),
+  };
+  return multiline ? (
+    <Textarea {...shared} className={cn("min-h-16 resize-y", shared.className)} />
+  ) : (
+    <Input {...shared} />
+  );
+}
+
+/** 工具栏里给“怎么填”留的位置（2026-10-16 页头规整）：有位置时提示放进工具栏，不再占编辑区一行。 */
+export const HowToSlotContext = createContext<HTMLElement | null>(null);
+
+/** The editor's own small row: a 怎么填 tip and table-specific buttons; the tip goes into the toolbar when it can. */
+export function EditorToolbar({ children, hint }: { children?: ReactNode; hint?: ReactNode }) {
+  const slot = useContext(HowToSlotContext);
+  const tip = hint ? (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground",
+          slot && "h-8 shrink-0 rounded-md border px-2 hover:bg-muted",
+        )}
+      >
+        <CircleHelp className="size-3.5" /> 怎么填
+      </PopoverTrigger>
+      <PopoverContent align={slot ? "end" : "start"} className="max-w-md text-sm leading-relaxed">
+        {hint}
+      </PopoverContent>
+    </Popover>
+  ) : null;
+  if (slot) {
+    return (
+      <>
+        {tip ? createPortal(tip, slot) : null}
+        {children ? <div className="flex flex-wrap justify-end gap-2">{children}</div> : null}
+      </>
+    );
+  }
+  if (!children && !hint) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      {tip ?? <span />}
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+export function AddButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={disabled}>
+      <Plus /> {label}
+    </Button>
+  );
+}
+
+/** “从上游带入”: only offered when the upstream has something new to bring. */
+export function ImportButton({
+  label,
+  count,
+  onClick,
+  readOnly,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+  readOnly: boolean;
+}) {
+  if (readOnly) return null;
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={count === 0} title={count === 0 ? "上游没有新的内容可带入" : undefined}>
+      <Import /> {label}
+      {count > 0 ? `（${count}）` : ""}
+    </Button>
+  );
+}
+
+export function RowActions({
+  label,
+  onRemove,
+  onMove,
+  readOnly,
+}: {
+  label: string;
+  onRemove: () => void;
+  onMove?: (delta: -1 | 1) => void;
+  readOnly: boolean;
+}) {
+  if (readOnly) return null;
+  return (
+    <div className="flex shrink-0 items-center">
+      {onMove ? (
+        <>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`上移 ${label}`} onClick={() => onMove(-1)}>
+            <ArrowUp />
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`下移 ${label}`} onClick={() => onMove(1)}>
+            <ArrowDown />
+          </Button>
+        </>
+      ) : null}
+      <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除 ${label}`} onClick={onRemove}>
+        <Trash2 />
+      </Button>
+    </div>
+  );
+}
+
+/** Read-only context from an upstream table, shown above the editor. */
+export function UpstreamNote({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-book-border bg-book px-4 py-3 text-sm text-book-foreground">
+      <div className="mb-1 text-xs font-semibold opacity-80">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 表格格子 (design 10 画面 4): reads like Excel — click, Enter, F2 or just start typing to edit;
+ * Enter saves, Tab saves and goes to the next cell, Esc cancels.
+ */
+export function GridCell({
+  label,
+  value,
+  onChange,
+  readOnly,
+  anchor,
+  placeholder,
+  align = "left",
+  className,
+  children,
+  revisionKey,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  readOnly: boolean;
+  anchor?: string;
+  /** Payload key matched against 修订 (e.g. “n3.path”); defaults to the anchor. */
+  revisionKey?: string;
+  placeholder?: string;
+  align?: "left" | "right";
+  className?: string;
+  /** Extra line under the value (e.g. “下级 310”). */
+  children?: ReactNode;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const cell = useRef<HTMLDivElement>(null);
+  const session = useEditSession();
+  const rev = session?.revision.on ? session.revisionCell(revisionKey ?? anchor ?? "") : null;
+  const commit = () => {
+    if (draft !== null && draft !== (value ?? "")) onChange(draft);
+    setDraft(null);
+  };
+  if (draft !== null) {
+    return (
+      <div className="relative">
+        <input
+          autoFocus
+          aria-label={label}
+          data-anchor={anchor}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+              requestAnimationFrame(() => cell.current?.focus());
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setDraft(null);
+              requestAnimationFrame(() => cell.current?.focus());
+            }
+          }}
+          className={cn("block min-h-9 w-full min-w-0 bg-background px-2 py-1.5 text-sm outline-2 -outline-offset-2 outline-brand", align === "right" && "text-right font-semibold")}
+        />
+        <div className="absolute top-full left-0 z-30 mt-1 flex items-center gap-1 whitespace-nowrap rounded-md bg-[#12384a] px-2 py-1 text-[11px] text-white shadow-lg">
+          <Kbd className="bg-white/15 text-white">Enter</Kbd> 保存 <Kbd className="bg-white/15 text-white">Tab</Kbd> 下一格 <Kbd className="bg-white/15 text-white">Esc</Kbd> 取消
+        </div>
+      </div>
+    );
+  }
+  const text = (value ?? "").trim();
+  return (
+    <div
+      ref={cell}
+      role="gridcell"
+      tabIndex={0}
+      aria-label={label}
+      aria-readonly={readOnly || undefined}
+      data-anchor={anchor}
+      onClick={() => !readOnly && setDraft(value ?? "")}
+      onKeyDown={(e) => {
+        if (readOnly || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === "Enter" || e.key === "F2") {
+          e.preventDefault();
+          setDraft(value ?? "");
+        } else if (e.key.length === 1) {
+          e.preventDefault();
+          setDraft(e.key);
+        }
+      }}
+      className={cn(
+        "min-h-9 cursor-text px-2 py-1.5 text-sm whitespace-pre-wrap outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand",
+        readOnly && "cursor-default",
+        align === "right" && "text-right font-semibold tabular-nums",
+        !text && "text-muted-foreground/60",
+        text === "待补" && pendingTone,
+        className,
+      )}
+    >
+      {rev?.kind === "changed" && rev.before !== undefined ? (
+        <span className="block text-[11px] font-normal text-muted-foreground line-through" title="对比版本里的原值">
+          {rev.before || "空"}
+        </span>
+      ) : null}
+      <span className={cn(rev?.kind === "changed" && "underline decoration-2 underline-offset-2")} style={rev?.kind === "changed" ? { textDecorationColor: "var(--dz-changed)" } : undefined}>
+        {text || (readOnly ? "—" : (placeholder ?? ""))}
+      </span>
+      {rev?.by ? (
+        <span
+          title={`${rev.by} ${rev.kind === "added" ? "新增" : "改的"}`}
+          aria-label={`${rev.by} ${rev.kind === "added" ? "新增" : "改的"}`}
+          className="ml-1 inline-flex size-4 items-center justify-center rounded-full align-middle text-[9px] font-semibold text-white"
+          style={{ background: "var(--dz-changed)" }}
+        >
+          {rev.by.slice(0, 1)}
+        </span>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+/** 一行“数据从哪来”的说明 (闭环：组织 → RACI / 部门承接 / 部门计划书), with a link to where it is kept. */
+export function SourceNote({ children, to, linkLabel, warn }: { children: ReactNode; to?: string; linkLabel?: string; warn?: boolean }) {
+  return (
+    <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs", warn ? "text-[color:var(--dz-warn)]" : "text-muted-foreground")}>
+      <span>{children}</span>
+      {to ? (
+        <Link to={to} className="text-primary hover:underline">
+          {linkLabel ?? "查看"} →
+        </Link>
+      ) : null}
+    </p>
+  );
+}

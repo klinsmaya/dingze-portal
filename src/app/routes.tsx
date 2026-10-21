@@ -8,7 +8,7 @@ import { ErrorComponent } from "@/components/app-shell/error-component";
 import { Layout } from "@/components/app-shell/layout";
 import { ForgotPassword } from "@/pages/forgot-password";
 import { Login } from "@/pages/login";
-import { Register } from "@/pages/register";
+import { InviteRegister } from "@/pages/register/invite";
 import {
   AppExtensionProviders,
   configuredRouteElements,
@@ -57,7 +57,8 @@ export function AppRoutes() {
       >
         <Route path="/login" element={<Login />} />
         <Route path="/signin" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* 公开注册关闭；只能凭邀请码申请，审核通过才开通账号。 */}
+        <Route path="/register" element={<InviteRegister />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
       </Route>
     </Routes>

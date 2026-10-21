@@ -15,11 +15,11 @@ test("signs in and preserves the session after reload", async ({ page }) => {
 
   await page.goto(resolvePortalTestURL(environment, "/login"));
 
-  await page
-    .getByLabel("Username or email", { exact: true })
-    .fill(credentials.account);
-  await page.getByLabel("Password", { exact: true }).fill(credentials.password);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  // The Portal signs in in Chinese; English labels are kept for other locales.
+  const accountField = page.getByLabel(/^(用户名|账号|用户名或邮箱|Username or email)$/).first();
+  await accountField.fill(credentials.account);
+  await page.getByLabel(/^(密码|Password)$/).first().fill(credentials.password);
+  await page.getByRole("button", { name: /^(登录|Sign in)$/ }).first().click();
 
   await expect
     .poll(() => new URL(page.url()).pathname)
@@ -29,6 +29,6 @@ test("signs in and preserves the session after reload", async ({ page }) => {
   await expect
     .poll(() => new URL(page.url()).pathname)
     .not.toMatch(/\/(?:login|signin)\/?$/);
-  await expect(page.getByLabel("Username or email")).toHaveCount(0);
+  await expect(page.getByLabel(/^(用户名|账号|用户名或邮箱|Username or email)$/)).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });

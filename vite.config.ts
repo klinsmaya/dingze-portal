@@ -77,6 +77,10 @@ export default defineConfig(({ command, mode }) => {
     ],
     resolve: {
       alias: {
+        "@dingze/shared": path.resolve(
+          __dirname,
+          "./server-plugins/plugin-dingze/src/shared"
+        ),
         "@/extensions": extensionsRoot,
         "@": path.resolve(__dirname, "./src"),
       },

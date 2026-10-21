@@ -1,0 +1,235 @@
+import { type DiffEntry, diffPayloads } from "@dingze/shared";
+
+// 修改记录 (design 10 §7 “修改 = 命令”): every edit — typed, structural, pasted or confirmed from a
+// digital-consultant card — becomes one command with before / after per path, its source and the
+// comment it answers. Undo of any single command reverts exactly its paths; the list is the log.
+
+export type Via = "edit" | "structure" | "chat" | "paste" | "undo" | "import";
+
+export const VIA_LABELS: Record<Via, string> = { edit: "直接改", structure: "调结构", chat: "对话", paste: "粘贴", undo: "撤销", import: "导入" };
+
+export type Command = {
+  id: string;
+  at: string;
+  via: Via;
+  label: string;
+  by?: string;
+  commentId?: number | null;
+  changes: DiffEntry[];
+  /** Local only: the whole draft before / after, so undoing the latest command is exact. */
+  prev?: unknown;
+  next?: unknown;
+};
+
+export type CommandMeta = { via?: Via; label?: string; commentId?: number | null; by?: string };
+
+let seq = 0;
+const newId = () => `c${Date.now().toString(36)}${(seq = (seq + 1) % 1e6).toString(36)}`;
+
+/** Text for a value in a change line: strings as-is, rows by their text fields. */
+export function preview(value: unknown, max = 40): string {
+  let text: string;
+  if (value === undefined || value === null || value === "") text = "空";
+  else if (typeof value === "string") text = value;
+  else if (typeof value === "number" || typeof value === "boolean") text = String(value);
+  else if (Array.isArray(value)) text = value.map((v) => preview(v, 20)).join("、");
+  else
+    text =
+      Object.entries(value as Record<string, unknown>)
+        .filter(([k, v]) => k !== "id" && !k.endsWith("Id") && (typeof v === "string" || typeof v === "number") && v !== "")
+        .map(([, v]) => String(v))
+        .slice(0, 3)
+        .join(" ｜ ") || "一行";
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** A readable one-line summary of a set of changes. */
+export function describeChanges(changes: DiffEntry[], nameOf: (path: string) => string = (p) => p): string {
+  if (changes.length === 0) return "无改动";
+  if (changes.every((c) => c.path.endsWith(ORDER))) return `调整顺序：${changes.map((c) => nameOf(c.path.slice(0, -ORDER.length - 1)) || "列表").join("、")}`;
+  const isRow = (v: unknown) => !!v && typeof v === "object";
+  // Rows / nodes added or removed are structure; an empty cell getting a value is just “填写”.
+  const rowsAdded = changes.filter((c) => c.kind === "added" && isRow(c.after));
+  const rowsRemoved = changes.filter((c) => c.kind === "removed" && isRow(c.before));
+  const cells = changes.filter((c) => !rowsAdded.includes(c) && !rowsRemoved.includes(c) && !c.path.endsWith(ORDER) && !c.path.endsWith(".amount"));
+  if (changes.length === 1 || (cells.length === 1 && !rowsAdded.length && !rowsRemoved.length)) {
+    const c = cells[0] ?? changes[0];
+    if (c.kind === "added" && isRow(c.after)) return `新增「${preview(c.after)}」`;
+    if (c.kind === "removed" && isRow(c.before)) return `删除「${preview(c.before)}」`;
+    if (c.kind === "added") return `填写「${nameOf(c.path)}」：${preview(c.after, 24)}`;
+    if (c.kind === "removed") return `清空「${nameOf(c.path)}」（原为 ${preview(c.before, 24)}）`;
+    return `「${nameOf(c.path)}」${preview(c.before, 24)} → ${preview(c.after, 24)}`;
+  }
+  const filled = cells.filter((c) => c.kind === "added").length;
+  const edited = cells.length - filled;
+  return [
+    rowsAdded.length && `新增 ${rowsAdded.length} 项`,
+    rowsRemoved.length && `删除 ${rowsRemoved.length} 项`,
+    filled && `填写 ${filled} 格`,
+    edited && `改 ${edited} 处`,
+  ]
+    .filter(Boolean)
+    .join("，");
+}
+
+export const ORDER = "#order";
+
+const keyedArray = (v: unknown): v is { id: string }[] => Array.isArray(v) && v.length > 0 && v.every((x) => isObj(x) && typeof x.id === "string");
+
+/** Rows moved up / down: the diff matches rows by id and ignores order, so record it apart. */
+export function orderChanges(before: unknown, after: unknown, path = ""): DiffEntry[] {
+  const join = (key: string) => (path ? `${path}.${key}` : key);
+  if (isObj(before) && isObj(after)) return Object.keys(after).flatMap((k) => orderChanges(before[k], after[k], join(k)));
+  if (keyedArray(before) && keyedArray(after)) {
+    const a = before.map((x) => x.id);
+    const b = after.map((x) => x.id);
+    const common = (ids: string[], other: string[]) => ids.filter((id) => other.includes(id));
+    const out: DiffEntry[] = [];
+    if (common(a, b).join("|") !== common(b, a).join("|")) out.push({ path: join(ORDER), kind: "changed", before: a, after: b });
+    for (const item of after) {
+      const old = before.find((x) => x.id === item.id);
+      if (old) out.push(...orderChanges(old, item, join(item.id)));
+    }
+    return out;
+  }
+  return [];
+}
+
+export function buildCommand(before: unknown, after: unknown, meta: CommandMeta = {}, nameOf?: (path: string) => string): Command | null {
+  const changes = [...diffPayloads(before, after), ...orderChanges(before, after)];
+  if (changes.length === 0) return null;
+  const via = meta.via ?? (isStructural(changes) ? "structure" : "edit");
+  return { id: newId(), at: new Date().toISOString(), via, label: meta.label ?? describeChanges(changes, nameOf), by: meta.by, commentId: meta.commentId ?? null, changes, prev: before, next: after };
+}
+
+const COALESCE_MS = 1500;
+
+/** Typing in one cell becomes one command: merge into the previous one when it is the same edit. */
+export function appendCommand(log: Command[], before: unknown, after: unknown, meta: CommandMeta, nameOf?: (path: string) => string): Command[] {
+  const last = log[log.length - 1];
+  const fresh = buildCommand(before, after, meta, nameOf);
+  if (!fresh) return log;
+  // Same field(s) edited again: the earlier entry may have filled an empty cell ("added").
+  const samePaths = (a: DiffEntry[], b: DiffEntry[]) =>
+    a.length === b.length && a.every((x, i) => x.path === b[i].path && x.kind !== "removed" && b[i].kind !== "removed" && !(x.kind === "added" && typeof x.after === "object"));
+  if (
+    last &&
+    fresh.via === "edit" &&
+    last.via === "edit" &&
+    !meta.label &&
+    (last.commentId ?? null) === (meta.commentId ?? null) &&
+    Date.now() - Date.parse(last.at) < COALESCE_MS &&
+    samePaths(last.changes, fresh.changes)
+  ) {
+    const changes = last.changes.map((c, i) => ({ ...c, kind: fresh.changes[i].kind === "removed" ? "removed" : c.kind, after: fresh.changes[i].after }));
+    return [...log.slice(0, -1), { ...last, at: fresh.at, changes, label: describeChanges(changes, nameOf), next: after }];
+  }
+  return [...log, fresh];
+}
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** Value at a diff path (array items addressed by id). */
+export function getAt(payload: unknown, path: string): unknown {
+  let cur: unknown = payload;
+  for (const seg of path.split(".").filter(Boolean)) {
+    if (Array.isArray(cur)) cur = cur.find((x) => isObj(x) && x.id === seg);
+    else if (isObj(cur)) cur = cur[seg];
+    else return undefined;
+  }
+  return cur;
+}
+
+/** Set (or, with `remove`, delete) the value at a diff path; arrays are addressed by id, missing items appended. */
+function setPath(payload: unknown, segments: string[], value: unknown, remove: boolean): unknown {
+  const [head, ...rest] = segments;
+  if (Array.isArray(payload)) {
+    const index = payload.findIndex((x) => isObj(x) && x.id === head);
+    if (!rest.length) {
+      if (remove) return index < 0 ? payload : payload.filter((_, i) => i !== index);
+      if (index < 0) return [...payload, value];
+      return payload.map((x, i) => (i === index ? value : x));
+    }
+    if (index < 0) return payload;
+    return payload.map((x, i) => (i === index ? setPath(x, rest, value, remove) : x));
+  }
+  const record: Obj = isObj(payload) ? payload : {};
+  if (!rest.length) {
+    if (remove) {
+      const others = { ...record };
+      delete others[head];
+      return others;
+    }
+    return { ...record, [head]: value };
+  }
+  return { ...record, [head]: setPath(record[head], rest, value, remove) };
+}
+
+function reorder(payload: unknown, segments: string[], ids: unknown): unknown {
+  const array = getAt(payload, segments.join("."));
+  if (!Array.isArray(array) || !Array.isArray(ids)) return payload;
+  const rank = (x: unknown) => {
+    const i = ids.indexOf(isObj(x) ? x.id : undefined);
+    return i < 0 ? ids.length : i;
+  };
+  const sorted = array.map((x, i) => ({ x, i })).sort((p, q) => rank(p.x) - rank(q.x) || p.i - q.i).map((p) => p.x);
+  return segments.length ? setPath(payload, segments, sorted, false) : sorted;
+}
+
+/** Undo one command: put every path it touched back to its `before`. */
+export function revertCommand<T>(payload: T, command: Command): T {
+  // The latest command on an untouched draft: restore the exact snapshot (order included).
+  if (command.prev !== undefined && command.next === payload) return command.prev as T;
+  let next: unknown = payload;
+  for (const c of [...command.changes].reverse()) {
+    const segments = c.path.split(".").filter(Boolean);
+    if (segments[segments.length - 1] === ORDER) next = reorder(next, segments.slice(0, -1), c.before);
+    else if (c.kind === "added") next = setPath(next, segments, undefined, true);
+    else next = setPath(next, segments, c.before, false);
+  }
+  return next as T;
+}
+
+/** Redo one command: put every path it touched to its `after` again. */
+export function reapplyCommand<T>(payload: T, command: Command): T {
+  if (command.next !== undefined && command.prev === payload) return command.next as T;
+  let next: unknown = payload;
+  for (const c of command.changes) {
+    const segments = c.path.split(".").filter(Boolean);
+    if (segments[segments.length - 1] === ORDER) next = reorder(next, segments.slice(0, -1), c.after);
+    else if (c.kind === "removed") next = setPath(next, segments, undefined, true);
+    else next = setPath(next, segments, c.after, false);
+  }
+  return next as T;
+}
+
+/** Structural edits (rows / nodes added or removed) are logged as 调结构, not 直接改. */
+export function isStructural(changes: DiffEntry[]): boolean {
+  return changes.some((c) => c.path.endsWith(ORDER)) || changes.some((c) => c.kind !== "changed" && ((c.after ?? c.before) !== null && typeof (c.after ?? c.before) === "object"));
+}
+
+/** Later commands that touched the same paths (or rows) as `command`, which an undo would override. */
+export function laterConflicts(log: Command[], command: Command): Command[] {
+  const index = log.findIndex((c) => c.id === command.id);
+  const paths = command.changes.map((c) => c.path);
+  const overlaps = (a: string, b: string) => a === b || a.startsWith(`${b}.`) || b.startsWith(`${a}.`);
+  return log.slice(index + 1).filter((c) => c.changes.some((x) => paths.some((p) => overlaps(p, x.path))));
+}
+
+/** The row ids and field paths a set of changes touches, for highlighting with data-anchor. */
+export function anchorsOf(changes: DiffEntry[]): string[] {
+  const out = new Set<string>();
+  for (const c of changes) {
+    const parts = c.path.split(".").filter(Boolean);
+    out.add(c.path);
+    for (let i = parts.length - 1; i > 0; i--) out.add(parts.slice(0, i).join("."));
+    for (const part of parts) out.add(part);
+  }
+  return [...out];
+}
+
+/** What is sent with a save: the command without its local snapshots. */
+export function toSaved(command: Command): Omit<Command, "id" | "prev" | "next"> {
+  return { at: command.at, via: command.via, label: command.label, by: command.by, commentId: command.commentId, changes: command.changes };
+}

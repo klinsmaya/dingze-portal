@@ -14,6 +14,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@dingze/shared": fileURLToPath(
+        new URL("./server-plugins/plugin-dingze/src/shared", import.meta.url)
+      ),
       "@/extensions": extensionsRoot,
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },

@@ -1,4 +1,5 @@
 import type { RenderAuthenticator } from "@nocobase/portal-sdk/auth";
+import { Link } from "react-router";
 
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { DynamicSignIn } from "@/components/auth/dynamic-sign-in";
@@ -12,8 +13,13 @@ export function DefaultSignInPage({
 }: DefaultSignInPageProps) {
   return (
     <AuthLayout
-      title="Welcome back"
-      description="Choose a sign-in method configured in NocoBase."
+      title="登录"
+      description="使用咨询机构为你开通的账号登录。"
+      footer={
+        <Link to="/register" className="text-muted-foreground hover:text-foreground hover:underline hover:underline-offset-4">
+          有邀请码？申请加入
+        </Link>
+      }
     >
       <DynamicSignIn renderAuthenticator={renderAuthenticator} />
     </AuthLayout>

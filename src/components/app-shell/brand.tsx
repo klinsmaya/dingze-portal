@@ -1,52 +1,40 @@
-import { assetUrl, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type BrandLogoProps = {
   className?: string;
 };
 
+/** The 定三责 seal: a gold “责” on the brand colour. */
 export function BrandLogo({ className }: BrandLogoProps) {
   return (
     <span
+      aria-hidden
       className={cn(
-        "inline-flex size-10 shrink-0 items-center justify-center overflow-hidden",
-        className
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold font-heading text-lg font-bold text-brand dark:text-brand-foreground",
+        className,
       )}
     >
-      <img
-        src={assetUrl("/logo-mark.png")}
-        alt=""
-        className="size-full object-contain dark:hidden"
-      />
-      <img
-        src={assetUrl("/logo-mark-dark.png")}
-        alt=""
-        className="hidden size-full object-contain dark:block"
-      />
+      责
     </span>
   );
 }
 
 export function BrandWordmark({ className }: BrandLogoProps) {
   return (
-    <span
-      className={cn(
-        "inline-flex h-8 shrink-0 items-center overflow-hidden",
-        className
-      )}
-    >
-      <img
-        src={assetUrl("/logo.png")}
-        alt="NocoBase"
-        className="h-full w-auto object-contain dark:hidden"
-      />
-      <img
-        src={assetUrl("/logo-dark.png")}
-        alt="NocoBase"
-        className="hidden h-full w-auto object-contain dark:block"
-      />
+    <span className={cn("inline-flex min-w-0 items-center gap-2.5", className)}>
+      <BrandLogo className="size-9" />
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="truncate font-heading text-base font-bold tracking-wide text-brand dark:text-foreground">
+          自驱战略 · 定三责
+        </span>
+        <span className="truncate text-[11px] text-muted-foreground">
+          企业战略咨询平台
+        </span>
+      </span>
     </span>
   );
 }
+
 type BrandProps = {
   className?: string;
   logoClassName?: string;

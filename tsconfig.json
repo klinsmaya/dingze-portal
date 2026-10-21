@@ -18,9 +18,10 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
+      "@dingze/shared": ["./server-plugins/plugin-dingze/src/shared"],
       "@/extensions/*": ["./registry/*", "./src/extensions/*"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "registry"]
+  "include": ["src", "registry", "server-plugins/plugin-dingze/src/shared"]
 }

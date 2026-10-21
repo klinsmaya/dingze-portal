@@ -4,10 +4,22 @@ import { Header } from "@/components/app-shell/header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import type { PropsWithChildren } from "react";
+import { useMatch } from "react-router";
 import { PageErrorBoundary } from "./page-error-boundary";
 import { Sidebar } from "./sidebar";
 
 export function Layout({ children }: PropsWithChildren) {
+  // Inside a project the workspace provides its own band header and project
+  // navigation, so it gets the full viewport instead of the app sidebar.
+  const inProject = useMatch("/projects/:projectId/*");
+  if (inProject) {
+    return (
+      <div className="flex min-h-svh flex-col bg-background">
+        <PageErrorBoundary>{children}</PageErrorBoundary>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <Sidebar />

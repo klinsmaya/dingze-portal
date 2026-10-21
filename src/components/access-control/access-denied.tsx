@@ -1,11 +1,13 @@
-import { ShieldX } from "lucide-react";
+import { FolderKanban, ShieldX } from "lucide-react";
+import { Link } from "react-router";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function AccessDenied({
   className,
-  title = "Access denied",
-  description = "You don't have permission to view this content.",
+  title = "无权访问",
+  description = "当前账号没有查看这个页面的权限。如果你需要它，请联系运营管理员开通。",
 }: {
   className?: string;
   title?: string;
@@ -25,6 +27,9 @@ export function AccessDenied({
       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
         {description}
       </p>
+      <Button className="mt-5" nativeButton={false} render={<Link to="/projects" />}>
+        <FolderKanban /> 回我的项目
+      </Button>
     </div>
   );
 }
