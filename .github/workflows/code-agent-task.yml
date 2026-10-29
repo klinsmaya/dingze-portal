@@ -1,0 +1,2291 @@
+name: Code Agent NocoBase Task
+run-name: "Factory issue #${{ github.event.issue.number || github.event.client_payload.issue_number || inputs.issue_number }} build ${{ github.event.client_payload.build_comment_id || '0' }} from ${{ github.event.client_payload.previous_run_id || inputs.recovery_run_id || '0' }}${{ inputs.external_run_id && format(' request {0}', inputs.external_run_id) || '' }}"
+
+on:
+  issues:
+    types: [opened, reopened]
+  repository_dispatch:
+    types: [code-agent-task, code-agent-continue]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to run (closed external submissions are supported)
+        required: true
+        type: number
+      # factory:external-closed-v1: explicit external runs use archived Issues.
+      external_run_id:
+        description: External system request identity for dispatch reconciliation
+        required: false
+        type: string
+      failure_smoke:
+        description: Maintainer-only controlled failure using the pinned counter fixture (no model or QA)
+        required: false
+        default: false
+        type: boolean
+      recovery_run_id:
+        description: Recover a failed run's saved work (blank starts a normal build)
+        required: false
+        type: string
+      recovery_base_sha:
+        description: Original application base SHA (required only for legacy checkpoints)
+        required: false
+        type: string
+
+env:
+  # Only the public Agent settings agent-configuration.mjs reads. Never pass
+  # the whole vars context: each step prints its env in the public log, so
+  # every repository variable would reach every step, model runs included.
+  FACTORY_AGENT_CONFIG_JSON: >-
+    {
+    "CODE_AGENT_ENGINE": ${{ toJSON(vars.CODE_AGENT_ENGINE) }},
+    "CODE_AGENT_VERSION": ${{ toJSON(vars.CODE_AGENT_VERSION) }},
+    "PI_VERSION": ${{ toJSON(vars.PI_VERSION) }},
+    "CODEBUDDY_VERSION": ${{ toJSON(vars.CODEBUDDY_VERSION) }},
+    "CLAUDE_CODE_VERSION": ${{ toJSON(vars.CLAUDE_CODE_VERSION) }},
+    "CODEX_VERSION": ${{ toJSON(vars.CODEX_VERSION) }},
+    "OPENCODE_VERSION": ${{ toJSON(vars.OPENCODE_VERSION) }},
+    "CODE_AGENT_MODEL": ${{ toJSON(vars.CODE_AGENT_MODEL) }},
+    "PI_MODEL": ${{ toJSON(vars.PI_MODEL) }},
+    "CODEBUDDY_MODEL": ${{ toJSON(vars.CODEBUDDY_MODEL) }},
+    "CLAUDE_CODE_MODEL": ${{ toJSON(vars.CLAUDE_CODE_MODEL) }},
+    "CODEX_MODEL": ${{ toJSON(vars.CODEX_MODEL) }},
+    "OPENCODE_MODEL": ${{ toJSON(vars.OPENCODE_MODEL) }},
+    "CODE_AGENT_API_TYPE": ${{ toJSON(vars.CODE_AGENT_API_TYPE) }},
+    "PI_API_TYPE": ${{ toJSON(vars.PI_API_TYPE) }},
+    "CODE_AGENT_THINKING": ${{ toJSON(vars.CODE_AGENT_THINKING) }},
+    "PI_THINKING": ${{ toJSON(vars.PI_THINKING) }},
+    "CODEBUDDY_THINKING": ${{ toJSON(vars.CODEBUDDY_THINKING) }},
+    "CODE_AGENT_AUTH_HEADER": ${{ toJSON(vars.CODE_AGENT_AUTH_HEADER) }},
+    "PI_AUTH_HEADER": ${{ toJSON(vars.PI_AUTH_HEADER) }},
+    "CODE_AGENT_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE) }},
+    "PI_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.PI_SUPPORTS_DEVELOPER_ROLE) }},
+    "CODE_AGENT_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT) }},
+    "PI_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.PI_SUPPORTS_REASONING_EFFORT) }},
+    "CODE_AGENT_MODEL_REASONING": ${{ toJSON(vars.CODE_AGENT_MODEL_REASONING) }},
+    "CODE_AGENT_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_INVOCATION_TIMEOUT_SECONDS) }},
+    "PI_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.PI_INVOCATION_TIMEOUT_SECONDS) }},
+    "CODE_AGENT_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS) }},
+    "CLAUDE_CODE_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_EFFORT) }},
+    "CLAUDE_CODE_QA_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_QA_EFFORT) }},
+    "CODEX_REASONING_EFFORT": ${{ toJSON(vars.CODEX_REASONING_EFFORT) }},
+    "CODEX_QA_REASONING_EFFORT": ${{ toJSON(vars.CODEX_QA_REASONING_EFFORT) }},
+    "OPENCODE_VARIANT": ${{ toJSON(vars.OPENCODE_VARIANT) }},
+    "OPENCODE_QA_VARIANT": ${{ toJSON(vars.OPENCODE_QA_VARIANT) }},
+    "CODEBUDDY_BASE_URL": ${{ toJSON(vars.CODEBUDDY_BASE_URL) }},
+    "CODEBUDDY_INTERNET_ENVIRONMENT": ${{ toJSON(vars.CODEBUDDY_INTERNET_ENVIRONMENT) }},
+    "ANTHROPIC_BASE_URL": ${{ toJSON(vars.ANTHROPIC_BASE_URL) }},
+    "CODEX_BASE_URL": ${{ toJSON(vars.CODEX_BASE_URL) }},
+    "OPENCODE_BASE_URL": ${{ toJSON(vars.OPENCODE_BASE_URL) }},
+    "CODE_AGENT_PROVIDER_ID": ${{ toJSON(vars.CODE_AGENT_PROVIDER_ID) }},
+    "FACTORY_QA_THINKING": ${{ toJSON(vars.FACTORY_QA_THINKING) }},
+    "FACTORY_REVIEW_THINKING": ${{ toJSON(vars.FACTORY_REVIEW_THINKING) }},
+    "FACTORY_BUILD_REVIEW": ${{ toJSON(vars.FACTORY_BUILD_REVIEW) }},
+    "FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS) }},
+    "FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS) }},
+    "AGENT_BROWSER_VERSION": ${{ toJSON(vars.AGENT_BROWSER_VERSION) }}
+    }
+
+permissions: {}
+
+# Retries and cross-run handoffs for one Issue must stay serialized, but
+# independent application tasks should not block each other.
+concurrency:
+  group: code-agent-task-${{ github.event.issue.number || github.event.client_payload.issue_number || inputs.issue_number || github.run_id }}
+  queue: max
+
+jobs:
+  prepare:
+    # External task managers save an Issue snapshot, then explicitly dispatch.
+    # Read the event's labels so a later Issue update cannot create a second run.
+    # The repository is public: an Issue only starts a model run when its author
+    # has repository access. Maintainers can still dispatch any Issue manually.
+    # Preset definitions and maintenance Issues (factory:preset, factory:manual)
+    # are never built from an Issue event: prepare-task only reported them as
+    # `preset`/`manual` after two checkouts, so their events start no job.
+    if: >-
+      github.event_name != 'issues' ||
+      (!contains(github.event.issue.labels.*.name, 'factory:external') &&
+       !contains(github.event.issue.labels.*.name, 'factory:preset') &&
+       !contains(github.event.issue.labels.*.name, 'factory:manual') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: read
+    outputs:
+      control_sha: ${{ steps.baseline.outputs.sha }}
+      status: ${{ steps.prepare.outputs.status }}
+      build_comment_id: ${{ steps.prepare.outputs.build_comment_id }}
+      comment_kind: ${{ steps.prepare.outputs.comment_kind }}
+      issue_number: ${{ steps.prepare.outputs.issue_number }}
+      work_branch: ${{ steps.prepare.outputs.work_branch }}
+      base_ref: ${{ steps.base.outputs.ref }}
+      base_sha: ${{ steps.base.outputs.sha }}
+      # Set when a recovery replaces the commit its failed run published.
+      expected_work_sha: ${{ steps.base.outputs.expected_work_sha }}
+      rerun_rejected: ${{ steps.rerun_guard.outputs.rerun_rejected }}
+    steps:
+      # "Re-run all jobs" would record attempt N as the task's run, upload a
+      # second factory-task-N (which a recovery downloads instead of the one
+      # matching the checkpoint), relabel the Issue and post a new status. Once
+      # an earlier attempt ran the build (its agent job started), stop before
+      # any of that, so the run stays recoverable as the failure notice says.
+      # A question round (whose agent job is skipped) re-runs this way, and so
+      # does a build whose earlier attempts never started the agent job (for
+      # example prepare failed on a transient error): the agent job's own guard
+      # accepts that attempt as the task's first execution.
+      # rerun_rejected lets dispatch-reports mark the reports as handled, so the
+      # workflow_run copies publish no empty usage or history for this attempt.
+      - name: Reject a GitHub Re-run of a prepared task
+        id: rerun_guard
+        if: github.run_attempt > 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Fails closed, also toward the reports: rerun_rejected is written
+          # once, on exit, and stays true unless every earlier attempt's jobs
+          # were read and none started the build. An unreadable job list stops
+          # the re-run (which changes nothing) and still lets dispatch-reports
+          # mark its reports handled.
+          verdict=true
+          trap 'echo "rerun_rejected=$verdict" >> "$GITHUB_OUTPUT"' EXIT
+          built=''
+          for (( attempt = 1; attempt < GITHUB_RUN_ATTEMPT; attempt++ )); do
+            built+="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$attempt/jobs?per_page=100" \
+              --jq '.jobs[] | select(.name == "agent" and .started_at != null and .conclusion != "skipped") | .name')"
+          done
+          if [[ -n "$built" ]]; then
+            echo "::error::An earlier attempt of this run already ran the build. GitHub Re-run cannot continue it; use an explicit recovery Run (workflow_dispatch with recovery_run_id=${GITHUB_RUN_ID}) or start a new build."
+            exit 1
+          fi
+          verdict=false
+
+      # repository_dispatch loads the entry workflow from the default branch.
+      # Only this small handoff protocol follows that revision; task code is pinned.
+      - name: Check out handoff bootstrap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: bootstrap
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/scripts/handoff.mjs
+            /.github/scripts/handoff-control.mjs
+            /.github/scripts/handoff-recovery.mjs
+            /.github/scripts/source-baseline-ref.mjs
+            /.github/scripts/pipeline-state.mjs
+            /.github/scripts/task-policy.mjs
+            /.github/scripts/acceptance-criteria.mjs
+            /.github/scripts/review-history.mjs
+            /.github/scripts/history-redaction.mjs
+            /.github/scripts/evaluation-sample.mjs
+          persist-credentials: false
+
+      # The composite steps below come from this workflow's own commit, like the
+      # bootstrap checkout: an in-flight task's pinned control_sha may predate
+      # them. The scripts they run still come from control/ or bootstrap/.
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+
+      # A continuation that fails here has no checkpoint of its own, and its
+      # source run concluded success, so one transient artifact error would
+      # discard the handed-off work: each download below is retried once.
+      - name: Download source task control pin
+        id: previous_task_download
+        if: (github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != ''
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-task-${{ inputs.recovery_run_id != '' && inputs.issue_number || github.event.client_payload.issue_number }}
+          path: previous-task
+          run-id: ${{ inputs.recovery_run_id || github.event.client_payload.previous_run_id }}
+          github-token: ${{ github.token }}
+
+      # New continuations carry a SHA bound to the small source task artifact:
+      # do not download the large checkpoint twice per run.
+      # This one-time fallback adopts pre-pin tasks.
+      - name: Download legacy handoff control metadata
+        if: github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue' && !github.event.client_payload.control_sha
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          # The checkpoint; older runs uploaded the same files as factory-handoff-N too.
+          name: factory-agent-${{ github.event.client_payload.issue_number }}
+          path: legacy-handoff
+          run-id: ${{ github.event.client_payload.previous_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download failed-run checkpoint
+        id: recovery_download
+        if: inputs.recovery_run_id != ''
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          # The checkpoint; older runs uploaded the same files as factory-handoff-N too.
+          name: factory-agent-${{ inputs.issue_number }}
+          path: recovery
+          run-id: ${{ inputs.recovery_run_id }}
+          github-token: ${{ github.token }}
+
+      # The commit the failed run's publication pushed to the work branch, if
+      # it pushed any. Absent, the work branch counts as moved, which refuses
+      # rather than overwrites; so a missing record can only refuse a recovery.
+      - name: Download the failed run's publication record
+        if: inputs.recovery_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-published-${{ inputs.issue_number }}
+          path: recovery-published
+          run-id: ${{ inputs.recovery_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate and normalize explicit recovery
+        id: recovery
+        if: inputs.recovery_run_id != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node bootstrap/.github/scripts/handoff-recovery.mjs normalize \
+            --event "$GITHUB_EVENT_PATH" --task previous-task/task-metadata.json \
+            --checkpoint recovery --published recovery-published/publication.json --output "$GITHUB_OUTPUT"
+
+      # An evaluation-batch sample starts on its batch's frozen control plane,
+      # proven by bot receipts and the checksummed batch manifest (not by any
+      # dispatch field). Ordinary Issues output nothing and keep the default.
+      - name: Resolve a frozen evaluation sample control plane
+        id: sample
+        if: github.event.action != 'code-agent-continue' && inputs.recovery_run_id == ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SAMPLE_ISSUE: ${{ github.event.issue.number || github.event.client_payload.issue_number || inputs.issue_number }}
+        run: node bootstrap/.github/scripts/evaluation-sample.mjs pin --issue "$SAMPLE_ISSUE" --output "$GITHUB_OUTPUT"
+
+      - name: Pin the task chain's control plane
+        id: baseline
+        env:
+          SAMPLE_CONTROL_SHA: ${{ steps.sample.outputs.control_sha }}
+          TASK_EVENT: ${{ steps.recovery.outputs.event_path || github.event_path }}
+          CHECKPOINT: ${{ inputs.recovery_run_id != '' && 'recovery' || 'legacy-handoff' }}
+        run: |
+          node bootstrap/.github/scripts/handoff-control.mjs resolve \
+            --event "$TASK_EVENT" \
+            --current-sha "${SAMPLE_CONTROL_SHA:-$(git -C bootstrap rev-parse HEAD)}" \
+            --checkpoint "$CHECKPOINT" \
+            --previous-task previous-task/task-metadata.json \
+            --output "$GITHUB_OUTPUT"
+
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.baseline.outputs.sha }}
+          path: control
+          persist-credentials: false
+
+      - name: Validate explicit failure smoke request
+        if: inputs.failure_smoke == true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node control/.github/scripts/failure-smoke.mjs validate
+
+      - name: Resolve Issue and target branch
+        id: prepare
+        env:
+          FACTORY_CONTROL_SHA: ${{ steps.baseline.outputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # The status comment of a continuation shows the base it keeps.
+          FACTORY_PREVIOUS_TASK: ${{ github.event.action == 'code-agent-continue' && 'previous-task/task-metadata.json' || '' }}
+          TASK_EVENT: ${{ steps.recovery.outputs.event_path || github.event_path }}
+        run: |
+          node control/.github/scripts/prepare-task.mjs \
+            --event "$TASK_EVENT" \
+            --metadata "$RUNNER_TEMP/task-metadata.json" \
+            --output "$GITHUB_OUTPUT"
+
+      # A recovery keeps the base its failed run recorded. A work branch at the
+      # commit that run's publication pushed counts as unmoved, and the recovery
+      # replaces that commit (expected_work_sha, the push lease); any other move
+      # is refused. See liveRecoveryBase in handoff-recovery.mjs.
+      - name: Reject changed recovery input or application base
+        id: recovery_base
+        if: inputs.recovery_run_id != '' && steps.prepare.outputs.status == 'ready'
+        env:
+          BASE_REF: ${{ steps.prepare.outputs.base_ref }}
+          BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
+        run: |
+          node bootstrap/.github/scripts/handoff-recovery.mjs check-base \
+            --checkpoint recovery --metadata "$RUNNER_TEMP/task-metadata.json" \
+            --base-ref "$BASE_REF" --base-sha "$BASE_SHA" --output "$GITHUB_OUTPUT"
+
+      # A continuation keeps the application base its source run recorded; see
+      # continuationBase in handoff-control.mjs. A recovery uses the base the
+      # step above validated. Everything else uses prepare's.
+      - name: Resolve the application base
+        id: base
+        if: steps.prepare.outputs.status == 'ready'
+        env:
+          BASE_REF: ${{ steps.prepare.outputs.base_ref }}
+          BASE_SHA: ${{ steps.prepare.outputs.base_sha }}
+          CONTINUATION: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue' }}
+          RECOVERY: ${{ inputs.recovery_run_id != '' }}
+          RECOVERY_REF: ${{ steps.recovery_base.outputs.ref }}
+          RECOVERY_SHA: ${{ steps.recovery_base.outputs.sha }}
+          RECOVERY_EXPECTED_WORK_SHA: ${{ steps.recovery_base.outputs.expected_work_sha }}
+        run: |
+          if [[ "$CONTINUATION" == true ]]; then
+            node bootstrap/.github/scripts/handoff-control.mjs base \
+              --previous-task previous-task/task-metadata.json \
+              --base-ref "$BASE_REF" --base-sha "$BASE_SHA" --output "$GITHUB_OUTPUT"
+          elif [[ "$RECOVERY" == true ]]; then
+            printf 'ref=%s\nsha=%s\nexpected_work_sha=%s\n' "$RECOVERY_REF" "$RECOVERY_SHA" "$RECOVERY_EXPECTED_WORK_SHA" >> "$GITHUB_OUTPUT"
+          else
+            printf 'ref=%s\nsha=%s\n' "$BASE_REF" "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only the files normalize wrote: the agent job downloads the failed
+      # run's checkpoint itself (it is already stored there) and checks it is
+      # the one validated here (handoff-recovery.mjs match), instead of this
+      # job uploading a second copy of the whole checkpoint.
+      - name: Save normalized recovery checkpoint
+        if: inputs.recovery_run_id != '' && steps.prepare.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-recovery-${{ steps.prepare.outputs.issue_number }}
+          path: |
+            recovery/task-event.json
+            recovery/handoff.json
+            recovery/recovery.json
+          if-no-files-found: error
+          retention-days: 14
+
+      # Use the bootstrap even when an older pinned prepare-task predates this
+      # field, so its next continuation can use the small artifact as provenance.
+      - name: Record the task chain control pin
+        if: steps.prepare.outputs.status == 'ready'
+        env:
+          FACTORY_CONTROL_SHA: ${{ steps.baseline.outputs.sha }}
+          FACTORY_ENTRY_SHA: ${{ github.sha }}
+          FACTORY_APPLICATION_BASE_REF: ${{ steps.base.outputs.ref }}
+          FACTORY_APPLICATION_BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: node bootstrap/.github/scripts/handoff-control.mjs record --metadata "$RUNNER_TEMP/task-metadata.json"
+
+      - name: Save normalized task metadata
+        if: steps.prepare.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-task-${{ steps.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/task-metadata.json
+          if-no-files-found: error
+          retention-days: 14
+
+      # prepare-task.mjs has already set agent:running once status is ready,
+      # and report-failure is skipped when this job fails, so any later
+      # failure here (a rejected recovery, a failed artifact upload) must
+      # clear the label itself. Replies never set it.
+      - name: Report a failure after task preparation
+        if: failure() && steps.prepare.outputs.status == 'ready' && steps.prepare.outputs.comment_kind != 'reply'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.prepare.outputs.issue_number }}
+        run: node control/.github/scripts/mark-failure.mjs "$ISSUE_NUMBER"
+
+  agent:
+    needs: prepare
+    env:
+      FACTORY_CONTROL_SHA: ${{ needs.prepare.outputs.control_sha }}
+      # An explicit recovery is continuation 1, as the handoff step counts it
+      # below; pipeline-state takes this only as a floor, so it never adds twice.
+      FACTORY_TASK_CONTINUATION: ${{ inputs.recovery_run_id != '' && '1' || github.event.client_payload.continuation || '0' }}
+      FACTORY_QA_THINKING: ${{ vars.FACTORY_QA_THINKING }}
+      FACTORY_BUILD_REVIEW: ${{ vars.FACTORY_BUILD_REVIEW || 'full' }}
+      FACTORY_REVIEW_THINKING: ${{ vars.FACTORY_REVIEW_THINKING || 'medium' }}
+      FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS: ${{ vars.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS || '3600' }}
+      FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS: ${{ vars.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS || '600' }}
+      CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+    if: needs.prepare.outputs.status == 'ready' && needs.prepare.outputs.comment_kind != 'reply'
+    runs-on: ubuntu-24.04
+    # GitHub-hosted runners allow at most six hours per job. The factory uses
+    # five hours as a soft runner budget, then checkpoints and continues in a
+    # new run at most once. Task-wide repair/failure counters survive Handoff.
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: write
+      # Read-only: re-checks a batch sample's live state before any model call.
+      issues: read
+    outputs:
+      handoff: ${{ steps.outcome.outputs.handoff }}
+      timed_out: ${{ steps.outcome.outputs.timed_out }}
+      checkpoint_available: ${{ steps.checkpoint.outcome == 'success' }}
+      # A kept handed-off checkpoint (Keep the handed-off checkpoint) is a sealed patch too.
+      patch_available: ${{ steps.patch.outcome == 'success' || steps.keep_checkpoint.outcome == 'success' }}
+      # A failed build with nothing to publish: see Check for a publishable diff.
+      empty_patch: ${{ steps.diff.outputs.empty == 'true' }}
+      # A handoff whose continuation was not dispatched: its checkpoint is recoverable.
+      handoff_undispatched: ${{ steps.outcome.outputs.handoff_undispatched }}
+      # A later attempt counts as rejected unless the guard accepted it: a
+      # control checkout that failed first skips the guard, and that attempt
+      # still must not publish reports or answer a comment.
+      rerun_rejected: ${{ steps.rerun_guard.outcome == 'failure' || (github.run_attempt > 1 && steps.rerun_guard.outcome != 'success') }}
+    steps:
+      # Checked out first: the re-run guard below reads the pinned scripts.
+      # Nothing here writes agent-artifacts.
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+
+      # A GitHub Re-run starts a fresh runner without the previous attempt's
+      # checkpoint, so it can never continue the task (requireFreshRunAttempt
+      # rejects it too). Stop it before anything writes agent-artifacts: its
+      # always() uploads would otherwise publish a second, nearly empty
+      # factory-agent-N, and a recovery downloading that name by run would read
+      # it instead of the first attempt's checkpoint.
+      # A later attempt is accepted only when no earlier attempt started this
+      # job (for example prepare failed on a transient error, as prepare's own
+      # guard accepts): there is no checkpoint it could lose, and this attempt
+      # is the task's first execution. FACTORY_FIRST_AGENT_ATTEMPT tells
+      # pipeline-state.mjs so. An unreadable job list rejects.
+      - name: Reject a GitHub Re-run of this job
+        id: rerun_guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (( ${GITHUB_RUN_ATTEMPT:-1} > 1 )); then
+            set -euo pipefail
+            started=''
+            for (( attempt = 1; attempt < GITHUB_RUN_ATTEMPT; attempt++ )); do
+              started+="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$attempt/jobs?per_page=100" \
+                --jq '.jobs[] | select(.name == "agent" and .started_at != null and .conclusion != "skipped") | .name')"
+            done
+            if [[ -n "$started" ]]; then
+              echo "::error::GitHub Re-run cannot preserve task repair limits. Use an explicit recovery Run (workflow_dispatch with recovery_run_id=${GITHUB_RUN_ID}) instead; this attempt uploads no checkpoint."
+              exit 1
+            fi
+            # A task pinned to an older control plane restores with a
+            # pipeline-state.mjs that ignores the verdict and would throw only
+            # after agent-artifacts exist: reject it here, as a re-run.
+            if ! grep -q FACTORY_FIRST_AGENT_ATTEMPT control/.github/scripts/pipeline-state.mjs; then
+              echo "::error::This task is pinned to a control plane that cannot run a GitHub Re-run as its first execution. Start a new build instead."
+              exit 1
+            fi
+            echo "FACTORY_FIRST_AGENT_ATTEMPT=true" >> "$GITHUB_ENV"
+            echo "::notice::No earlier attempt of this run started the agent job; attempt ${GITHUB_RUN_ATTEMPT} is the task's first execution."
+          fi
+
+      # Keep the handoff protocol available even when the pinned task scripts
+      # predate control_sha propagation. Never use this checkout for task code.
+      - name: Check out handoff bootstrap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: bootstrap
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/scripts/handoff.mjs
+            /.github/scripts/handoff-control.mjs
+            /.github/scripts/handoff-recovery.mjs
+            /.github/scripts/source-baseline-ref.mjs
+            /.github/scripts/pipeline-state.mjs
+            /.github/scripts/task-policy.mjs
+            /.github/scripts/acceptance-criteria.mjs
+            /.github/scripts/review-history.mjs
+            /.github/scripts/history-redaction.mjs
+          persist-credentials: false
+
+      - name: Start five-hour runner budget
+        run: |
+          echo "FACTORY_JOB_STARTED_EPOCH_SECONDS=$(date +%s)" >> "$GITHUB_ENV"
+          echo "FACTORY_RUN_DEADLINE_EPOCH_SECONDS=$(($(date +%s) + 18000 - 120))" >> "$GITHUB_ENV"
+          echo "FACTORY_TIMINGS_FILE=$RUNNER_TEMP/agent-artifacts/timings.jsonl" >> "$GITHUB_ENV"
+
+      # The composite steps below come from this workflow's own commit, like the
+      # bootstrap checkout: an in-flight task's pinned control_sha may predate
+      # them. The scripts they run still come from control/ or bootstrap/.
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+
+      # A continuation that fails here has nothing of its own to save, and its
+      # source run concluded success, so no recovery can start from either run:
+      # one transient artifact error would discard the handed-off work. Each
+      # download is retried once after a pause, and they all run before the
+      # application checkout, so a failure from that checkout on is kept (see
+      # "Keep the handed-off checkpoint" below).
+      - name: Download handoff checkpoint
+        id: checkpoint_download
+        if: github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue'
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          # The checkpoint; older runs uploaded the same files as factory-handoff-N too.
+          name: factory-agent-${{ needs.prepare.outputs.issue_number }}
+          path: handoff
+          run-id: ${{ github.event.client_payload.previous_run_id }}
+          github-token: ${{ github.token }}
+
+      # A recovery restores the failed run's own checkpoint, which prepare
+      # validated, plus the small files prepare's normalize wrote beside it.
+      - name: Download the failed run's checkpoint
+        id: recovery_checkpoint_download
+        if: inputs.recovery_run_id != ''
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-agent-${{ needs.prepare.outputs.issue_number }}
+          path: handoff
+          run-id: ${{ inputs.recovery_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download normalized recovery checkpoint
+        if: inputs.recovery_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-recovery-${{ needs.prepare.outputs.issue_number }}
+          path: recovery-normalized
+
+      # The normalized files replace any of the same name the checkpoint holds,
+      # and the checkpoint must be the one prepare validated: same patch,
+      # state, input and control plane as its recovery.json records.
+      - name: Apply the normalized recovery files
+        if: inputs.recovery_run_id != ''
+        run: |
+          set -euo pipefail
+          for file in task-event.json handoff.json recovery.json; do
+            if [[ ! -f "recovery-normalized/$file" || -L "recovery-normalized/$file" ]]; then
+              echo "::error::The normalized recovery lacks $file." >&2
+              exit 1
+            fi
+            rm -f "handoff/$file"
+            cp "recovery-normalized/$file" "handoff/$file"
+          done
+          node bootstrap/.github/scripts/handoff-recovery.mjs match --checkpoint handoff
+
+      # Downloaded before the checkpoint is verified and applied, so a failing
+      # patch restore still finds the task metadata and keeps its checkpoint.
+      - name: Download normalized task
+        id: task_download
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-task-${{ needs.prepare.outputs.issue_number }}
+          path: task
+
+      - name: Verify the pinned handoff control plane
+        id: verify_control
+        if: (github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != ''
+        env:
+          TASK_EVENT: ${{ inputs.recovery_run_id != '' && 'handoff/task-event.json' || github.event_path }}
+        run: |
+          node bootstrap/.github/scripts/handoff-control.mjs verify \
+            --event "$TASK_EVENT" --checkpoint handoff
+
+      # Only the Agent sees full history: it may read `git log` to locate how the
+      # template and earlier task rounds changed a file. Later jobs apply the
+      # sealed patch to the base tree and check out a single commit.
+      - name: Check out application base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: workspace
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore handoff checkpoint
+        if: (github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != ''
+        env:
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+        run: |
+          node control/.github/scripts/apply-patch.mjs \
+            --workspace workspace \
+            --patch handoff/agent.patch \
+            --branch "$WORK_BRANCH"
+          # Restore retrospective only here; stage state is validated after task download.
+          mkdir -p "$RUNNER_TEMP/agent-artifacts"
+          if [[ -f handoff/retro.json && ! -L handoff/retro.json ]]; then
+            cp handoff/retro.json "$RUNNER_TEMP/agent-artifacts/retro.json"
+          fi
+
+      # A batch sample is admitted again right before model work, so a sample
+      # cancelled or released since prepare, or a spent budget, starts no model.
+      # A refusal (cancelled or released sample, spent budget, a receipt that no
+      # longer matches the task) is recorded as
+      # an output, so a continuation never keeps its checkpoint as recoverable
+      # work; an API error leaves it unset. Pinned older scripts print the same
+      # refusal text, so it is read from their output.
+      - name: Admit the evaluation sample for this execution
+        id: admit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -f control/.github/scripts/evaluation-sample.mjs ]]; then
+            status=0
+            node control/.github/scripts/evaluation-sample.mjs admit --metadata task/task-metadata.json --output "$GITHUB_ENV" \
+              2> "$RUNNER_TEMP/sample-admission.err" || status=$?
+            cat "$RUNNER_TEMP/sample-admission.err" >&2
+            if (( status != 0 )); then
+              if grep -Eq 'Evaluation sample not admitted|Batch sample receipt no longer matches the task metadata' "$RUNNER_TEMP/sample-admission.err"; then
+                echo "refused=true" >> "$GITHUB_OUTPUT"
+              fi
+              exit "$status"
+            fi
+          fi
+
+      - name: Restore pipeline progress
+        id: resume
+        env:
+          CONTINUATION_RUN: ${{ (github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != '' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-artifacts"
+          if [[ "$CONTINUATION_RUN" == true ]]; then
+            node control/.github/scripts/pipeline-state.mjs restore handoff "$RUNNER_TEMP/agent-artifacts" task/task-metadata.json
+          else
+            node control/.github/scripts/pipeline-state.mjs init "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" task/task-metadata.json
+          fi
+          # The checkpoint, the failed PR, retro and visual reports all read the
+          # task metadata beside the state. Copied here, not only when the
+          # prompt is built, so a failure during setup (dependency or Agent
+          # install, preflight, fonts) still leaves a complete checkpoint.
+          cp task/task-metadata.json "$RUNNER_TEMP/agent-artifacts/task-metadata.json"
+          echo "phase=$(node control/.github/scripts/pipeline-state.mjs phase "$RUNNER_TEMP/agent-artifacts/pipeline-state.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Check independent evaluation prerequisites before model work
+        env:
+          FACTORY_TEST_API_KEY_PRESENT: ${{ secrets.FACTORY_TEST_API_KEY != '' }}
+          FACTORY_TEST_ADMIN_KEY_PRESENT: ${{ secrets.FACTORY_TEST_ADMIN_KEY != '' }}
+          FACTORY_BUSINESS_MODEL_PRESENT: ${{ vars.FACTORY_BUSINESS_MODEL != '' }}
+          FACTORY_BUSINESS_API_KEY_PRESENT: ${{ secrets.FACTORY_BUSINESS_API_KEY != '' }}
+          FACTORY_BUSINESS_MODEL_ENDPOINT_PRESENT: ${{ vars.FACTORY_BUSINESS_MODEL_ENDPOINT != '' }}
+          FACTORY_TEST_CHANNEL_PRESENT: ${{ vars.FACTORY_TEST_CHANNEL != '' }}
+          FACTORY_TEST_RECEIVER_URL_PRESENT: ${{ vars.FACTORY_TEST_RECEIVER_URL != '' }}
+        run: |
+          if [[ -f control/.github/scripts/required-checks.mjs ]]; then
+            node control/.github/scripts/required-checks.mjs preflight task/task-metadata.json "$RUNNER_TEMP/agent-artifacts/required-checks.preflight.json" || {
+              status=$?
+              node control/.github/scripts/pipeline-state.mjs outcome "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" blocked
+              exit "$status"
+            }
+          fi
+
+      # Every task is bounded; a batch plan can tighten the factory ceilings.
+      - name: Apply the task and evaluation budgets
+        run: |
+          if [[ -f control/.github/scripts/evaluation-budget.mjs ]]; then
+            node control/.github/scripts/evaluation-budget.mjs deadline "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          # Source tarballs use an isolated local store, not the shared registry cache.
+          # Check the already checked-out descriptor before setup-node arms its post step.
+          cache: ${{ hashFiles('workspace/factory-source.json') == '' && 'pnpm' || '' }}
+          cache-dependency-path: workspace/pnpm-lock.yaml
+
+      # The official CLI installs dist/ as its own pnpm root, which never reads the
+      # application's .npmrc, and pnpm 11 ignores scoped registries passed in
+      # the environment. Only the user-level file reaches that nested install.
+      - name: Expose the factory registry to nested pnpm roots
+        run: cat control/.npmrc >> ~/.npmrc
+
+      # The pinned font package is cached under its own SHA-256 and verified
+      # again before dpkg installs it, so most runs skip apt and its index
+      # update entirely (FACTORY_FONT_DEB_CACHE in install-browser-fonts.sh).
+      # Restored and saved here, before any model call; verify-final only
+      # restores it.
+      - name: Read the pinned Chinese font package
+        id: font_pin
+        env:
+          FONT_SCRIPT: control/.github/scripts/install-browser-fonts.sh
+        run: echo "sha=$(sed -n 's/^FONT_DEB_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$FONT_SCRIPT")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pinned Chinese font package
+        id: font_cache
+        if: steps.font_pin.outputs.sha != ''
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: browser-font-cache
+          key: browser-font-deb-${{ runner.os }}-${{ steps.font_pin.outputs.sha }}
+
+      - name: Install Chinese browser fonts
+        timeout-minutes: 10
+        env:
+          FACTORY_FONT_DEB_CACHE: ${{ github.workspace }}/browser-font-cache
+        run: bash control/.github/scripts/install-browser-fonts.sh
+
+      - name: Save the pinned Chinese font package
+        if: steps.font_pin.outputs.sha != '' && steps.font_cache.outputs.cache-hit != 'true' && hashFiles('browser-font-cache/*.deb') != ''
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: browser-font-cache
+          key: browser-font-deb-${{ runner.os }}-${{ steps.font_pin.outputs.sha }}
+
+      - name: Restore the selected source baseline packages
+        run: |
+          if [[ -f control/.github/scripts/source-snapshot.mjs ]]; then
+            node control/.github/scripts/source-snapshot.mjs restore workspace task/task-metadata.json
+          elif [[ -f workspace/factory-source.json ]]; then
+            echo "Pinned control plane cannot restore the selected source baseline." >&2
+            exit 1
+          fi
+
+      # Restored work (a continuation, a recovery, or a comment round on the
+      # published work branch) can carry a package.json its lockfile does not
+      # match: an interrupted repair or a failed task published it that way. A
+      # frozen install would then fail before any model could fix it, on every
+      # later round. Only for restored work and only for
+      # ERR_PNPM_OUTDATED_LOCKFILE, install again without freezing: the updated
+      # lockfile becomes part of the patch, and verify.sh's lockfile stage still
+      # sends any remaining mismatch to repair. A fresh task stays frozen.
+      - name: Install application dependencies
+        timeout-minutes: 15
+        working-directory: workspace
+        env:
+          RESTORED_WORK: ${{ (github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != '' || needs.prepare.outputs.base_ref == needs.prepare.outputs.work_branch }}
+        run: |
+          set -o pipefail
+          node ../control/.github/scripts/assert-current-template.mjs .
+          status=0
+          node ../control/.github/scripts/timed-command.mjs install pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/install.log" || status=$?
+          if (( status != 0 )); then
+            if [[ "$RESTORED_WORK" != true ]] || ! grep -q ERR_PNPM_OUTDATED_LOCKFILE "$RUNNER_TEMP/install.log"; then
+              exit "$status"
+            fi
+            echo "::warning::The restored work's pnpm-lock.yaml does not match its package.json; installing without --frozen-lockfile so the task can repair it."
+            node ../control/.github/scripts/timed-command.mjs install-refresh-lockfile pnpm install --no-frozen-lockfile
+          fi
+          node ../control/.github/scripts/timed-command.mjs skills-sync pnpm exec nocobase skills sync
+
+      - name: Capture the actual installed package and Skill baseline
+        run: |
+          if [[ -f control/.github/scripts/baseline-record.mjs ]]; then
+            node control/.github/scripts/baseline-record.mjs workspace "$RUNNER_TEMP/agent-artifacts/baseline.json"
+          fi
+
+      - name: Build the implementation prompt
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-artifacts"
+          cp task/task-metadata.json "$RUNNER_TEMP/agent-artifacts/task-metadata.json"
+          node control/.github/scripts/build-prompt.mjs \
+            --metadata task/task-metadata.json \
+            --template control/.github/prompts/implement.md \
+            --retro-path "$RUNNER_TEMP/agent-artifacts/retro.json" \
+            --output "$RUNNER_TEMP/implement.md"
+
+      - name: Explain restored work without exposing QA context
+        if: inputs.recovery_run_id != '' && steps.resume.outputs.phase == 'implementation'
+        run: node bootstrap/.github/scripts/handoff-recovery.mjs context --checkpoint handoff --prompt "$RUNNER_TEMP/implement.md"
+
+      - name: Explain handed-off work without exposing QA context
+        if: github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue' && steps.resume.outputs.phase == 'implementation'
+        env:
+          PREVIOUS_RUN_ID: ${{ github.event.client_payload.previous_run_id }}
+        run: node bootstrap/.github/scripts/handoff-recovery.mjs continuation-context --previous-run "$PREVIOUS_RUN_ID" --prompt "$RUNNER_TEMP/implement.md"
+
+      - name: Install pinned Code Agent
+        timeout-minutes: 10
+        if: inputs.failure_smoke != true
+        env: &agent-install-env
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          CODE_AGENT_VERSION: ${{ vars.CODE_AGENT_VERSION }}
+          PI_VERSION: ${{ vars.PI_VERSION }}
+          CODEBUDDY_VERSION: ${{ vars.CODEBUDDY_VERSION }}
+          CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+          CODEX_VERSION: ${{ vars.CODEX_VERSION }}
+          OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+        run: node control/.github/scripts/install-agent.mjs
+
+      # The npm cache is restored and saved again here, before any model call,
+      # so what the model does to the runner never reaches a later run's cache.
+      # It is a directory of its own: ~/.npm also receives the Code Agent CLI
+      # installed above, which a key naming only the browser version would keep
+      # forever while never serving it.
+      - name: Restore the Agent Browser npm cache
+        id: browser_cache
+        if: inputs.failure_smoke != true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/agent-browser-npm
+          key: agent-browser-npm-v2-${{ runner.os }}-${{ vars.AGENT_BROWSER_VERSION || '0.36.0' }}
+
+      - name: Install pinned Agent Browser
+        timeout-minutes: 10
+        if: inputs.failure_smoke != true
+        env:
+          AGENT_BROWSER_VERSION: ${{ vars.AGENT_BROWSER_VERSION || '0.36.0' }}
+          npm_config_cache: ${{ runner.temp }}/agent-browser-npm
+        run: |
+          npm install --global --prefer-offline "agent-browser@${AGENT_BROWSER_VERSION}"
+          agent-browser --version
+
+      - name: Save the Agent Browser npm cache
+        if: inputs.failure_smoke != true && steps.browser_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/agent-browser-npm
+          key: ${{ steps.browser_cache.outputs.cache-primary-key }}
+
+      # The package index is refreshed only when installing from the current
+      # one fails: the font install usually refreshed it already, and a cached
+      # font package leaves the image's index, which is often still current.
+      - name: Install optional video encoder
+        if: inputs.failure_smoke != true
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30)
+            if ! sudo apt-get install "${apt_options[@]}" --yes --no-install-recommends ffmpeg; then
+              sudo apt-get update "${apt_options[@]}"
+              sudo apt-get install "${apt_options[@]}" --yes --no-install-recommends ffmpeg
+            fi
+          fi
+
+      - name: Prepare and validate browser environment
+        if: inputs.failure_smoke != true
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-artifacts/browser-environment"
+          export AGENT_BROWSER_EXECUTABLE_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          python3 control/.github/scripts/prepare-browser-fixtures.py "$RUNNER_TEMP/agent-artifacts/browser-environment/fixtures"
+          node control/.github/scripts/browser-preflight.mjs "$RUNNER_TEMP/agent-artifacts/browser-environment/preflight.json"
+          echo "AGENT_BROWSER_EXECUTABLE_PATH=$AGENT_BROWSER_EXECUTABLE_PATH" >> "$GITHUB_ENV"
+          echo "FACTORY_BROWSER_PREFLIGHT=$RUNNER_TEMP/agent-artifacts/browser-environment/preflight.json" >> "$GITHUB_ENV"
+          echo "FACTORY_BROWSER_FIXTURES_MANIFEST=$RUNNER_TEMP/agent-artifacts/browser-environment/fixtures/manifest.json" >> "$GITHUB_ENV"
+
+      - name: Start live progress observer
+        if: inputs.failure_smoke != true
+        continue-on-error: true
+        env:
+          # The observer starts before model credentials exist. It can dispatch
+          # snapshots, but only the independent reporter can write Issue comments.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nohup node control/.github/scripts/task-progress.mjs watch \
+            "$RUNNER_TEMP/agent-artifacts" task/task-metadata.json \
+            >"$RUNNER_TEMP/agent-artifacts/live-progress.log" 2>&1 < /dev/null &
+
+      - name: Run Code Agent implementation
+        id: implementation
+        if: >-
+          inputs.failure_smoke != true && (
+          ((needs.prepare.outputs.base_ref != needs.prepare.outputs.work_branch || needs.prepare.outputs.build_comment_id != '') &&
+          !(github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') && inputs.recovery_run_id == '') ||
+          steps.resume.outputs.phase == 'implementation')
+        env: &agent-run-env
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+          # Compatibility bridge for older pinned control code (before the shared normalizer).
+          # Explicit engine selection; adding a CLI must not fall through to Pi.
+          # This mapping is shared by implementation, repair/QA, and comment reply.
+          CODE_AGENT_API_ENDPOINT: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_ENDPOINT || secrets.PI_API_ENDPOINT) || '' }}
+          CODE_AGENT_API_KEY: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_KEY || secrets.PI_API_KEY) || '' }}
+          CODEBUDDY_AUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_AUTH_TOKEN || '' }}
+          CODEBUDDY_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_API_KEY || '' }}
+          CODEBUDDY_MODEL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_MODEL || '' }}
+          CODEBUDDY_THINKING: ${{ vars.CODEBUDDY_THINKING || 'max' }}
+          CODEBUDDY_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_BASE_URL || '' }}
+          CODEBUDDY_INTERNET_ENVIRONMENT: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_INTERNET_ENVIRONMENT || '' }}
+          CODE_AGENT_API_TYPE: ${{ vars.CODE_AGENT_API_TYPE || vars.PI_API_TYPE || 'openai-completions' }}
+          CODE_AGENT_MODEL: ${{ vars.CODE_AGENT_MODEL || vars.PI_MODEL }}
+          CODE_AGENT_THINKING: ${{ vars.CODE_AGENT_THINKING || vars.PI_THINKING || 'max' }}
+          CODE_AGENT_AUTH_HEADER: ${{ vars.CODE_AGENT_AUTH_HEADER || vars.PI_AUTH_HEADER || 'true' }}
+          CODE_AGENT_SUPPORTS_DEVELOPER_ROLE: ${{ vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE || vars.PI_SUPPORTS_DEVELOPER_ROLE }}
+          CODE_AGENT_SUPPORTS_REASONING_EFFORT: ${{ vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT || vars.PI_SUPPORTS_REASONING_EFFORT || 'true' }}
+          CODE_AGENT_INVOCATION_TIMEOUT_SECONDS: ${{ vars.CODE_AGENT_INVOCATION_TIMEOUT_SECONDS || vars.PI_INVOCATION_TIMEOUT_SECONDS || '0' }}
+          ANTHROPIC_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.ANTHROPIC_API_KEY || '' }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          ANTHROPIC_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && vars.ANTHROPIC_BASE_URL || '' }}
+          CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}
+          CLAUDE_CODE_EFFORT: ${{ vars.CLAUDE_CODE_EFFORT }}
+          CLAUDE_CODE_QA_EFFORT: ${{ vars.CLAUDE_CODE_QA_EFFORT }}
+          CODEX_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codex' && secrets.CODEX_API_KEY || '' }}
+          CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+          CODEX_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codex' && vars.CODEX_BASE_URL || '' }}
+          CODEX_REASONING_EFFORT: ${{ vars.CODEX_REASONING_EFFORT }}
+          CODEX_QA_REASONING_EFFORT: ${{ vars.CODEX_QA_REASONING_EFFORT }}
+          OPENCODE_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          OPENCODE_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && vars.OPENCODE_BASE_URL || '' }}
+          OPENCODE_VARIANT: ${{ vars.OPENCODE_VARIANT }}
+          OPENCODE_QA_VARIANT: ${{ vars.OPENCODE_QA_VARIANT }}
+          CODE_AGENT_IDLE_TIMEOUT_SECONDS: ${{ vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS }}
+        run: |
+          node control/.github/scripts/pipeline-state.mjs set "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" implementation
+          set +e
+          node control/.github/scripts/pipeline-state.mjs budget "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" implementation
+          status=$?
+          if [[ "$status" -eq 0 ]]; then
+            node control/.github/scripts/run-agent.mjs \
+              --workspace workspace \
+              --prompt "$RUNNER_TEMP/implement.md" \
+              --log "$RUNNER_TEMP/agent-artifacts/agent-implement.jsonl" \
+              --agentDir "$RUNNER_TEMP/code-agent"
+            status=$?
+          fi
+          if [[ "$status" -eq 75 ]]; then
+            if [[ -f control/.github/scripts/task-policy.mjs ]]; then
+              node control/.github/scripts/pipeline-state.mjs handoff "$RUNNER_TEMP/agent-artifacts/pipeline-state.json"
+              status=$?
+            else
+              # Older tasks keep their pinned control API; bootstrap still bounds dispatch.
+              node control/.github/scripts/pipeline-state.mjs outcome "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" handoff
+            fi
+          fi
+          set -e
+          if [[ "$status" -eq 75 ]]; then
+            echo "handoff=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$status" -ne 0 && "$status" -ne 76 ]]; then
+            node control/.github/scripts/pipeline-state.mjs outcome "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" failed
+          fi
+          if [[ "$status" -eq 0 ]]; then
+            node control/.github/scripts/pipeline-state.mjs set "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" verify
+          fi
+          exit "$status"
+
+      - name: Verify and repair within task limits
+        id: verify
+        if: inputs.failure_smoke != true && steps.implementation.outputs.handoff != 'true'
+        env: *agent-run-env
+        run: |
+          set +e
+          control/.github/scripts/verify-and-repair.sh \
+            control \
+            workspace \
+            "$RUNNER_TEMP/implement.md" \
+            task/task-metadata.json \
+            "$RUNNER_TEMP/agent-artifacts" \
+            "$RUNNER_TEMP/repair-state"
+          status=$?
+          set -e
+          if [[ "$status" -eq 75 ]]; then
+            echo "handoff=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Inject disclosed failure before business QA
+        id: failure_smoke
+        if: inputs.failure_smoke == true
+        env:
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+        run: node control/.github/scripts/failure-smoke.mjs inject workspace "$RUNNER_TEMP/agent-artifacts" "$WORK_BRANCH"
+
+      # A job timeout is a cancellation: success() and failure() are both false
+      # then, so without the cancelled() clause hours of work left no patch and
+      # no checkpoint. Only work that actually started is sealed.
+      # A continuation or recovery that fails while setting up (dependency or
+      # Agent install, preflight, fonts) never reaches implementation or
+      # verification, yet its workspace already holds the restored work. Record
+      # the run as failed so the patch below seals it and the work stays
+      # publishable and recoverable instead of vanishing with the runner.
+      # A continuation that failed after both the checkpoint and the task
+      # downloads but before "Restore pipeline progress" (application checkout,
+      # patch restore, admission, the restore itself) has a workspace of
+      # uncertain state, yet the handed-off work is intact in handoff/. Save
+      # that checkpoint as this run's own, marked failed, so publish-failed and
+      # an explicit recovery from this run (recovery_run_id) keep it: the source
+      # run concluded success after its handoff, so a recovery could never start
+      # from there. A cancellation (the runner limit included) keeps it too. A
+      # refused control-plane verification is deliberate and keeps nothing. The
+      # elapsed time stays the source run's (no job start), so no counter is reset.
+      - name: Keep the handed-off checkpoint
+        id: keep_checkpoint
+        if: >-
+          (failure() || cancelled()) && steps.rerun_guard.outcome == 'success' && steps.resume.outcome != 'success' &&
+          github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue' &&
+          steps.checkpoint_download.outcome == 'success' &&
+          steps.task_download.outcome == 'success' &&
+          steps.verify_control.outcome == 'success' &&
+          steps.admit.outputs.refused != 'true'
+        run: |
+          set -euo pipefail
+          artifacts="$RUNNER_TEMP/agent-artifacts"
+          mkdir -p "$artifacts"
+          for file in handoff/agent.patch handoff/pipeline-state.json task/task-metadata.json; do
+            if [[ ! -f "$file" || -L "$file" ]]; then
+              echo "::error::The handed-off checkpoint lacks $file; nothing to keep."
+              exit 1
+            fi
+          done
+          # Only a checkpoint this run could have restored is kept. A deliberate
+          # rejection (input edited, patch or control plane changed, task
+          # stopped, budget changed, repair context lost) stays a plain failure
+          # with nothing published and no recovery offered. The check comes from
+          # this workflow's own revision, like the handoff protocol.
+          node bootstrap/.github/scripts/pipeline-state.mjs keepable \
+            handoff/pipeline-state.json handoff/agent.patch task/task-metadata.json
+          # The whole checkpoint, regular files only (find -type f neither lists
+          # nor follows symlinks): repair context, review and agent history and
+          # the retro survive for the recovery and the reports. Not the handoff
+          # request; not the source runner's progress observer files, whose pid
+          # the stop step below would otherwise signal; and not the source run's
+          # invocation results or timings, which mark-failure, usage and timing
+          # reports would otherwise present as this run's.
+          (cd handoff && find . -type f ! -path ./handoff.json ! -name 'live-progress.*' \
+            ! -name 'agent*.jsonl.result.json' ! -name 'timings.jsonl' \
+            -exec cp --parents {} "$artifacts" \;)
+          cp task/task-metadata.json "$artifacts/task-metadata.json"
+          # What is published must pass the same check as what was validated.
+          node bootstrap/.github/scripts/pipeline-state.mjs keepable \
+            "$artifacts/pipeline-state.json" "$artifacts/agent.patch" "$artifacts/task-metadata.json"
+          env -u FACTORY_JOB_STARTED_EPOCH_SECONDS \
+            node control/.github/scripts/pipeline-state.mjs outcome "$artifacts/pipeline-state.json" failed
+          echo "::warning::This continuation failed before restoring its checkpoint. The handed-off work is saved as this run's checkpoint; recover it with recovery_run_id=${GITHUB_RUN_ID}."
+
+      - name: Mark a continuation that failed during setup
+        id: setup_failure
+        if: >-
+          (failure() || cancelled()) && steps.resume.outcome == 'success' &&
+          steps.implementation.outcome == 'skipped' && steps.verify.outcome == 'skipped' &&
+          ((github.event_name == 'repository_dispatch' && github.event.action == 'code-agent-continue') || inputs.recovery_run_id != '')
+        run: |
+          state="$RUNNER_TEMP/agent-artifacts/pipeline-state.json"
+          outcome="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).outcome ?? "")' "$state")"
+          # A preflight block or an exhausted budget keeps its own verdict.
+          if [[ "$outcome" != blocked && "$outcome" != budget-exhausted && "$outcome" != failed ]]; then
+            node control/.github/scripts/pipeline-state.mjs outcome "$state" failed
+          fi
+
+      - name: Create deterministic patch
+        id: patch
+        if: >-
+          success() ||
+          failure() && (steps.implementation.outcome == 'failure' || steps.verify.outcome == 'failure' || steps.failure_smoke.outcome == 'failure') ||
+          (failure() || cancelled()) && steps.setup_failure.outcome == 'success' ||
+          cancelled() && (steps.implementation.outcome != 'skipped' || steps.verify.outcome != 'skipped' || steps.failure_smoke.outcome != 'skipped') ||
+          steps.implementation.outputs.handoff == 'true' ||
+          steps.verify.outputs.handoff == 'true'
+        env:
+          ALLOW_EMPTY_PATCH: ${{ steps.implementation.outcome == 'failure' || steps.verify.outcome == 'failure' || steps.implementation.outcome == 'cancelled' || steps.verify.outcome == 'cancelled' || needs.prepare.outputs.base_ref == needs.prepare.outputs.work_branch || steps.implementation.outputs.handoff == 'true' || steps.verify.outputs.handoff == 'true' }}
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+        run: |
+          # The root AGENTS.md/CLAUDE.md are reset to the template text: from
+          # this base, or on an existing work branch from where it forked from
+          # the target branch, so a branch an earlier build diverged carries
+          # the template text again. The fork point, not the target head: a
+          # later template refresh must not pull newer guidance into an old branch.
+          guidance_source=HEAD
+          if [[ "$BASE_REF" == "$WORK_BRANCH" ]]; then
+            target="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).task?.targetBranch ?? "")' task/task-metadata.json)"
+            if [[ -z "$target" ]]; then
+              echo "::warning::The task records no target branch; the root AGENTS.md/CLAUDE.md are kept as this work branch has them."
+            elif ! fork="$(git -C workspace merge-base HEAD "refs/remotes/origin/${target}" 2>/dev/null)"; then
+              echo "::warning::Cannot find where this work branch forked from ${target}; the root AGENTS.md/CLAUDE.md are kept as this work branch has them."
+            else
+              guidance_source="$fork"
+            fi
+          fi
+          node control/.github/scripts/create-patch.mjs \
+            --workspace workspace \
+            --patch "$RUNNER_TEMP/agent-artifacts/agent.patch" \
+            --summary "$RUNNER_TEMP/agent-artifacts/change-summary.json" \
+            --allow-empty "$ALLOW_EMPTY_PATCH" \
+            --protect-template-guidance true \
+            --guidance-source "$guidance_source"
+          node control/.github/scripts/pipeline-state.mjs seal "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" "$RUNNER_TEMP/agent-artifacts/agent.patch"
+
+      - name: Review build quality and framework feedback
+        # The patch is already sealed. A failed assessment never starts repair
+        # or changes the independent final verification / publication verdict.
+        if: >-
+          !cancelled() && inputs.failure_smoke != true && steps.patch.outcome == 'success' &&
+          steps.setup_failure.outcome != 'success' &&
+          steps.implementation.outputs.handoff != 'true' && steps.verify.outputs.handoff != 'true'
+        continue-on-error: true
+        # The runner accepts at most 60 minutes for the whole review, reruns and
+        # their waits included, and saves a validated partial result on its own
+        # timeout; leave time for snapshot setup and cleanup.
+        timeout-minutes: 70
+        env: *agent-run-env
+        run: node control/.github/scripts/run-build-review.mjs workspace "$RUNNER_TEMP/agent-artifacts"
+
+      - name: Prepare runner handoff metadata
+        id: handoff
+        if: steps.implementation.outputs.handoff == 'true' || steps.verify.outputs.handoff == 'true'
+        env:
+          CURRENT_CONTINUATION: ${{ inputs.recovery_run_id != '' && '1' || github.event.client_payload.continuation || '0' }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: |
+          # Bash arithmetic evaluates command substitutions, and this value comes
+          # from the dispatch payload: accept digits only.
+          if [[ ! "$CURRENT_CONTINUATION" =~ ^[0-9]{1,3}$ ]]; then
+            echo "::error::Invalid continuation counter in the dispatch payload." >&2
+            exit 1
+          fi
+          next_continuation=$((10#$CURRENT_CONTINUATION + 1))
+          # A spent evaluation budget ends the chain here: the checkpoint is kept,
+          # no continuation is sent. evaluation-budget.mjs records the stop
+          # (budget-exhausted, with its diagnostic), so the failure notice reads
+          # "stopped for diagnosis", not a recoverable handoff.
+          if [[ -f control/.github/scripts/evaluation-budget.mjs ]] && \
+            ! node control/.github/scripts/evaluation-budget.mjs handoff "$RUNNER_TEMP/agent-artifacts/pipeline-state.json" "$next_continuation"; then
+            echo "::warning::Evaluation sample budget exhausted; facts are saved without an automatic continuation."
+            exit 1
+          fi
+          node bootstrap/.github/scripts/handoff.mjs prepare \
+            --issue "$ISSUE_NUMBER" \
+            --run-id "$GITHUB_RUN_ID" \
+            --continuation "$next_continuation" \
+            --phase "$(node control/.github/scripts/pipeline-state.mjs phase "$RUNNER_TEMP/agent-artifacts/pipeline-state.json")" \
+            --output "$RUNNER_TEMP/agent-artifacts/handoff.json"
+          echo "continuation=$next_continuation" >> "$GITHUB_OUTPUT"
+
+      - name: Stop the task source registry
+        if: always()
+        continue-on-error: true
+        run: |
+          if [[ -f workspace/factory-source.json ]]; then
+            node control/.github/scripts/source-snapshot.mjs stop
+          fi
+
+      - name: Flush and stop live progress observer
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 1
+        run: node control/.github/scripts/task-progress.mjs stop "$RUNNER_TEMP/agent-artifacts"
+
+      # Also the handoff and recovery checkpoint: see Confirm the handoff checkpoint.
+      - name: Upload Code Agent patch and diagnostics
+        id: agent-upload
+        if: always() && steps.rerun_guard.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-agent-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/agent-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      # A failed build whose patch is empty on a new work branch has nothing a
+      # failed PR could show, and its push would only fail: publish-failed is
+      # skipped and the failure notice says so (FACTORY_EMPTY_PATCH). An empty
+      # patch on an existing work branch still marks that branch's PR failed,
+      # and so does a recovery's (expected_work_sha): its base is the target
+      # branch, yet the failed run's publication already created the branch.
+      - name: Check for a publishable diff
+        id: diff
+        if: always() && (steps.patch.outcome == 'success' || steps.keep_checkpoint.outcome == 'success')
+        # Must not fail the job or block the handoff dispatch below.
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+          EXPECTED_WORK_SHA: ${{ needs.prepare.outputs.expected_work_sha }}
+        run: |
+          patch="$RUNNER_TEMP/agent-artifacts/agent.patch"
+          if [[ "$BASE_REF" != "$WORK_BRANCH" && -z "$EXPECTED_WORK_SHA" && -f "$patch" && ! -L "$patch" && ! -s "$patch" ]]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::The saved patch is empty and ${WORK_BRANCH} does not exist yet, so no failed build PR is published."
+            echo "No application diff was saved; ${WORK_BRANCH} does not exist yet, so no failed build PR is published." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Final verification, publication, failed preview packaging and the
+      # failure notice read only these files. They download this small copy;
+      # factory-agent-N stays the complete record for reports and diagnosis.
+      # Downstream jobs fall back to factory-agent-N when this copy is missing,
+      # so a transient artifact error here must not fail the job or block the
+      # handoff below.
+      - name: Stage the patch for downstream jobs
+        if: always() && steps.rerun_guard.outcome == 'success'
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/patch-artifacts"
+          [[ -d "$RUNNER_TEMP/agent-artifacts" ]] || exit 0
+          cd "$RUNNER_TEMP/agent-artifacts"
+          for file in agent.patch change-summary.json task-metadata.json pipeline-state.json; do
+            if [[ -f "$file" && ! -L "$file" ]]; then
+              cp "$file" "$RUNNER_TEMP/patch-artifacts/$file"
+            fi
+          done
+          # mark-failure.mjs explains a stop from the invocation results.
+          find . -type f -name 'agent*.jsonl.result.json' \
+            -exec cp --parents {} "$RUNNER_TEMP/patch-artifacts" \;
+
+      - name: Upload the patch for downstream jobs
+        if: always() && steps.rerun_guard.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-patch-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/patch-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      # The checkpoint is factory-agent-N itself: it already holds this exact
+      # directory, so a second upload of it only doubled the time and storage of
+      # every failed or handed-off run. Continuations and explicit recoveries
+      # download factory-agent-N. This step keeps the contract the dispatch and
+      # the failure notice rely on: a checkpoint exists only when that upload
+      # succeeded and carries what a continuation restores.
+      - name: Confirm the handoff checkpoint
+        id: checkpoint
+        # Preserve a recovery checkpoint on failure, without treating it as
+        # successful verification or automatically retrying a broken runner.
+        if: always() && (steps.patch.outcome == 'success' || steps.keep_checkpoint.outcome == 'success') && (steps.handoff.outcome == 'success' || failure() || cancelled())
+        env:
+          AGENT_UPLOAD_OUTCOME: ${{ steps.agent-upload.outcome }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: |
+          if [[ "$AGENT_UPLOAD_OUTCOME" != 'success' ]]; then
+            echo "::error::factory-agent-${ISSUE_NUMBER} was not uploaded ($AGENT_UPLOAD_OUTCOME); no checkpoint was saved."
+            exit 1
+          fi
+          for file in agent.patch pipeline-state.json task-metadata.json; do
+            if [[ ! -f "$RUNNER_TEMP/agent-artifacts/$file" ]]; then
+              echo "::error::The checkpoint lacks $file."
+              exit 1
+            fi
+          done
+
+      - name: Dispatch continuation run
+        id: dispatch
+        # Explicit status function: without one, `success() &&` is implied and
+        # any earlier always() upload failure would skip the dispatch silently.
+        if: ${{ !cancelled() && steps.handoff.outcome == 'success' && steps.checkpoint.outcome == 'success' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUILD_COMMENT_ID: ${{ needs.prepare.outputs.build_comment_id }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+          CONTINUATION: ${{ steps.handoff.outputs.continuation }}
+        run: |
+          node bootstrap/.github/scripts/handoff.mjs dispatch \
+            --issue "$ISSUE_NUMBER" \
+            --previous-run-id "$GITHUB_RUN_ID" \
+            --continuation "$CONTINUATION"
+
+      - name: Record agent outcome
+        id: outcome
+        if: always()
+        # A handoff only counts once its checkpoint is saved and the successor
+        # was dispatched. Otherwise no continuation exists, so this run must
+        # still report its failure and publish what it has.
+        env:
+          HANDOFF_REQUESTED: ${{ steps.implementation.outputs.handoff == 'true' || steps.verify.outputs.handoff == 'true' }}
+          HANDOFF_OUTCOME: ${{ steps.handoff.outcome }}
+          CHECKPOINT_OUTCOME: ${{ steps.checkpoint.outcome }}
+          DISPATCH_OUTCOME: ${{ steps.dispatch.outcome }}
+          # Keep in step with this job's timeout-minutes.
+          JOB_TIMEOUT_SECONDS: '21600'
+        run: |
+          if [[ "$HANDOFF_OUTCOME" == "success" && "$CHECKPOINT_OUTCOME" == "success" && "$DISPATCH_OUTCOME" == "success" ]]; then
+            echo "handoff=true" >> "$GITHUB_OUTPUT"
+          else
+            if [[ "$HANDOFF_OUTCOME" == "success" ]]; then
+              echo "::error::Handoff was prepared but its checkpoint upload ($CHECKPOINT_OUTCOME) or continuation dispatch ($DISPATCH_OUTCOME) did not succeed; reporting this run as failed."
+            fi
+            echo "handoff=false" >> "$GITHUB_OUTPUT"
+            # The checkpoint still records the handoff and no successor runs:
+            # the failure notice offers recovery from it, and an explicit
+            # recovery accepts it once no continuation of this run exists
+            # (handoffDispatched in handoff-recovery.mjs). A refused handoff
+            # (spent budget) recorded its stop instead and stays unrecoverable.
+            if [[ "$HANDOFF_REQUESTED" == true ]]; then
+              echo "handoff_undispatched=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          # GitHub reports a job that hit timeout-minutes as cancelled, the same
+          # as a manual cancel. Elapsed time tells them apart for the notice;
+          # five minutes of slack covers the cancellation itself.
+          timed_out=false
+          if [[ "${FACTORY_JOB_STARTED_EPOCH_SECONDS:-}" =~ ^[0-9]+$ ]] && \
+            (( $(date +%s) - FACTORY_JOB_STARTED_EPOCH_SECONDS >= JOB_TIMEOUT_SECONDS - 300 )); then
+            timed_out=true
+            echo "::error::The agent job reached its ${JOB_TIMEOUT_SECONDS}s runner limit before finishing."
+          fi
+          echo "timed_out=$timed_out" >> "$GITHUB_OUTPUT"
+
+      # A summary is diagnostics only; it must never fail the task.
+      - name: Summarize implementation and repair timings
+        if: always()
+        continue-on-error: true
+        run: node control/.github/scripts/timing-summary.mjs
+
+  verify-final:
+    needs: [prepare, agent]
+    if: needs.agent.result == 'success' && needs.agent.outputs.handoff != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      # A failed verification left its deployable build; see the upload below.
+      failed_dist: ${{ steps.failed_dist_upload.outcome == 'success' }}
+    env:
+      FACTORY_BUILD_TARGET: linux-x64
+      FACTORY_BUILD_NODE_VERSION: '24'
+      # Verification builds for the explicit deployment target and archives
+      # that same build with `--tar`; nothing is rebuilt for the preview.
+      FACTORY_BUILD_ARCHIVE: '1'
+    permissions:
+      contents: read
+    steps:
+      - name: Initialize final timing output
+        run: echo "FACTORY_TIMINGS_FILE=$RUNNER_TEMP/final-artifacts/timings.jsonl" >> "$GITHUB_ENV"
+
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+
+      # The composite steps below come from this workflow's own commit, like the
+      # bootstrap checkout in prepare and agent: an in-flight task's pinned
+      # control_sha may predate them. The scripts they run still come from
+      # control/, so task code stays pinned.
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+
+      - name: Apply the verified patch to a fresh application base
+        uses: ./factory-actions/.github/actions/apply-task-patch
+        with:
+          base-sha: ${{ needs.prepare.outputs.base_sha }}
+          issue-number: ${{ needs.prepare.outputs.issue_number }}
+          work-branch: ${{ needs.prepare.outputs.work_branch }}
+
+      # Retried once: a transient artifact error here would fail a build whose
+      # repairs already passed, with no checkpoint left to recover from.
+      - name: Download trusted final verification task
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-task-${{ needs.prepare.outputs.issue_number }}
+          path: final-task
+
+      # Restore only: the agent job of this run saved the pinned package (see
+      # its font steps); a miss installs through apt as before.
+      - name: Read the pinned Chinese font package
+        id: font_pin
+        env:
+          FONT_SCRIPT: control/.github/scripts/install-browser-fonts.sh
+        run: echo "sha=$(sed -n 's/^FONT_DEB_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$FONT_SCRIPT")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pinned Chinese font package
+        if: steps.font_pin.outputs.sha != ''
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: browser-font-cache
+          key: browser-font-deb-${{ runner.os }}-${{ steps.font_pin.outputs.sha }}
+
+      - name: Install Chinese browser fonts
+        timeout-minutes: 10
+        env:
+          FACTORY_FONT_DEB_CACHE: ${{ github.workspace }}/browser-font-cache
+        run: bash control/.github/scripts/install-browser-fonts.sh
+
+      # pnpm, Node.js, the agent job's pnpm store (restored, never saved), the
+      # registry for nested pnpm roots and the selected source baseline.
+      - name: Restore the task toolchain and package sources
+        uses: ./factory-actions/.github/actions/restore-task-toolchain
+        with:
+          metadata: agent-artifacts/task-metadata.json
+
+      - name: Install application dependencies
+        timeout-minutes: 15
+        working-directory: workspace
+        run: node ../control/.github/scripts/timed-command.mjs install pnpm install --frozen-lockfile
+
+      - name: Create clean final verification configuration
+        run: |
+          mkdir -p "$RUNNER_TEMP/final-artifacts"
+          node control/.github/scripts/create-runtime-config.mjs \
+            --output "$RUNNER_TEMP/final.yml" \
+            --database "$RUNNER_TEMP/final/database.sqlite"
+
+      - name: Independently verify the applied patch
+        env:
+          FACTORY_REQUIRED_CHECKS_METADATA: ${{ github.workspace }}/final-task/task-metadata.json
+          FACTORY_REQUIRED_CHECKS_PATCH: ${{ github.workspace }}/agent-artifacts/agent.patch
+          FACTORY_TEST_API_KEY: ${{ secrets.FACTORY_TEST_API_KEY }}
+          FACTORY_TEST_ADMIN_KEY: ${{ secrets.FACTORY_TEST_ADMIN_KEY }}
+          # One more run of a failed `test` check only (verify.sh records it in
+          # test-retried); a template test flake must not fail a build whose
+          # repair loop already passed.
+          FACTORY_RETRY_TEST_ONCE: '1'
+        run: |
+          set -o pipefail
+          control/.github/scripts/verify.sh \
+            workspace \
+            "$RUNNER_TEMP/final.yml" \
+            "$RUNNER_TEMP/final-artifacts/verify-final" \
+            2>&1 | tee "$RUNNER_TEMP/final-artifacts/verify-final.log"
+
+      # The preview workflow downloads this artifact and reads both files from its
+      # root: `dist.tar.gz` to deploy and `task-metadata.json` to know which PR and
+      # target branch the build belongs to. They are staged into one directory
+      # first because `upload-artifact` keeps the structure below the paths' common
+      # ancestor, and these two live in unrelated directories of the job.
+      # The package only feeds the preview, which never decides acceptance:
+      # a transient artifact error here must not turn a passed verification
+      # into a failed delivery. deploy-preview reports the missing package
+      # (selectDistArtifact keys on "Report a missing deployable build").
+      - name: Stage the deployable build and its metadata
+        id: dist_stage
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/deployable"
+          cp workspace/storage/exports/dist.tar.gz "$RUNNER_TEMP/deployable/dist.tar.gz"
+          cp agent-artifacts/task-metadata.json "$RUNNER_TEMP/deployable/task-metadata.json"
+
+      - name: Upload the deployable build
+        id: dist_upload
+        if: steps.dist_stage.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-dist-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/deployable
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Report a missing deployable build
+        if: steps.dist_stage.outcome == 'failure' || steps.dist_upload.outcome == 'failure'
+        run: |
+          echo "::warning::The verified build could not be packaged for the preview; verification and delivery are unaffected, but this run has no preview."
+          echo 'The verified build could not be packaged for the preview; delivery is unaffected.' >> "$GITHUB_STEP_SUMMARY"
+
+      # verify.sh builds and archives before its database, browser and required
+      # checks. When one of those fails, the archive is the same linux-x64 build
+      # preview-build-failed would install and build a second time for the failed
+      # PR's preview; keep it instead, and that job is skipped.
+      - name: Stage the failed verification's build for the preview
+        id: failed_dist
+        if: failure() && hashFiles('workspace/storage/exports/dist.tar.gz') != ''
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/deployable"
+          cp workspace/storage/exports/dist.tar.gz "$RUNNER_TEMP/deployable/dist.tar.gz"
+          cp agent-artifacts/task-metadata.json "$RUNNER_TEMP/deployable/task-metadata.json"
+
+      - name: Upload the failed verification's build
+        id: failed_dist_upload
+        if: failure() && steps.failed_dist.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-dist-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/deployable
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop the final verifier source registry
+        if: always()
+        continue-on-error: true
+        run: |
+          if [[ -f workspace/factory-source.json ]]; then
+            node control/.github/scripts/source-snapshot.mjs stop
+          fi
+
+      # Diagnostics only: publish requires this job to succeed, so a malformed
+      # timing row or a transient artifact error here must not turn a passed
+      # verification into a failed delivery.
+      - name: Summarize final timings
+        if: always()
+        continue-on-error: true
+        run: node control/.github/scripts/timing-summary.mjs
+
+      - name: Upload final verification diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-final-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/final-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    needs: [prepare, agent, verify-final]
+    if: needs.verify-final.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      FACTORY_DELIVERY_STATUS: success
+    steps: &publication-steps
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+
+      # The composite steps below come from this workflow's own commit, like the
+      # bootstrap checkout in prepare and agent: an in-flight task's pinned
+      # control_sha may predate them. The scripts they run still come from
+      # control/, so task code stays pinned.
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+
+      # One commit is enough to apply the patch. The lease below names the
+      # expected remote value explicitly instead of reading a tracking ref;
+      # publication-base.mjs fetches whatever a new branch's push needs. The
+      # checkout keeps its token: this job pushes the task branch.
+      - name: Apply the verified patch to a fresh application base
+        uses: ./factory-actions/.github/actions/apply-task-patch
+        with:
+          base-sha: ${{ needs.prepare.outputs.base_sha }}
+          issue-number: ${{ needs.prepare.outputs.issue_number }}
+          work-branch: ${{ needs.prepare.outputs.work_branch }}
+          persist-credentials: 'true'
+
+      # A new work branch whose base fell behind only on factory files is
+      # published on the current branch head, so its workflow files match the
+      # repository's; otherwise the verified base stays. See QA_PIPELINE.md.
+      - name: Choose the publication base
+        env:
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+        run: |
+          node control/.github/scripts/publication-base.mjs \
+            --workspace workspace \
+            --patch agent-artifacts/agent.patch \
+            --branch "$WORK_BRANCH" \
+            --base-ref "$BASE_REF" \
+            --base-sha "$BASE_SHA" \
+            --record agent-artifacts/publication-base.json
+
+      # A re-run attempt reads the commit an earlier attempt of this run
+      # pushed (the record is uploaded right after the push): the push below
+      # keeps that commit when it holds the same tree, even after the target
+      # branch moved and the publication base was restacked onto a new parent.
+      - name: Download this run's publication record
+        if: github.run_attempt > 1
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-published-${{ needs.prepare.outputs.issue_number }}
+          path: previous-publication
+
+      - name: Commit and push task branch
+        id: push
+        working-directory: workspace
+        env:
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+          WORK_BRANCH: ${{ needs.prepare.outputs.work_branch }}
+          # A recovery replacing the commit its failed run published.
+          EXPECTED_WORK_SHA: ${{ needs.prepare.outputs.expected_work_sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # A recovery keeps the target as its base even though the failed run's
+          # publication created the work branch (EXPECTED_WORK_SHA): its empty
+          # diff goes on to replace that published commit below.
+          if git diff --cached --quiet && [[ "$BASE_REF" != "$WORK_BRANCH" ]] && \
+            [[ ! "$EXPECTED_WORK_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::No application diff was saved; GitHub cannot create a build PR. The failed report and logs remain available."
+            exit 1
+          fi
+          push_needed=true
+          if git diff --cached --quiet; then
+            # The verified tree is the base itself. Reuse the branch only when
+            # it is already at that commit: a recovery whose repair emptied the
+            # patch must still replace the failed run's published commit, or the
+            # PR would keep showing unverified content.
+            if [[ "$EXPECTED_WORK_SHA" =~ ^[a-f0-9]{40}$ ]] && \
+              [[ "$(git ls-remote origin "refs/heads/${WORK_BRANCH}" | cut -f1)" != "$(git rev-parse HEAD)" ]]; then
+              echo "The verified tree equals ${BASE_SHA}; replacing the failed run's published commit ${EXPECTED_WORK_SHA} with it."
+            else
+              echo "No new application changes; reusing the existing work branch commit."
+              push_needed=false
+            fi
+          else
+            git commit -m "feat: apply Code Agent task #${ISSUE_NUMBER}"
+          fi
+          # A GitHub Re-run of this job after its push landed (and, say, the PR
+          # creation failed) commits the same tree again under a new commit id,
+          # which the lease below refuses. A remote work branch that already
+          # holds exactly this commit's tree is that publication when it sits on
+          # the same parent, or when this run's publication record names it
+          # (the target moved between attempts and the base was restacked):
+          # keep its commit rather than pushing an identical tree. Any other
+          # commit with that tree is not provably this run's and is still pushed
+          # under the lease, which refuses it.
+          if [[ "$push_needed" == true ]]; then
+            remote="$(git ls-remote origin "refs/heads/${WORK_BRANCH}" | cut -f1)"
+            parents() { git cat-file -p "$1" | sed -n 's/^parent //p'; }
+            recorded=''
+            record=../previous-publication/publication.json
+            if [[ -f "$record" && ! -L "$record" ]]; then
+              recorded="$(node -e '
+                const [file, runId, branch] = process.argv.slice(1);
+                const value = JSON.parse(require("fs").readFileSync(file, "utf8"));
+                if (value?.version === 1 && String(value.sourceRunId) === runId && value.workBranch === branch &&
+                  /^[a-f0-9]{40}$/.test(value.commit ?? "")) console.log(value.commit);
+              ' "$record" "$GITHUB_RUN_ID" "$WORK_BRANCH" 2>/dev/null || true)"
+            fi
+            if [[ "$remote" == "$(git rev-parse HEAD)" ]]; then
+              echo "${WORK_BRANCH} is already at this commit."
+              push_needed=false
+            elif [[ -n "$remote" ]] && \
+              git fetch --quiet --no-tags --depth=1 origin "refs/heads/${WORK_BRANCH}" && \
+              [[ "$(git rev-parse FETCH_HEAD)" == "$remote" ]] && \
+              [[ "$(git rev-parse 'FETCH_HEAD^{tree}')" == "$(git rev-parse 'HEAD^{tree}')" ]] && \
+              { [[ "$(parents FETCH_HEAD)" == "$(parents HEAD)" ]] || [[ "$remote" == "$recorded" ]]; }; then
+              echo "${WORK_BRANCH} already holds this verified tree at ${remote}, published by this task; keeping that commit instead of pushing again."
+              git reset --quiet --soft "$remote"
+              push_needed=false
+            fi
+          fi
+          if [[ "$push_needed" == true ]]; then
+            if [[ "$EXPECTED_WORK_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+              # Only the failed run's own published commit may be replaced.
+              lease="refs/heads/${WORK_BRANCH}:${EXPECTED_WORK_SHA}"
+            elif [[ "$BASE_REF" == "$WORK_BRANCH" ]]; then
+              lease="refs/heads/${WORK_BRANCH}:${BASE_SHA}"
+            else
+              lease="refs/heads/${WORK_BRANCH}:"
+            fi
+            # A transient network or server error is retried; a rejection is
+            # final: a refused workflow change, a lease that no longer matches or
+            # a non-fast-forward. A push whose response was lost may have landed,
+            # so a retry first checks whether the remote already has this commit.
+            pushed=false
+            for attempt in 1 2 3; do
+              if (( attempt > 1 )) && [[ "$(git ls-remote origin "refs/heads/${WORK_BRANCH}" | cut -f1)" == "$(git rev-parse HEAD)" ]]; then
+                echo "The previous push attempt reached ${WORK_BRANCH}."
+                pushed=true
+                break
+              fi
+              if git push --force-with-lease="$lease" origin "HEAD:refs/heads/${WORK_BRANCH}" 2> "$RUNNER_TEMP/push.log"; then
+                pushed=true
+                break
+              fi
+              cat "$RUNNER_TEMP/push.log" >&2
+              if grep -qE 'without `workflows` permission|stale info|\[rejected\]|\[remote rejected\]|non-fast-forward|Permission to .* denied' "$RUNNER_TEMP/push.log"; then
+                break
+              fi
+              if (( attempt < 3 )); then
+                echo "::warning::Push attempt $attempt failed; retrying."
+                sleep $((attempt * 10))
+              fi
+            done
+            if [[ "$pushed" != true ]]; then
+              if grep -q 'without `workflows` permission' "$RUNNER_TEMP/push.log"; then
+                echo "::error::GitHub refused ${WORK_BRANCH} because the pushed commits would change workflow files, which the task token may not do. The task was verified on ${BASE_SHA}; the target branch moved since with changes the publisher could not restack onto (see Choose the publication base). The verified patch is in the factory-patch-${ISSUE_NUMBER} artifact: apply it with git apply --3way on the current target branch, push ${WORK_BRANCH} with credentials allowed to change workflows, and open the PR by hand."
+              fi
+              exit 1
+            fi
+            cat "$RUNNER_TEMP/push.log" >&2
+          fi
+          # What the work branch now holds, for a recovery from this run: a
+          # branch still at this commit is this run's own publication, not
+          # newer work (liveRecoveryBase in handoff-recovery.mjs).
+          mkdir -p "$RUNNER_TEMP/publication-record"
+          node -e '
+            const [file, issue, branch, commit, runId, attempt, status] = process.argv.slice(1);
+            require("fs").writeFileSync(file, JSON.stringify({ version: 1, issue: Number(issue), workBranch: branch,
+              commit, sourceRunId: Number(runId), attempt: Number(attempt), status }, null, 2) + "\n");
+          ' "$RUNNER_TEMP/publication-record/publication.json" "$ISSUE_NUMBER" "$WORK_BRANCH" \
+            "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$FACTORY_DELIVERY_STATUS"
+
+      # Small and best effort: without it a recovery refuses (the branch looks
+      # moved) instead of overwriting anything.
+      - name: Upload the publication record
+        if: steps.push.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-published-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/publication-record/publication.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Create or update Pull Request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/publish-pr.mjs \
+            --metadata agent-artifacts/task-metadata.json \
+            --summary agent-artifacts/change-summary.json --status "$FACTORY_DELIVERY_STATUS" \
+            --publication agent-artifacts/publication-base.json
+
+  # Preserve failed work without treating publication as successful acceptance.
+  publish-failed:
+    needs: [prepare, agent, verify-final]
+    if: >-
+      always() && !cancelled() &&
+      needs.prepare.outputs.status == 'ready' &&
+      needs.prepare.outputs.comment_kind != 'reply' &&
+      needs.agent.outputs.handoff != 'true' &&
+      needs.agent.outputs.patch_available == 'true' &&
+      needs.agent.outputs.empty_patch != 'true' &&
+      (needs.agent.result != 'success' || needs.verify-final.result != 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      FACTORY_DELIVERY_STATUS: failed
+    steps: *publication-steps
+
+  # FACTORY_PREVIEW_ENABLED=false skips packaging when no preview host is
+  # configured: deploy-preview would discard the package anyway. A job
+  # condition cannot read secrets, hence the variable; unset keeps it on.
+  preview-build-failed:
+    needs: [prepare, agent, verify-final, publish-failed]
+    # Skipped when verify-final already uploaded the build it made before a
+    # later check failed: deploy-preview takes that factory-dist-N instead.
+    if: always() && !cancelled() && needs.publish-failed.result == 'success' && vars.FACTORY_PREVIEW_ENABLED != 'false' && needs.verify-final.outputs.failed_dist != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Initialize failed preview timing output
+        run: echo "FACTORY_TIMINGS_FILE=$RUNNER_TEMP/final-artifacts/timings.jsonl" >> "$GITHUB_ENV"
+
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+
+      # The composite steps below come from this workflow's own commit, like the
+      # bootstrap checkout in prepare and agent: an in-flight task's pinned
+      # control_sha may predate them. The scripts they run still come from
+      # control/, so task code stays pinned.
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+
+      - name: Apply the verified patch to a fresh application base
+        uses: ./factory-actions/.github/actions/apply-task-patch
+        with:
+          base-sha: ${{ needs.prepare.outputs.base_sha }}
+          issue-number: ${{ needs.prepare.outputs.issue_number }}
+          work-branch: ${{ needs.prepare.outputs.work_branch }}
+
+      # pnpm, Node.js, the agent job's pnpm store (restored, never saved), the
+      # registry for nested pnpm roots and the selected source baseline.
+      - name: Restore the task toolchain and package sources
+        uses: ./factory-actions/.github/actions/restore-task-toolchain
+        with:
+          metadata: agent-artifacts/task-metadata.json
+
+      # A failed task can leave package.json and its lockfile out of step. The
+      # preview of that work then installs without freezing, but only for
+      # ERR_PNPM_OUTDATED_LOCKFILE; any other install failure still fails.
+      - name: Install application dependencies
+        timeout-minutes: 15
+        working-directory: workspace
+        run: |
+          set -o pipefail
+          status=0
+          node ../control/.github/scripts/timed-command.mjs install pnpm install --frozen-lockfile 2>&1 | tee "$RUNNER_TEMP/install.log" || status=$?
+          if (( status != 0 )); then
+            grep -q ERR_PNPM_OUTDATED_LOCKFILE "$RUNNER_TEMP/install.log" || exit "$status"
+            echo "::warning::The failed work's pnpm-lock.yaml does not match its package.json; installing the preview without --frozen-lockfile."
+            node ../control/.github/scripts/timed-command.mjs install-refresh-lockfile pnpm install --no-frozen-lockfile
+          fi
+
+      - name: Create isolated failed preview build configuration
+        run: |
+          mkdir -p "$RUNNER_TEMP/final-artifacts"
+          node control/.github/scripts/create-runtime-config.mjs \
+            --output "$RUNNER_TEMP/final.yml" \
+            --database "$RUNNER_TEMP/final/database.sqlite"
+
+      - name: Attempt packaging the failed implementation
+        working-directory: workspace
+        env:
+          APP_CONFIG_FILE: ${{ runner.temp }}/final.yml
+          NODE_ENV: production
+        run: |
+          set -o pipefail
+          node ../control/.github/scripts/timed-command.mjs preview-build pnpm build --target linux-x64 --node-version 24 --tar 2>&1 | tee $RUNNER_TEMP/final-artifacts/preview-build.log
+
+      # The preview workflow downloads this artifact and reads both files from its
+      # root: `dist.tar.gz` to deploy and `task-metadata.json` to know which PR and
+      # target branch the build belongs to. They are staged into one directory
+      # first because `upload-artifact` keeps the structure below the paths' common
+      # ancestor, and these two live in unrelated directories of the job.
+      - name: Stage the deployable build and its metadata
+        run: |
+          mkdir -p "$RUNNER_TEMP/deployable"
+          cp workspace/storage/exports/dist.tar.gz "$RUNNER_TEMP/deployable/dist.tar.gz"
+          cp agent-artifacts/task-metadata.json "$RUNNER_TEMP/deployable/task-metadata.json"
+
+      - name: Upload the deployable build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-dist-${{ needs.prepare.outputs.issue_number }}
+          overwrite: true
+          path: ${{ runner.temp }}/deployable
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop the failed preview source registry
+        if: always()
+        continue-on-error: true
+        run: |
+          if [[ -f workspace/factory-source.json ]]; then
+            node control/.github/scripts/source-snapshot.mjs stop
+          fi
+
+      - name: Summarize failed preview packaging timings
+        if: always()
+        # Diagnostics only: a failure here must not report a package that was
+        # uploaded above as missing.
+        continue-on-error: true
+        run: node control/.github/scripts/timing-summary.mjs
+
+      - name: Upload failed preview packaging diagnostics
+        if: always()
+        # Diagnostics only: a failure here must not report a package that was
+        # uploaded above as missing.
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-preview-build-${{ needs.prepare.outputs.issue_number }}
+          path: ${{ runner.temp }}/final-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Runs only when the run itself was cancelled. A job that hit its
+  # timeout-minutes is also 'cancelled' in needs.*, so report-failure cannot
+  # tell the two apart from its needs, and a step-level cancelled() there is
+  # always false: an always() job is not cancelled with the run.
+  run-cancelled:
+    needs:
+      [
+        prepare,
+        agent,
+        verify-final,
+        publish,
+        publish-failed,
+        preview-build-failed,
+      ]
+    if: cancelled()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Record that the run was cancelled
+        run: 'true'
+
+  report-failure:
+    needs:
+      [
+        prepare,
+        agent,
+        verify-final,
+        publish,
+        publish-failed,
+        preview-build-failed,
+        run-cancelled,
+      ]
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.status == 'ready' &&
+      needs.prepare.outputs.comment_kind != 'reply' &&
+      needs.agent.outputs.handoff != 'true' &&
+      (needs.agent.result != 'success' ||
+       needs.verify-final.result != 'success' ||
+       needs.publish.result != 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out factory control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+          # mark-failure.mjs and everything it imports live here.
+          sparse-checkout: .github/scripts
+
+      - name: Download failure diagnostics
+        id: patch_copy
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-patch-${{ needs.prepare.outputs.issue_number }}
+          path: failure-artifacts
+
+      # The agent job tolerates a failed upload of the small copy; the complete
+      # factory-agent-N record carries the same files.
+      - name: Fall back to the complete Code Agent artifact
+        if: steps.patch_copy.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-agent-${{ needs.prepare.outputs.issue_number }}
+          path: failure-artifacts
+
+      # This job deliberately runs on cancellation (always()) so the Issue
+      # leaves agent:running; the notice says it was cancelled. Only a real
+      # cancellation of the run counts (run-cancelled): GitHub also reports a
+      # job that hit its timeout-minutes as cancelled, which is a failure.
+      - name: Mark Issue as failed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_CHECKPOINT_AVAILABLE: ${{ needs.agent.outputs.checkpoint_available }}
+          FACTORY_PREVIEW_BUILD_RESULT: ${{ needs.preview-build-failed.result }}
+          FACTORY_RUN_CANCELLED: ${{ needs.run-cancelled.result == 'success' }}
+          FACTORY_RUN_TIMED_OUT: ${{ needs.agent.outputs.timed_out }}
+          FACTORY_RERUN_REJECTED: ${{ needs.agent.outputs.rerun_rejected }}
+          FACTORY_HANDOFF_UNDISPATCHED: ${{ needs.agent.outputs.handoff_undispatched }}
+          FACTORY_EMPTY_PATCH: ${{ needs.agent.outputs.empty_patch }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: node control/.github/scripts/mark-failure.mjs "$ISSUE_NUMBER" failure-artifacts
+
+  dispatch-reports:
+    # The dispatched report runs wait only a few minutes for this run to
+    # complete, so dispatch after the comment reply jobs have finished too.
+    needs:
+      [
+        prepare,
+        agent,
+        verify-final,
+        publish,
+        publish-failed,
+        preview-build-failed,
+        report-failure,
+        reply,
+        publish-reply,
+      ]
+    # prepare exposes status=ready before its artifact upload; a failed prepare
+    # has no factory-task-N for the reports to read. A "Re-run all jobs" that
+    # prepare rejected still runs this job with every request marked handled
+    # and none dispatched, so the workflow_run copies skip that empty attempt.
+    if: >-
+      always() &&
+      ((needs.prepare.result == 'success' && needs.prepare.outputs.status == 'ready' && needs.prepare.outputs.comment_kind != 'reply') ||
+       needs.prepare.outputs.rerun_rejected == 'true')
+    runs-on: ubuntu-24.04
+    # Up to seven requests at 70 s each (dispatch-task-reports.sh) plus checkout.
+    # Continuations have no workflow_run fallback, so the last reports must fit.
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # Isolated from application execution and from all model/media secrets.
+      # The dispatcher comes from this workflow file's own revision, not the
+      # task's pinned control SHA: continuations, recoveries and evaluation
+      # samples pin an older control plane whose dispatcher ignores its
+      # arguments, and each step below would then request every report. It
+      # carries no task logic, and the steps below are its only callers.
+      - name: Check out the report dispatcher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: dispatcher
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/scripts/dispatch-task-reports.sh
+      # One step per report (including continuations): report-dispatch-gate.yml
+      # reads each step by name, so a failed request makes only that report's
+      # workflow_run copy do the work, not all six. Each step runs even after an
+      # earlier one failed; the job's continue-on-error keeps the task result.
+      - name: Request report-task-progress.yml
+        id: request-report-task-progress
+        if: ${{ !cancelled() }}
+        env: &report-dispatch-env
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          FACTORY_REPORT_REF: ${{ github.event.repository.default_branch }}
+          FACTORY_TASK_PUBLISHED: ${{ needs.publish.result == 'success' || needs.publish-failed.result == 'success' }}
+          # A rejected Re-run requests no report; see dispatch-task-reports.sh.
+          # Rejected in prepare ("Re-run all jobs") it requests nothing at all.
+          FACTORY_RERUN_REJECTED: ${{ needs.agent.outputs.rerun_rejected == 'true' || needs.prepare.outputs.rerun_rejected == 'true' }}
+          FACTORY_PREPARE_REJECTED: ${{ needs.prepare.outputs.rerun_rejected == 'true' }}
+          # Names report-task-progress.yml's per-Issue concurrency group.
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh report-task-progress.yml
+      - name: Request report-task-usage.yml
+        id: request-report-task-usage
+        if: ${{ !cancelled() }}
+        env: *report-dispatch-env
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh report-task-usage.yml
+      - name: Request publish-agent-history.yml
+        id: request-publish-agent-history
+        if: ${{ !cancelled() }}
+        env: *report-dispatch-env
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh publish-agent-history.yml
+      - name: Request publish-retro.yml
+        id: request-publish-retro
+        if: ${{ !cancelled() }}
+        env: *report-dispatch-env
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh publish-retro.yml
+      - name: Request publish-visual-report.yml
+        id: request-publish-visual-report
+        if: ${{ !cancelled() }}
+        env: *report-dispatch-env
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh publish-visual-report.yml
+      # A comment round was started with GITHUB_TOKEN, so its completion emits
+      # no workflow_run for the comment queue; request the queue directly so the
+      # next instruction starts now instead of at a late hourly sweep. The queue
+      # waits for this run to complete before it reconciles.
+      - name: Request comment-build-queue.yml
+        id: request-comment-build-queue
+        if: ${{ !cancelled() && needs.prepare.outputs.build_comment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          FACTORY_REPORT_REF: ${{ github.event.repository.default_branch }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh comment-build-queue.yml
+
+  reply:
+    env:
+      FACTORY_CONTROL_SHA: ${{ needs.prepare.outputs.control_sha }}
+    needs: [prepare, agent, verify-final, publish, publish-failed]
+    if: >-
+      always() && !cancelled() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.status == 'ready' &&
+      needs.prepare.outputs.build_comment_id != '' &&
+      needs.agent.outputs.handoff != 'true' &&
+      needs.agent.outputs.rerun_rejected != 'true'
+    runs-on: ubuntu-24.04
+    # 10 install + 15 reply budget, plus checkouts, setup and the upload.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ (needs.publish.result == 'success' || needs.publish-failed.result == 'success') && needs.prepare.outputs.work_branch || needs.prepare.outputs.base_sha }}
+          path: workspace
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      # A comment round whose download fails once would otherwise end with no
+      # reply at all: both reply jobs retry their downloads (see verify-final).
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+      - name: Download the task metadata
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-task-${{ needs.prepare.outputs.issue_number }}
+          path: task
+      - name: Build reply prompt
+        env:
+          BUILD_RESULT: ${{ needs.publish-failed.result == 'success' && 'failure' || needs.publish.result }}
+        run: node control/.github/scripts/comment-reply.mjs prompt task/task-metadata.json "$RUNNER_TEMP"
+      - name: Install pinned Code Agent
+        timeout-minutes: 10
+        env: *agent-install-env
+        run: node control/.github/scripts/install-agent.mjs
+      - name: Answer source comment from current code
+        env: *agent-run-env
+        run: |
+          CODE_AGENT_INVOCATION_TIMEOUT_SECONDS=900 node control/.github/scripts/run-agent.mjs \
+            --workspace workspace \
+            --prompt "$RUNNER_TEMP/comment-prompt.md" \
+            --log "$RUNNER_TEMP/comment-artifacts/comment-agent.jsonl" \
+            --agentDir "$RUNNER_TEMP/comment-agent"
+      - name: Collect comment reply diagnostics
+        if: always()
+        env: *agent-run-env
+        run: node control/.github/scripts/agent-invocation-record.mjs stage-reply "$RUNNER_TEMP" task/task-metadata.json
+
+      - name: Save reply for trusted publisher
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-comment-reply-${{ needs.prepare.outputs.build_comment_id }}
+          path: ${{ runner.temp }}/comment-artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-reply:
+    needs: [prepare, reply]
+    if: ${{ !cancelled() && needs.reply.result == 'success' }}
+    runs-on: ubuntu-24.04
+    # Two retried downloads may each wait 30 seconds before their retry.
+    timeout-minutes: 7
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          persist-credentials: false
+          # comment-reply.mjs and everything it imports live here.
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Check out the workflow's composite actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: factory-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/
+          persist-credentials: false
+      - name: Download the task metadata
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-task-${{ needs.prepare.outputs.issue_number }}
+          path: task
+      - name: Download the reply
+        uses: ./factory-actions/.github/actions/download-with-retry
+        with:
+          name: factory-comment-reply-${{ needs.prepare.outputs.build_comment_id }}
+          path: reply
+      - name: Publish quoted reply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/comment-reply.mjs publish task/task-metadata.json reply
+
+  # A comment round whose prepare ended without status ready (waiting behind
+  # another PR, a rejected or duplicate instruction) or failed after reporting
+  # it (a refused recovery base, a failed upload) runs
+  # neither dispatch-reports nor dispatch-reply-history, the only other
+  # requesters of the comment queue. It was started with GITHUB_TOKEN, so its
+  # completion emits no workflow_run either: request the queue here, or the
+  # Issue's next instruction waits for the late hourly sweep. A re-run prepare
+  # rejected claimed nothing and wakes nothing.
+  wake-comment-queue:
+    needs: prepare
+    if: >-
+      !cancelled() &&
+      needs.prepare.outputs.build_comment_id != '' &&
+      (needs.prepare.outputs.status != 'ready' || needs.prepare.result != 'success') &&
+      needs.prepare.outputs.rerun_rejected != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # From this workflow file's revision, as in dispatch-reports.
+      - name: Check out the report dispatcher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: dispatcher
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/scripts/dispatch-task-reports.sh
+      - name: Request comment-build-queue.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          FACTORY_REPORT_REF: ${{ github.event.repository.default_branch }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh comment-build-queue.yml
+
+  # Question rounds skip dispatch-reports, so they request their history here.
+  # A /build round's history is already requested by dispatch-reports.
+  # Uses the same retrying dispatcher and step name as dispatch-reports, and
+  # report-dispatch-gate.yml reads this job too, so the workflow_run copy of
+  # publish-agent-history does not publish the round a second time.
+  dispatch-reply-history:
+    needs: [prepare, reply, publish-reply]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.status == 'ready' && needs.prepare.outputs.build_comment_id != '' && needs.prepare.outputs.comment_kind == 'reply' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # From this workflow file's revision, as in dispatch-reports.
+      - name: Check out the report dispatcher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: dispatcher
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/scripts/dispatch-task-reports.sh
+      - name: Request publish-agent-history.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          FACTORY_REPORT_REF: ${{ github.event.repository.default_branch }}
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh publish-agent-history.yml
+      # As in dispatch-reports: start the Issue's next queued instruction now.
+      - name: Request comment-build-queue.yml
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.run_attempt }}
+          FACTORY_REPORT_REF: ${{ github.event.repository.default_branch }}
+          ISSUE_NUMBER: ${{ needs.prepare.outputs.issue_number }}
+        run: bash dispatcher/.github/scripts/dispatch-task-reports.sh comment-build-queue.yml

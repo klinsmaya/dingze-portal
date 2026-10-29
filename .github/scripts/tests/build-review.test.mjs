@@ -1,0 +1,639 @@
+import { Buffer } from 'node:buffer';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { collectReviewProcess, digest, loadBuildReview, moduleRoundResult, reviewArtifactHash, validateBuildReview, validateEvaluation } from '../build-review.mjs';
+import { createReviewSnapshot, materializeEvidence, runBuildReview } from '../run-build-review.mjs';
+import { aggregate, collectUsage, emptyUsage, validateRecord } from '../task-usage.mjs';
+import { makeDeliveryReport } from '../delivery-report.mjs';
+import { renderHtml } from '../../reports/render-report.mjs';
+import { packHistory } from '../agent-history.mjs';
+
+const here = path.resolve(import.meta.dirname, '../..');
+const example = () => JSON.parse(readFileSync(path.join(here, 'reports/example.review.json'), 'utf8'));
+const facts = () => JSON.parse(readFileSync(path.join(here, 'reports/example.facts.json'), 'utf8'));
+const put = (root, relative, content) => {
+  const file = path.join(root, relative); mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, typeof content === 'string' || Buffer.isBuffer(content) ? content : JSON.stringify(content));
+  return file;
+};
+function fixture(t) {
+  // macOS aliases its temporary root; only fixture-owned symlinks are under test.
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'build-review-test-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const workspace = path.join(root, 'workspace'), artifacts = path.join(root, 'artifacts'), snapshot = path.join(root, 'snapshot');
+  mkdirSync(workspace); mkdirSync(artifacts); mkdirSync(snapshot);
+  const source = put(workspace, 'server/customer.ts', 'export const customer = 1;\n');
+  put(workspace, 'package.json', { name: 'review-fixture' });
+  put(workspace, 'pnpm-lock.yaml', 'lockfileVersion: 9\n');
+  put(workspace, '.gitignore', 'node_modules\n.env\n');
+  put(workspace, '.agents/skills/example/SKILL.md', '# Installed guidance\nUse customer.\n');
+  put(workspace, 'config.yml', 'auth: { secret: must-not-reach-review }\n');
+  execFileSync('git', ['init', '-q'], { cwd: workspace });
+  execFileSync('git', ['add', '.'], { cwd: workspace });
+  execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@localhost', 'commit', '-qm', 'fixture'], { cwd: workspace });
+  put(workspace, 'node_modules/@nocobase/example/package.json', { name: '@nocobase/example', version: '3.0.0-fixture' });
+  put(workspace, 'node_modules/@nocobase/example/dist/index.js', 'export const customer = undefined;\n');
+  put(workspace, 'node_modules/@nocobase/example/dist/index.d.ts', 'export declare const customer: number;\n');
+  const metadata = { repository: 'owner/factory', issue: { number: 21 }, run: {id:100,attempt:1}, controlSha:'b'.repeat(40), applicationBase:{sha:execFileSync('git',['rev-parse','HEAD'],{cwd:workspace,encoding:'utf8'}).trim()}, task: { requirements: 'Manage customers', reviewCriteria: 'Review used modules independently' } };
+  put(artifacts, 'task-metadata.json', metadata);
+  put(artifacts, 'agent-implement.jsonl', '{"type":"tool_result","content":"Read framework fixture"}\n');
+  put(artifacts, 'agent-implement.jsonl.prompt.md', 'Build fixture');
+  put(artifacts, 'agent-implement.jsonl.invocation.json', {version:1,invoked:true});
+  put(artifacts, 'agent-implement.jsonl.result.json', {status:'completed'});
+  put(artifacts, 'agent.patch', 'sealed fixture patch\n');
+  put(artifacts, 'repair-summary.json', { verificationAttempts: 2, repairAttempts: 1, finalVerificationAttempt: 2 });
+  for (const [round, status] of [[1, 'failed'], [2, 'passed']]) put(artifacts, `verify-${round}/browser-acceptance/report.json`, {
+    passed: status === 'passed', checks: [{ id: 'B01', criterion: 'Create customer', status, actions: ['Click save'], evidence: ['Observed result'], screenshots: [] }],
+  });
+  const env = { ...process.env, GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1', FACTORY_CONTROL_SHA: 'b'.repeat(40), FACTORY_BUILD_REVIEW: 'full',
+    CODE_AGENT_ENGINE: 'pi', CODE_AGENT_API_KEY: 'private-review-fixture-key', CODE_AGENT_API_ENDPOINT: 'https://fixture.invalid/v1', CODE_AGENT_MODEL: 'fixture-model' };
+  delete env.FACTORY_RUN_DEADLINE_EPOCH_SECONDS; delete env.FACTORY_AGENT_INSTALL_RECORD;
+  delete env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS; delete env.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS;
+  env.FACTORY_MODEL_RETRY_DELAYS_SECONDS = '0,0';
+  // Outside the snapshot, whose root is reset before every call.
+  env.MOCK_CALLS_FILE = path.join(root, 'mock-calls');
+  return { root, workspace, artifacts, snapshot, source, metadata, env };
+}
+function installMock(f, behavior = 'success') {
+  const bin = path.join(f.root, 'bin'); mkdirSync(bin);
+  put(bin, 'pi', `#!/usr/bin/env node
+const fs = require('node:fs');
+const input = JSON.parse(fs.readFileSync('review-input.json', 'utf8'));
+if (process.env.FACTORY_AGENT_ROLE !== 'review' || process.env.GITHUB_TOKEN || process.env.FACTORY_ADMIN_PASSWORD) process.exit(7);
+// Counts the calls of one review, so reruns can behave differently.
+const calls = (fs.existsSync(process.env.MOCK_CALLS_FILE) ? fs.readFileSync(process.env.MOCK_CALLS_FILE, 'utf8').length : 0) + 1;
+fs.appendFileSync(process.env.MOCK_CALLS_FILE, 'x');
+const prompt = fs.readFileSync(process.argv.at(-1).slice(1), 'utf8');
+console.log(JSON.stringify({type:'mock_call',calls,retry:prompt.includes('## 重试说明'),budget:Number(/硬上限 (\\d+) 秒/.exec(prompt)?.[1]),
+  validatorError:prompt.includes('Evidence lines outside captured file'),kept:prompt.includes('曾保存并通过校验')}));
+let behavior = ${JSON.stringify(behavior)};
+if (fs.existsSync('feedback-input.json')) {
+  const feedback=JSON.parse(fs.readFileSync('feedback-input.json','utf8'));
+  const kinds=['contract','behavior','application','environment','factory','existing-capability'];
+  const status=behavior==='feedback-contradicted'?'contradicted':'supported';
+  const verdict={version:1,inputHash:feedback.inputHash,findings:feedback.candidates.map(f=>({findingId:f.id,status,reason:'Compared the actual API contract with captured implementation and alternatives',checks:kinds.map(kind=>({kind,reason:'Read captured '+kind+' evidence; alternative does not explain the observed mismatch',evidence:[kind==='contract'?'E2':kind==='behavior'?'E4':'E1']}))})),evidence:[{id:'E4',kind:'package',path:'packages/@nocobase/example/dist/index.js',lines:[1,1],observation:'Actual implementation returns undefined'}]};
+  if(behavior==='feedback-invalid') verdict.evidence[0].lines=[99,99];
+  if(behavior==='feedback-input-tamper') fs.writeFileSync('feedback-input.json','{}');
+  fs.writeFileSync('feedback-assessment.json',JSON.stringify(verdict));
+  if(behavior==='feedback-crash') process.exit(17);
+  if(behavior==='feedback-stall') {setInterval(()=>{},1000);return;}
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'stop',usage:{input:10,output:2,cacheRead:0,cacheWrite:0,totalTokens:12}}}));
+  console.log(JSON.stringify({type:'agent_end'})); process.exit(0);
+}
+if (behavior === 'stall-then-success') behavior = calls === 1 ? 'stall-empty' : 'success';
+if (behavior === 'stall-then-crash') behavior = calls === 1 ? 'stall' : 'crash';
+if (behavior === 'invalid-then-fixed') behavior = calls === 1 || !prompt.includes('Evidence lines outside captured file') ? 'invalid-draft' : 'success';
+if (behavior === 'stall-then-shrink') behavior = calls === 1 ? 'stall-two-modules' : 'stall';
+if (behavior === 'stall-then-long-error') behavior = calls === 1 ? 'stall' : 'long-error';
+if (behavior === 'alter-scaffold') {
+  if (calls === 1) {
+    fs.chmodSync('AGENTS.md', 0o600); fs.writeFileSync('AGENTS.md', 'tampered');
+    fs.chmodSync('.review-tools/check-review-draft.mjs', 0o600); fs.writeFileSync('.review-tools/check-review-draft.mjs', 'tampered');
+    fs.chmodSync('.review-tools', 0o500);
+    // Instructions an engine would also read, and the uncatalogued input files.
+    fs.writeFileSync('.review-agent/AGENTS.md', 'tampered'); fs.writeFileSync('AGENTS.override.md', 'tampered');
+    fs.writeFileSync('review-input.json', JSON.stringify({ ...input, requirements: 'tampered' }));
+    fs.mkdirSync('scratch/stuck', { recursive: true }); fs.writeFileSync('scratch/stuck/note', 'x'); fs.chmodSync('scratch/stuck', 0o500);
+    process.exit(17);
+  }
+  const altered = [fs.readFileSync('AGENTS.md', 'utf8'), fs.readFileSync('.review-tools/check-review-draft.mjs', 'utf8'),
+    fs.readFileSync('review-input.json', 'utf8')].some(text => text.includes('tampered')) ||
+    ['.review-agent/AGENTS.md', 'AGENTS.override.md', 'scratch'].some(name => fs.existsSync(name));
+  behavior = altered ? 'crash' : 'success';
+}
+const score = {score:73,reason:'Fixture framework contract and usage',evidence:['E2','E1']};
+const review = {version:input.rubricVersion,inputHash:input.basis.inputHash,progress:{complete:true,pendingModules:[]},summary:'Fixture-only review',
+ modules:[{name:'Data access',scope:'Customer creation',limitations:'No concurrency coverage',criteria:['B01'],
+ targets:[{kind:'library',name:'@nocobase/example',entrypoints:['customer'],evidence:['E2']}],
+ requirements:[{need:'Create customer',responsibility:'Framework supplies data contract, application supplies customer rules',support:'composition',recommendedUsage:'Use the declared customer value',actualUsage:'Uses customer in application',gapOwner:'none',evidence:['E1','E2']}],
+ scores:{requirementFit:score,usability:score,design:score,reliability:{score:null,reason:'No implementation coverage',evidence:[]},agentFriendliness:score}}],
+ findings:[],ui:{status:'not-reviewed',score:null,reason:'No image inspection',evidence:[]},
+ evidence:[{id:'E1',kind:'code',path:'app/server/customer.ts',lines:[1,1],observation:'Read actual captured source',excerpt:'MODEL FABRICATION',mediaId:'MODEL FABRICATION'}, {id:'E2',kind:'package',path:'packages/@nocobase/example/dist/index.d.ts',lines:[1,1],observation:'Read framework declaration'}],limitations:[]};
+const history=JSON.parse(fs.readFileSync(input.history.path,'utf8'));
+const original=history.files.find(file=>file.source==='agent-implement.jsonl').chunks[0].path;
+review.evidence.push({id:'E3',kind:'log',path:original,lines:[1,1],observation:'Actual fixture tool event'});
+review.historyReview=[{log:'agent-implement.jsonl',status:'reviewed',reason:'Read original fixture event',evidence:['E3'],errors:[]}];
+if (behavior.startsWith('feedback-')) review.findings=[{id:'F1',kind:'issue',owner:'framework',confidence:'confirmed',severity:'critical',status:'open',title:'Contract mismatch',detail:'The declared value is not returned',impact:'Captured behavior violates the declared contract',suggestedChange:'Align implementation with the public contract',evidence:['E1','E2'],diagnosis:{category:'runtime-defect',trigger:'Use customer',expected:'A number',actual:'Undefined',workaround:'No workaround recorded',acceptance:'Customer returns a number'}}];
+if (behavior === 'old-rubric') review.version = 1;
+if (behavior === 'wrong-hash') review.inputHash = 'c'.repeat(64);
+if (['invalid-draft', 'modify-invalid'].includes(behavior)) review.evidence[0].lines = [1, 99];
+if (behavior === 'stall-two-modules') review.modules.push({ ...review.modules[0], name: 'Data access, second unit' });
+if (['modify', 'stall-modify', 'modify-invalid'].includes(behavior)) {fs.chmodSync('app/server/customer.ts',0o600);fs.writeFileSync('app/server/customer.ts','modified');}
+if (behavior !== 'stall-empty') fs.writeFileSync('assessment.json', ['malformed', 'stall-malformed'].includes(behavior) ? '{oops' : JSON.stringify(review));
+if (behavior === 'check-draft') {
+  const {spawnSync} = require('node:child_process');
+  review.modules[0].targets[0].kind='skill';
+  fs.writeFileSync('assessment.json',JSON.stringify(review));
+  const check=()=>spawnSync(process.execPath,['.review-tools/check-review-draft.mjs'],{encoding:'utf8'});
+  const invalid=check();if(invalid.status!==1 || !invalid.stderr.includes('Invalid framework target kind'))process.exit(8);
+  review.modules[0].targets[0].kind='library';
+  fs.writeFileSync('assessment.json',JSON.stringify(review));
+  const valid=check();if(valid.status!==0 || !JSON.parse(valid.stdout).valid)process.exit(9);
+}
+if (behavior.startsWith('stall')) {
+  console.log(JSON.stringify({type:'turn_start'}));
+  setInterval(() => {}, 1000);
+} else if (behavior === 'auth-error') {
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'401: invalid_api_key'}}));
+  console.log(JSON.stringify({type:'agent_end'}));
+} else if (behavior === 'long-error') {
+  // A proxy error page: no status code, so it is an Agent failure, not a service error.
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'Invalid upstream response <html>' + 'x'.repeat(3000)}}));
+  console.log(JSON.stringify({type:'agent_end'}));
+} else if (behavior === 'api-400') {
+  // How Claude Code and CodeBuddy word a rejected request.
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'API Error: 400 {"type":"invalid_request_error"}'}}));
+  console.log(JSON.stringify({type:'agent_end'}));
+} else if (behavior === 'model-404') {
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'error',errorMessage:'404 model not found'}}));
+  console.log(JSON.stringify({type:'agent_end'}));
+} else if (behavior === 'crash') {
+  process.exit(17);
+} else {
+  console.log(JSON.stringify({type:'message_end',message:{role:'assistant',stopReason:'stop',usage:{input:100,output:20,cacheRead:5,cacheWrite:0,totalTokens:125}}}));
+  if (behavior !== 'no-terminal') console.log(JSON.stringify({type:'agent_end'}));
+}
+`);
+  chmodSync(path.join(bin, 'pi'), 0o755);
+  f.env.PATH = `${bin}:${process.env.PATH}`;
+}
+
+test('rubric accepts numeric scores and explicit unknowns, never boolean or fabricated defaults', () => {
+  const report = example(); validateBuildReview(report, report.basis);
+  for (const bad of [-1, 101, 80.5, true, '85', undefined]) {
+    const review = example().evaluation; review.modules[0].scores.design.score = bad;
+    assert.throws(() => validateEvaluation(review, review.inputHash), /score/);
+  }
+  const review = example().evaluation; review.modules[0].scores.design.evidence = [];
+  assert.throws(() => validateEvaluation(review, review.inputHash), /requires evidence/);
+});
+test('unknown evidence, missing misleading comparison and uninspected UI fail explicitly', () => {
+  let review = example().evaluation; review.modules[0].scores.design.evidence = ['E999'];
+  assert.throws(() => validateEvaluation(review, review.inputHash), /Unknown evidence/);
+  review = example().evaluation; delete review.findings.find(f => f.kind === 'misleading').claimed;
+  assert.throws(() => validateEvaluation(review, review.inputHash), /claimed/);
+  review = example().evaluation; review.ui.score = 99;
+  assert.throws(() => validateEvaluation(review, review.inputHash), /evidence|Unreviewed/);
+  review = example().evaluation; review.ui.status = 'reviewed';
+  assert.throws(() => validateEvaluation(review, review.inputHash), /two actual screenshots/);
+});
+test('snapshot captures installed versions and Skill, omits credentials, and never links to original source', t => {
+  const f = fixture(t); put(f.workspace, '.env', 'SECRET=not-for-review');
+  symlinkSync(f.source, path.join(f.workspace, 'linked.ts'));
+  const captured = createReviewSnapshot(f.workspace, f.artifacts, f.snapshot);
+  assert.ok(captured.files.some(file => file.path === 'app/.agents/skills/example/SKILL.md'));
+  assert.ok(captured.files.some(file => file.path === 'packages/@nocobase/example/dist/index.d.ts'));
+  assert.deepEqual(captured.packages, [{ name: '@nocobase/example', version: '3.0.0-fixture' }]);
+  assert.equal(captured.files.some(file => /config.yml|\.env|linked.ts/.test(file.path)), false);
+  chmodSync(path.join(f.snapshot, 'app/server/customer.ts'), 0o600);
+  put(f.snapshot, 'app/server/customer.ts', 'edited copy');
+  assert.equal(readFileSync(f.source, 'utf8'), 'export const customer = 1;\n');
+});
+test('path and line references are checked against captured files; excerpts are extracted, not model-supplied', t => {
+  const f = fixture(t), captured = createReviewSnapshot(f.workspace, f.artifacts, f.snapshot);
+  const review = { version: 1, inputHash: 'a'.repeat(64), summary: 'Fixture', modules: [], findings: [], limitations: [],
+    ui: { status: 'not-reviewed', score: null, reason: 'No images', evidence: [] },
+    evidence: [{ id: 'E1', kind: 'code', path: 'app/server/customer.ts', lines: [1, 1], observation: 'A declaration', excerpt: 'invented', mediaId: 'invented' }] };
+  validateEvaluation(review, review.inputHash, captured.files);
+  const resolved = materializeEvidence(review, f.snapshot, captured.files);
+  assert.equal(resolved.evidence[0].excerpt, 'export const customer = 1;');
+  assert.equal(resolved.evidence[0].sha256, digest(readFileSync(f.source)));
+  assert.equal(resolved.evidence[0].mediaId, undefined);
+  review.evidence[0].lines = [1, 999]; assert.throws(() => validateEvaluation(review, review.inputHash, captured.files), /line/);
+  review.evidence[0].path = 'app/../secret'; assert.throws(() => validateEvaluation(review, review.inputHash, captured.files), /path/);
+});
+test('terminal diagnostics are captured, archived and invalidate only reports that include them', t => {
+  const f = fixture(t);
+  const originalHash = reviewArtifactHash(f.artifacts);
+  put(f.artifacts, 'task-diagnostic.json', { status: 'needs-diagnosis', code: 'repeated-failure' });
+  put(f.artifacts, 'task-diagnostic.md', 'Repeated failure; root cause unknown.');
+  const diagnosticHash = reviewArtifactHash(f.artifacts);
+  assert.notEqual(diagnosticHash, originalHash);
+  const captured = createReviewSnapshot(f.workspace, f.artifacts, f.snapshot);
+  const packed = packHistory({ artifacts: f.artifacts, output: path.join(f.root, 'history'), issue: 21, runId: 100, attempt: 1 });
+  for (const name of ['task-diagnostic.json', 'task-diagnostic.md']) {
+    assert.ok(captured.files.some(file => file.path === 'artifacts/' + name));
+    assert.ok(packed.manifest.files.some(file => file.name === name));
+  }
+  put(f.artifacts, 'task-diagnostic.md', 'Updated diagnostic evidence.');
+  assert.notEqual(reviewArtifactHash(f.artifacts), diagnosticHash);
+  for (const name of ['task-diagnostic.json', 'task-diagnostic.md']) rmSync(path.join(f.artifacts, name));
+  assert.equal(reviewArtifactHash(f.artifacts), originalHash, 'old reports retain their original hash when no dossier exists');
+});
+test('process retains original failure; focused QA and a resumed Run cannot stand in for first/full QA', t => {
+  const f = fixture(t), module = { criteria: ['B01'] };
+  let process = collectReviewProcess(f.artifacts);
+  assert.equal(moduleRoundResult(module, process, 1), 'failed');
+  assert.equal(moduleRoundResult(module, process, 2), 'passed');
+  rmSync(path.join(f.artifacts, 'verify-1'), { recursive: true });
+  rmSync(path.join(f.artifacts, 'verify-2'), { recursive: true });
+  put(f.artifacts, 'verify-7/browser-focused/report.json', { passed: true, checks: [{ id: 'B01', status: 'passed' }] });
+  put(f.artifacts, 'repair-summary.json', { verificationAttempts: 1, repairAttempts: 0, finalVerificationAttempt: 7 });
+  process = collectReviewProcess(f.artifacts);
+  assert.equal(moduleRoundResult(module, process, 1), 'unknown');
+  assert.equal(moduleRoundResult(module, process, 7), 'unknown');
+  assert.equal(process.verificationAttempts, 1);
+});
+test('missing, malformed and stale review cannot add scores or erase original process', t => {
+  const f = fixture(t), identity = { repository: 'owner/factory', issue: 21, runId: 100, attempt: 1 };
+  assert.equal(loadBuildReview(f.artifacts, identity).state, 'not-reviewed');
+  put(f.artifacts, 'build-review.json', '{broken');
+  assert.equal(loadBuildReview(f.artifacts, identity).state, 'failed');
+  put(f.artifacts, 'build-review.json', example());
+  const report = loadBuildReview(f.artifacts, identity);
+  assert.equal(report.evaluation, null); assert.equal(report.process.rounds[0].reports[0].checks[0].status, 'failed');
+});
+test('full independent mock CLI path records provenance, real excerpts and separate usage, without changing sealed patch', async t => {
+  const f = fixture(t); installMock(f);
+  f.env.GITHUB_TOKEN = 'never-give-reviewer-publication-rights'; f.env.FACTORY_ADMIN_PASSWORD = 'private-test-password';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.evaluation.modules[0].scores.design.score, 73);
+  assert.equal(report.evaluation.evidence[0].excerpt, 'export const customer = 1;');
+  assert.equal(report.evaluation.evidence[0].mediaId, undefined);
+  assert.match(report.basis.baseSha, /^[a-f0-9]{40}$/);
+  assert.equal(report.basis.patchHash, digest('sealed fixture patch\n'));
+  assert.equal(report.basis.packages[0].version, '3.0.0-fixture');
+  assert.equal(readFileSync(path.join(f.artifacts, 'agent.patch'), 'utf8'), 'sealed fixture patch\n');
+  const usage = await collectUsage(f.artifacts);
+  assert.equal(usage.phases.review.totalTokens, 125); assert.equal(usage.phases.implementation.totalTokens, 0);
+  const normalized = JSON.parse(readFileSync(path.join(f.artifacts, 'agent-review.jsonl.result.json'), 'utf8'));
+  assert.equal(normalized.version, 1); assert.equal(normalized.role, 'review');
+  const capture = JSON.parse(readFileSync(path.join(f.artifacts, 'agent-review.jsonl.invocation.json')));
+  assert.equal(capture.phase, 'review'); assert.equal(capture.invoked, true); assert.equal(capture.status, 'finished');
+  for (const name of ['review-input.json', 'review-files.json']) assert.ok(capture.context.some(c => c.path === name));
+  assert.equal(capture.promptSha256, digest(readFileSync(path.join(f.artifacts, 'agent-review.jsonl.prompt.md'))));
+  const packed = packHistory({artifacts:f.artifacts,output:path.join(f.root,'history'),issue:21,runId:100,attempt:1});
+  assert.equal(packed.manifest.completeness.invocations.find(i => i.log === 'agent-review.jsonl').missing.length, 0);
+  assert.ok(packed.manifest.files.some(f => f.name === 'build-review-files.json' && f.phase === 'review'));
+  assert.ok(packed.manifest.files.some(f => f.name === 'build-review-input.json' && f.phase === 'review'));
+  const record = { version: 1, repository: 'owner/factory', issue: 21, runId: 100, attempt: 1, status: 'delivered', start: 1, end: 2, jobs: [], agentJobId: null, usage };
+  const result = await makeDeliveryReport({ record, records: [record], cumulative: aggregate([record]), timings: [] }, f.artifacts);
+  assert.match(result.html, /独立 Agent 评审/); assert.match(result.html, /73<small>/);
+  assert.equal(result.facts.buildReview.process.rounds[0].reports[0].checks[0].status, 'failed');
+});
+for (const behavior of ['wrong-hash', 'modify', 'malformed', 'old-rubric']) test(`review ${behavior} fails softly and keeps delivery intact`, async t => {
+  const f = fixture(t); installMock(f, behavior);
+  const result = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(result.state, 'failed'); assert.equal(result.evaluation, null);
+  // An edited reviewed input taints the snapshot; a rejected draft is rerun.
+  assert.equal(result.execution.reviewCalls, behavior === 'modify' ? 1 : 3);
+  assert.equal(readFileSync(f.source, 'utf8'), 'export const customer = 1;\n');
+  assert.equal(readFileSync(path.join(f.artifacts, 'agent.patch'), 'utf8'), 'sealed fixture patch\n');
+  // Every call's usage counts, even when calls print identical lines.
+  assert.equal((await collectUsage(f.artifacts)).phases.review.totalTokens, 125 * result.execution.reviewCalls);
+});
+test('disabled and exhausted-budget runs do not invoke any CLI or invent scores', async t => {
+  for (const setting of [{ FACTORY_BUILD_REVIEW: 'off' }, { FACTORY_RUN_DEADLINE_EPOCH_SECONDS: String(Math.floor(Date.now() / 1000) + 10) }]) {
+    const f = fixture(t);
+    const result = await runBuildReview(f.workspace, f.artifacts, { ...f.env, ...setting });
+    assert.equal(result.state, 'not-reviewed'); assert.equal(result.evaluation, null);
+    assert.equal(existsSync(path.join(f.artifacts, 'agent-review.jsonl')), false);
+    assert.equal(existsSync(path.join(f.artifacts, 'agent-review.jsonl.invocation.json')), false);
+  }
+});
+test('old usage receipts still aggregate, without adding a fictitious reviewer invocation', () => {
+  const usage = emptyUsage(); delete usage.phases.review;
+  const record = { version: 1, repository: 'owner/factory', issue: 21, runId: 100, attempt: 1, start: 1, end: 2, jobs: [], agentJobId: null, usage };
+  validateRecord(record, 'owner/factory', 21);
+  assert.equal(record.usage.phases.review.totalTokens, 0); assert.equal(aggregate([record]).total, 0);
+});
+test('shared HTML includes independent scores, unknowns, first failure and positive/negative feedback, while escaping all text', async () => {
+  const f = facts(); f.buildReview = example();
+  f.buildReview.evaluation.findings[0].title = '<img src=x onerror=alert(1)>';
+  const result = await renderHtml(f, null, path.join(here, 'reports'));
+  for (const text of ['模块评审', '做得好的地方', '指引错误', '文档 / API 声称', '实际观察', '未评估', '首轮 QA', '最终轮 QA', '证据与原文']) assert.ok(result.html.includes(text), text);
+  assert.match(result.html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(result.html, /<img src=x/);
+  assert.equal(f.checks[0].status, 'failed');
+});
+test('review execution is wired after patch seal, before artifact upload and never gates publication', () => {
+  const workflow = readFileSync(path.join(here, 'workflows/code-agent-task.yml'), 'utf8');
+  const start = workflow.indexOf('- name: Review build quality and framework feedback');
+  assert.ok(start > workflow.indexOf('pipeline-state.mjs seal'));
+  assert.ok(start < workflow.indexOf('- name: Upload Code Agent patch and diagnostics'));
+  const step = workflow.slice(start, workflow.indexOf('- name: Prepare runner handoff metadata', start));
+  assert.match(step, /continue-on-error: true/); assert.match(step, /!cancelled\(\)/);
+  assert.match(step, /handoff != 'true'/); assert.match(step, /env: \*agent-run-env/);
+});
+
+test('publication retry keeps producer attempt and requires matching metadata, patch, rubric and QA', async t => {
+  const f = fixture(t); installMock(f);
+  f.metadata.run = { id: 100, attempt: 1 };
+  f.metadata.controlSha = f.env.FACTORY_CONTROL_SHA;
+  f.metadata.applicationBase = { sha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: f.workspace, encoding: 'utf8' }).trim() };
+  put(f.artifacts, 'task-metadata.json', f.metadata);
+  const original = await runBuildReview(f.workspace, f.artifacts, f.env);
+  const identity = { repository: 'owner/factory', issue: 21, runId: 100, attempt: 2 };
+  const adopted = loadBuildReview(f.artifacts, identity);
+  assert.equal(adopted.state, 'completed', adopted.reason); assert.equal(adopted.basis.attempt, 1);
+  assert.equal(loadBuildReview(f.artifacts, { ...identity, runId: 101 }).evaluation, null);
+  assert.equal(loadBuildReview(f.artifacts, { ...identity, attempt: 0 }).evaluation, null);
+  put(f.artifacts, 'agent.patch', 'different candidate');
+  assert.match(loadBuildReview(f.artifacts, identity).reason, /patch mismatch/);
+  put(f.artifacts, 'agent.patch', 'sealed fixture patch\n');
+  put(f.artifacts, 'verify-1/browser-acceptance/report.json', { passed: true, checks: [] });
+  assert.match(loadBuildReview(f.artifacts, identity).reason, /evidence fingerprint mismatch/);
+  assert.equal(original.evaluation.modules[0].scores.design.score, 73);
+});
+
+test('legacy timeout diagnostic is preserved across publication retry, never promoted to scores', t => {
+  const f = fixture(t);
+  f.metadata.run = { id: 100, attempt: 1 }; f.metadata.controlSha = 'b'.repeat(40);
+  put(f.artifacts, 'task-metadata.json', f.metadata);
+  put(f.artifacts, 'build-review.json', { version: 1, state: 'failed', reason: 'Original timeout', evaluation: null,
+    basis: { repository: 'owner/factory', issue: 21, runId: '100', attempt: 1, controlSha: f.metadata.controlSha } });
+  const report = loadBuildReview(f.artifacts, { repository: 'owner/factory', issue: 21, runId: 100, attempt: 2 });
+  assert.equal(report.reason, 'Original timeout'); assert.equal(report.evaluation, null);
+});
+
+test('compact entry is fingerprinted and excludes full catalog; replay preserves original installation', async t => {
+  const f = fixture(t); installMock(f);
+  const original = await runBuildReview(f.workspace, f.artifacts, f.env);
+  const input = readReviewJsonForTest(f.artifacts, 'build-review-input.json');
+  assert.equal(input.files, undefined); assert.equal(input.catalog.path, 'review-files.json');
+  assert.ok(input.catalog.count > 0);
+  assert.ok(input.budgetSeconds <= 3600 && input.budgetSeconds > 3300, 'the budget counts from before the snapshot');
+  const source = { ...original.basis };
+  const replay = await runBuildReview(f.workspace, f.artifacts, { ...f.env, GITHUB_RUN_ID: '200', GITHUB_RUN_ATTEMPT: '1' }, { source });
+  assert.equal(replay.state, 'completed', replay.reason);
+  assert.equal(replay.basis.runId, '100'); assert.equal(replay.reviewer.runId, '200');
+  assert.equal(replay.reviewer.replay, true);
+  put(f.workspace, 'pnpm-lock.yaml', 'changed lockfile');
+  assert.match((await runBuildReview(f.workspace, f.artifacts, f.env, { source })).reason, /lockfile differs/);
+});
+const readReviewJsonForTest = (root, name) => JSON.parse(readFileSync(path.join(root, name), 'utf8'));
+
+test('budget exhaustion preserves only a valid evidenced checkpoint as partial', async t => {
+  const { finalizeAssessment } = await import('../run-build-review.mjs');
+  const f = fixture(t); installMock(f);
+  const original = await runBuildReview(f.workspace, f.artifacts, f.env);
+  const captured = createReviewSnapshot(f.workspace, f.artifacts, f.snapshot);
+  put(f.snapshot, 'assessment.json', original.evaluation);
+  const partial = finalizeAssessment(f.snapshot, captured, original.basis, false);
+  assert.equal(partial.partial, true); assert.equal(partial.evaluation.modules[0].scores.design.score, 73);
+  const report = { ...original, state: 'partial', evaluation: partial.evaluation };
+  validateBuildReview(report);
+  const view = facts(); view.buildReview = report;
+  const rendered = await renderHtml(view, null, path.join(here, 'reports'));
+  assert.match(rendered.html, /部分评审 · 尚未全覆盖/); assert.match(rendered.html, /73<small>/);
+  put(f.snapshot, 'assessment.json', { ...original.evaluation, evidence: [] });
+  assert.throws(() => finalizeAssessment(f.snapshot, captured, original.basis, false), /Unknown evidence/);
+  put(f.snapshot, 'assessment.json', { ...original.evaluation, inputHash: '0'.repeat(64) });
+  assert.throws(() => finalizeAssessment(f.snapshot, captured, original.basis, false), /identity mismatch/);
+  put(f.snapshot, 'assessment.json', { ...original.evaluation, modules: [], evidence: [] });
+  assert.throws(() => finalizeAssessment(f.snapshot, captured, original.basis, false), /No assessed module/);
+});
+
+test('idle watchdog preserves a validated checkpoint as partial with its actual stop reason', async t => {
+  const f = fixture(t); installMock(f, 'stall');
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'partial', report.reason);
+  assert.match(report.reason, /连续 3 秒.*stalled/);
+  assert.equal(report.evaluation.modules[0].scores.design.score, 73);
+  assert.ok(report.evaluation.limitations.includes(report.reason));
+  validateBuildReview(report);
+  const result = readReviewJsonForTest(f.artifacts, 'agent-review.jsonl.result.json');
+  assert.equal(result.status, 'stalled');
+  assert.equal(result.terminalEvent, false);
+  assert.match(readReviewJsonForTest(f.artifacts, 'agent-review.jsonl.invocation.json').error, /连续 3 秒.*stalled/);
+  assert.equal(readReviewJsonForTest(f.artifacts, 'build-review.json').state, 'partial');
+  assert.equal(readFileSync(f.source, 'utf8'), 'export const customer = 1;\n');
+});
+
+for (const [behavior, error] of [
+  ['stall-empty', /No assessed module/],
+  ['stall-malformed', /JSON/],
+  ['stall-modify', /changed captured input/],
+]) test(`idle interruption retains the stop reason but rejects ${behavior} checkpoints`, async t => {
+  const f = fixture(t); installMock(f, behavior);
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'failed');
+  assert.equal(report.evaluation, null);
+  assert.match(report.reason, /连续 3 秒.*stalled/);
+  assert.match(report.reason, error);
+});
+
+for (const behavior of ['auth-error', 'crash', 'no-terminal']) {
+  test(`a valid checkpoint cannot turn ${behavior} into a partial review`, async t => {
+    const f = fixture(t); installMock(f, behavior);
+    const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+    assert.equal(report.state, 'failed');
+    assert.equal(report.evaluation, null);
+    if (behavior === 'no-terminal') assert.match(report.reason, /status: completed, exit code: 0/);
+    // A configuration error is final; a crash or a missing end event is rerun.
+    assert.equal(report.execution.reviewCalls, behavior === 'auth-error' ? 1 : 3);
+  });
+}
+
+const reviewEvents = (f) => readFileSync(path.join(f.artifacts, 'agent-review.jsonl'), 'utf8')
+  .trim().split('\n').map(line => JSON.parse(line));
+
+test('a stalled review is rerun on the same snapshot and completes there', async t => {
+  const f = fixture(t); installMock(f, 'stall-then-success');
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.execution.reviewCalls, 2);
+  assert.match(report.reason, /共 2 次评审调用/);
+  validateBuildReview(report);
+  const events = reviewEvents(f);
+  const calls = events.filter(event => event.type === 'mock_call');
+  assert.deepEqual(calls.map(event => [event.calls, event.retry]), [[1, false], [2, true]]);
+  assert.ok(calls[0].budget <= 3600 && calls[0].budget > 3300);
+  assert.ok(calls[1].budget < calls[0].budget && calls[1].budget > 3300, 'the rerun gets what is left of one budget');
+  const retry = events.find(event => event.type === 'factory_review_retry');
+  assert.deepEqual([retry.retry, retry.of, retry.delaySeconds], [1, 2, 0]);
+  assert.match(retry.reason, /stalled/);
+  assert.equal(readReviewJsonForTest(f.artifacts, 'agent-review.jsonl.result.json').status, 'completed');
+  assert.equal(readReviewJsonForTest(f.artifacts, 'agent-review.jsonl.invocation.json').status, 'finished');
+});
+
+test('a rejected draft is rerun at once with the validator error in its prompt', async t => {
+  const f = fixture(t); installMock(f, 'invalid-then-fixed');
+  f.env.FACTORY_MODEL_RETRY_DELAYS_SECONDS = '60,300';
+  const started = Date.now();
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.ok(Date.now() - started < 30_000, 'a draft rerun does not wait for the delay schedule');
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.execution.reviewCalls, 2);
+  const calls = reviewEvents(f).filter(event => event.type === 'mock_call');
+  assert.deepEqual(calls.map(event => event.validatorError), [false, true]);
+});
+
+test('a draft that stays invalid fails after two reruns and says how many calls were made', async t => {
+  const f = fixture(t); installMock(f, 'invalid-draft');
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'failed'); assert.equal(report.evaluation, null);
+  assert.equal(report.execution.reviewCalls, 3);
+  assert.match(report.reason, /共 3 次评审调用均未取得可发布的结果，最后一次：Evidence lines outside captured file/);
+  assert.equal(reviewEvents(f).filter(event => event.type === 'factory_review_retry').length, 2);
+});
+
+test('a later failed call never replaces an earlier validated checkpoint', async t => {
+  const f = fixture(t); installMock(f, 'stall-then-crash');
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'partial', report.reason);
+  assert.equal(report.execution.reviewCalls, 3);
+  assert.match(report.reason, /连续 3 秒.*stalled.*采用第 1 次调用保存的检查点.*exited with code 17/);
+  assert.equal(report.evaluation.modules[0].scores.design.score, 73);
+  validateBuildReview(report);
+  const calls = reviewEvents(f).filter(event => event.type === 'mock_call');
+  assert.deepEqual(calls.map(event => event.kept), [false, true, true], 'reruns are told what is already saved');
+});
+
+test('a rerun that saves fewer modules does not replace a richer checkpoint', async t => {
+  const f = fixture(t); installMock(f, 'stall-then-shrink');
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'partial', report.reason);
+  assert.equal(report.execution.reviewCalls, 3);
+  assert.equal(report.evaluation.modules.length, 2);
+  assert.match(report.reason, /采用第 1 次调用保存的检查点/);
+  validateBuildReview(report);
+});
+
+test('a long error in a later call cannot push the kept checkpoint past the limitation cap', async t => {
+  const f = fixture(t); installMock(f, 'stall-then-long-error');
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '3';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'partial', report.reason);
+  assert.equal(report.execution.reviewCalls, 3);
+  assert.match(report.reason, /Invalid upstream response/);
+  for (const limitation of report.evaluation.limitations) assert.ok(limitation.length <= 2000);
+  validateBuildReview(report);
+});
+
+test('a rerun starts from a clean snapshot root even after a call altered or locked it', async t => {
+  const f = fixture(t); installMock(f, 'alter-scaffold');
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.execution.reviewCalls, 2);
+});
+
+for (const [behavior, why] of [['modify-invalid', 'an edited input taints the snapshot even behind a rejected draft'],
+  ['model-404', 'a rejected request fails the same way again'],
+  ['api-400', 'an engine reports a rejected request as an API error']]) test(`no rerun when ${why}`, async t => {
+  const f = fixture(t); installMock(f, behavior);
+  const started = Date.now();
+  f.env.FACTORY_MODEL_RETRY_DELAYS_SECONDS = '60,300';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'failed');
+  assert.equal(report.execution.reviewCalls, 1);
+  assert.ok(Date.now() - started < 30_000);
+});
+
+test('reruns are off for a stop-condition diagnosis and when the schedule is none', async t => {
+  for (const [setup, name] of [[f => {
+    put(f.artifacts, 'task-diagnostic.json', { status: 'needs-diagnosis', code: 'repeated-failure' });
+    put(f.artifacts, 'task-diagnostic.md', 'Repeated failure; root cause unknown.');
+  }, 'diagnosis'], [f => { f.env.FACTORY_MODEL_RETRY_DELAYS_SECONDS = 'none'; }, 'none']]) {
+    const f = fixture(t); installMock(f, 'crash'); setup(f);
+    const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+    assert.equal(report.state, 'failed', name);
+    assert.equal(report.execution.reviewCalls, 1, name);
+    assert.equal(reviewEvents(f).filter(event => event.type === 'mock_call').length, 1, name);
+  }
+});
+
+test('invalid review idle timeout fails before a model invocation', async t => {
+  const f = fixture(t); installMock(f);
+  for (const value of ['0', '-1', '1.5', '1801', 'invalid']) {
+    const report = await runBuildReview(f.workspace, f.artifacts, { ...f.env, FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS: value });
+    assert.equal(report.state, 'failed');
+    assert.match(report.reason, /FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS/);
+    assert.equal(existsSync(path.join(f.artifacts, 'agent-review.jsonl')), false);
+  }
+});
+
+test('new assessment revision changes the public HTML identity for the same publication attempt', async () => {
+  const f = facts(); f.buildReview = example();
+  const original = await renderHtml(f, null, path.join(here, 'reports'));
+  f.buildReview.evaluation.modules[0].scores.design.score = 66;
+  const updated = await renderHtml(f, null, path.join(here, 'reports'));
+  assert.notEqual(original.reportId, updated.reportId);
+});
+
+test('malformed supplemental JSON cannot erase an already valid original assessment', async t => {
+  const f = fixture(t); installMock(f);
+  await runBuildReview(f.workspace, f.artifacts, f.env);
+  put(f.artifacts, 'build-review.supplement.json', '{broken');
+  const report = loadBuildReview(f.artifacts, { repository: 'owner/factory', issue: 21, runId: 100, attempt: 1 });
+  assert.equal(report.state, 'completed'); assert.ok(report.process.warnings.some(w => /后补评审未采用/.test(w)));
+});
+
+test('reviewer can correct a draft with the supplied validator within its single invocation', async t => {
+  const f = fixture(t); installMock(f, 'check-draft');
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.evaluation.modules[0].targets[0].kind, 'library');
+  const lines = readFileSync(path.join(f.artifacts, 'agent-review.jsonl'), 'utf8').split('\n');
+  assert.equal(lines.filter(line => line.includes('"type":"message_end"')).length, 1);
+});
+
+
+test('candidate-only second session preserves findings and appends validated source evidence within one budget', async t => {
+  const f = fixture(t); installMock(f, 'feedback-supported');
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  assert.equal(report.execution.reviewCalls, 1);
+  assert.equal(report.execution.feedbackReviewCalls, 1);
+  const finding = report.evaluation.findings[0];
+  assert.equal(finding.feedbackReview.status, 'supported', finding.feedbackReview.reason);
+  assert.equal(finding.confidence, 'confirmed'); assert.equal(finding.status, 'open');
+  assert.equal(report.evaluation.evidence.find(e => e.id === 'E4').excerpt, 'export const customer = undefined;');
+  assert.equal((await collectUsage(f.artifacts)).phases.review.totalTokens, 137);
+  const events = reviewEvents(f);
+  const candidate = events.find(event => event.type === 'factory_feedback_review');
+  const initial = events.find(event => event.type === 'mock_call');
+  assert.ok(candidate.budgetSeconds <= 180);
+  assert.ok(initial.budget + candidate.budgetSeconds <= 3600);
+  assert.deepEqual(candidate.candidateIds, ['F1']);
+  const packed = packHistory({ artifacts: f.artifacts, output: path.join(f.root, 'history'), issue: 21, runId: 100, attempt: 1 });
+  assert.ok(packed.manifest.files.some(file => file.name === 'build-review-feedback-input.json'));
+});
+
+for (const behavior of ['feedback-invalid', 'feedback-crash', 'feedback-stall', 'feedback-input-tamper']) test(`failed candidate review stays visible and never invalidates original assessment: ${behavior}`, async t => {
+  const f = fixture(t); installMock(f, behavior);
+  f.env.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS = '1';
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.state, 'completed', report.reason);
+  const finding = report.evaluation.findings[0];
+  assert.equal(finding.feedbackReview.status, 'insufficient');
+  assert.match(finding.feedbackReview.reason, /未完成|未通过|未正常结束/);
+  assert.equal(finding.severity, 'critical'); assert.equal(finding.confidence, 'confirmed');
+  assert.equal(report.execution.feedbackReviewCalls, 1, 'No candidate retry or repair loop');
+  assert.equal(report.evaluation.evidence.some(e => e.id === 'E4'), false);
+});
+
+test('counter-evidence is retained without silently changing original attribution or lifecycle', async t => {
+  const f = fixture(t); installMock(f, 'feedback-contradicted');
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.evaluation.findings[0].feedbackReview.status, 'contradicted');
+  assert.equal(report.evaluation.findings[0].owner, 'framework');
+  assert.equal(report.evaluation.findings[0].status, 'open');
+});
+
+
+test('terminal diagnosis keeps its single-call boundary and high-risk candidates visibly unverified', async t => {
+  const f = fixture(t); installMock(f, 'feedback-supported');
+  put(f.artifacts, 'task-diagnostic.json', { status: 'needs-diagnosis', code: 'repeated-failure' });
+  const report = await runBuildReview(f.workspace, f.artifacts, f.env);
+  assert.equal(report.execution.reviewCalls, 1); assert.equal(report.execution.feedbackReviewCalls, 0);
+  assert.equal(report.evaluation.findings[0].feedbackReview.status, 'insufficient');
+  assert.match(report.evaluation.findings[0].feedbackReview.reason, /停止诊断只允许单次/);
+  const reassessed = await runBuildReview(f.workspace, f.artifacts, f.env, { source: {
+    runId: report.basis.runId, attempt: report.basis.attempt, controlSha: report.basis.controlSha,
+    baseSha: report.basis.baseSha, patchHash: report.basis.patchHash,
+  } });
+  assert.equal(reassessed.execution.source, 'reassessment');
+  assert.equal(reassessed.execution.feedbackReviewCalls, 1);
+  assert.equal(reassessed.evaluation.findings[0].feedbackReview.status, 'supported');
+});
