@@ -120,7 +120,11 @@ test('workflows pass only the allowlisted Agent settings, never every repository
       assert.doesNotMatch(source, /FACTORY_AGENT_CONFIG_JSON/, name);
       // A workflow that runs the configured Agent must hand it every setting,
       // not a hand-picked subset that silently drops newer ones.
-      assert.doesNotMatch(source, /vars\.CODE_AGENT_ENGINE/, name);
+      if (source.includes('vars.CODE_AGENT_ENGINE')) {
+        // The integration probe reports boolean presence only; it never invokes an Agent.
+        assert.match(source, /node \.github\/scripts\/check-factory-config\.mjs/, name);
+        assert.doesNotMatch(source, /run-agent\.mjs|install-agent\.mjs/, name);
+      }
       continue;
     }
     checked++;
