@@ -20,3 +20,28 @@ jobs:
         with:
           node-version: 24.x
       - run: bash .github/scripts/test-integration.sh
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.x
+      - name: Check model configuration names without exposing credentials
+        env:
+          FACTORY_ENGINE: ${{ vars.CODE_AGENT_ENGINE || 'pi' }}
+          HAS_CODE_AGENT_API_ENDPOINT: ${{ (secrets.CODE_AGENT_API_ENDPOINT || secrets.PI_API_ENDPOINT) != '' }}
+          HAS_CODE_AGENT_API_KEY: ${{ (secrets.CODE_AGENT_API_KEY || secrets.PI_API_KEY) != '' }}
+          HAS_CODE_AGENT_MODEL: ${{ (vars.CODE_AGENT_MODEL || vars.PI_MODEL) != '' }}
+          HAS_CODEX_API_KEY: ${{ secrets.CODEX_API_KEY != '' }}
+          HAS_CODEX_MODEL: ${{ vars.CODEX_MODEL != '' }}
+          HAS_CODEBUDDY_CREDENTIAL: ${{ (secrets.CODEBUDDY_API_KEY || secrets.CODEBUDDY_AUTH_TOKEN) != '' }}
+          HAS_CODEBUDDY_MODEL: ${{ vars.CODEBUDDY_MODEL != '' }}
+          HAS_CLAUDE_CODE_CREDENTIAL: ${{ (secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CODE_OAUTH_TOKEN) != '' }}
+          HAS_CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL != '' }}
+          HAS_OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY != '' }}
+          HAS_OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL != '' }}
+        run: node .github/scripts/check-factory-config.mjs
