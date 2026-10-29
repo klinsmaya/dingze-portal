@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+# Shared constants and helpers for the PR preview environment on the preview host.
+#
+# The preview host runs one Docker container per pull request behind a Traefik
+# instance. Nothing here builds an application: the deployable artifact is
+# produced by CI (`pnpm build --tar`) and pushed in, so a preview is always the
+# exact tree that `verify.sh` accepted.
+set -euo pipefail
+
+PREVIEW_ROOT="${PREVIEW_ROOT:-/srv/nb3-preview}"
+PREVIEW_DEPS_DIR="$PREVIEW_ROOT/deps"
+PREVIEW_INSTANCES_DIR="$PREVIEW_ROOT/instances"
+PREVIEW_TMP_DIR="$PREVIEW_ROOT/tmp"
+PREVIEW_LOG_DIR="$PREVIEW_ROOT/logs"
+
+PREVIEW_NETWORK="${PREVIEW_NETWORK:-nb3-preview}"
+PREVIEW_RUNTIME_IMAGE="${PREVIEW_RUNTIME_IMAGE:-nb3-preview-runtime}"
+PREVIEW_TRAEFIK_PORT="${PREVIEW_TRAEFIK_PORT:-8081}"
+
+# Base image for the runtime. It must supply the Node ABI that CI recorded in
+# `dist/package.json` under `nocobase.buildTarget` (Node 24 is ABI 137), and a
+# glibc at least as new as whatever the shipped native prebuilds were built
+# against. `better-sqlite3` is fetched as a `linux-x64` glibc prebuild, so a
+# glibc base is required and a musl one would not run at all.
+PREVIEW_NODE_IMAGE="${PREVIEW_NODE_IMAGE:-node:24-trixie-slim}"
+
+# Optional HTTP proxy for building the runtime image. The Docker daemon's own
+# proxy setting covers pulling, but a build step's network access only sees what
+# the build client passes, so installing a package inside the image needs this
+# set explicitly on a network that has no direct egress.
+PREVIEW_BUILD_PROXY="${PREVIEW_BUILD_PROXY:-}"
+
+# Optional HTTP proxy for fetching a payload. The same network that has no direct
+# egress for a build also has none for `curl`, so a host that needs the one needs
+# the other. Used by preview-deploy.sh.
+PREVIEW_FETCH_PROXY="${PREVIEW_FETCH_PROXY:-}"
+
+# The application listens inside its container; the port is never published on
+# the host, so previews cannot collide with the services already running here.
+PREVIEW_APP_PORT="${PREVIEW_APP_PORT:-13000}"
+
+# Kept identical to the base path `verify.sh` uses. A preview that served a
+# different base path would not be the thing that was verified.
+PREVIEW_BASE_PATH="${PREVIEW_BASE_PATH:-/main}"
+
+PREVIEW_DOMAIN="${PREVIEW_DOMAIN:-nfvd.net}"
+
+# A single vCPU is shared with Gitea, act_runner, four PostgreSQL instances and
+# the NocoBase alpha container, so every preview is capped and their number is
+# bounded.
+PREVIEW_CPU_LIMIT="${PREVIEW_CPU_LIMIT:-0.5}"
+PREVIEW_MEMORY_LIMIT="${PREVIEW_MEMORY_LIMIT:-768m}"
+PREVIEW_MAX_INSTANCES="${PREVIEW_MAX_INSTANCES:-30}"
+
+log() {
+  printf '[preview] %s\n' "$*" >&2
+}
+
+die() {
+  printf '[preview] error: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+require_positive_integer() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]] || die "expected a positive integer, got: $1"
+}
+
+# How long fetching a payload may take, every try and pause included. The
+# deploy runs inside the workflow's 45-minute Deploy step, and when that step
+# times out only the ssh client dies: this host would carry on. So every wait
+# here has its own limit, and together they stay inside the step (see the
+# budget in preview-deploy.sh). 600 s fetches the ~84 MB full payload at an
+# average of 140 KB/s; the host measured 815 KB/s.
+PREVIEW_FETCH_BUDGET="${PREVIEW_FETCH_BUDGET:-600}"
+
+# Puts a payload in place, fetching it when needed and checking its digest either
+# way. Usage: fetch_payload <path> <url> <sha256> <proxy>
+#
+# The bytes land in `<path>.part` and are moved into place only after the digest
+# matches, so a truncated or tampered download can never be deployed as if it
+# were complete. A failed attempt leaves that partial file behind, which is why
+# nothing else reads that name. CI gives every deploy a path of its own
+# (payload-pr-<n>-<run>-<attempt>.tar.gz), so two deploys of one pull request
+# never write the same partial file or replace each other's verified payload.
+fetch_payload() {
+  local payload="$1" url="$2" expected="$3" proxy="$4"
+  local actual partial deadline remaining
+  if [[ -f "$payload" ]]; then
+    if [[ -z "$expected" ]]; then
+      log "using the payload already on this host: $payload"
+      return 0
+    fi
+    actual="$(sha256sum "$payload" | cut -d' ' -f1)"
+    if [[ "$actual" == "$expected" ]]; then
+      log "payload already present and verified: $payload"
+      return 0
+    fi
+    [[ -n "$url" ]] ||
+      die "payload digest mismatch and no URL to refetch it: $payload"
+    log "payload on this host does not match the digest; refetching"
+    rm -f "$payload"
+  fi
+
+  [[ -n "$url" ]] || die "payload not found: $payload"
+  [[ -n "$expected" ]] ||
+    die "fetching a payload requires its digest; refusing to deploy unverified bytes"
+  partial="$payload.part"
+  # Every fetch starts empty: a .part left by an earlier deploy may hold other bytes.
+  rm -f "$partial"
+  # A transfer slower than 50 KB/s for two minutes counts as stalled, rather
+  # than holding the deploy until the workflow's step limit. Each try is a new
+  # curl with -C -, so it resumes the .part file from its current size instead
+  # of starting the ~84 MB payload again; curl's own --retry discards what it
+  # fetched on older versions. The digest check below covers the whole file.
+  local -a curl_opts=(-fL -C - --connect-timeout 20 --speed-limit 51200 --speed-time 120)
+  [[ -z "$proxy" ]] || curl_opts+=(-x "$proxy")
+  log "fetching the payload from $url"
+  local try status=0
+  deadline=$(( SECONDS + PREVIEW_FETCH_BUDGET ))
+  for try in 1 2 3 4; do
+    remaining=$(( deadline - SECONDS ))
+    (( remaining > 0 )) ||
+      die "could not fetch the payload within ${PREVIEW_FETCH_BUDGET}s (curl exit $status); set PREVIEW_FETCH_PROXY if this host needs a proxy for egress"
+    status=0
+    curl "${curl_opts[@]}" --max-time "$remaining" -o "$partial" "$url" || status=$?
+    (( status == 0 )) && break
+    # 33: the server refused the byte range, so the next try starts over.
+    (( status == 33 )) && rm -f "$partial"
+    (( try == 4 )) &&
+      die "could not fetch the payload (curl exit $status); set PREVIEW_FETCH_PROXY if this host needs a proxy for egress"
+    log "payload fetch try $try failed (curl exit $status); resuming in 5 s"
+    sleep 5
+  done
+  actual="$(sha256sum "$partial" | cut -d' ' -f1)"
+  if [[ "$actual" != "$expected" ]]; then
+    rm -f "$partial"
+    die "payload digest mismatch: expected $expected, got $actual"
+  fi
+  mv -f "$partial" "$payload"
+  log "payload fetched and verified: $payload"
+}
+
+container_name() {
+  printf 'preview-pr-%s' "$1"
+}
+
+router_name() {
+  printf 'pr%s' "$1"
+}
+
+instance_dir() {
+  printf '%s/pr-%s' "$PREVIEW_INSTANCES_DIR" "$1"
+}
+
+# Teardown leaves a timestamp here (nanoseconds since the epoch), under the
+# deploy lock. A deploy that started before it belongs to the closed pull
+# request and must not bring the preview back; one started after it (a reopen)
+# deploys normally and removes the mark.
+closed_mark() {
+  printf '%s/closed/pr-%s' "$PREVIEW_ROOT" "$1"
+}
+
+mark_closed() {
+  mkdir -p "$PREVIEW_ROOT/closed"
+  date +%s%N >"$(closed_mark "$1")"
+}
+
+# prune_marks <closed|started> <max-age-seconds>: drops marks older than that.
+# A mark only has to outlive a deploy that started before it was written, and
+# the deploy step is limited to 30 minutes, so a day leaves a wide margin.
+prune_marks() {
+  local cutoff mark at
+  cutoff=$(( $(date +%s%N) - $2 * 1000000000 ))
+  for mark in "$PREVIEW_ROOT/$1"/pr-*; do
+    [[ -f "$mark" ]] || continue
+    at="$(tr -dc '0-9' <"$mark")"
+    if [[ -z "$at" ]] || (( at < cutoff )); then
+      rm -f "$mark"
+    fi
+  done
+}
+
+prune_closed_marks() {
+  prune_marks closed "$1"
+}
+
+# closed_since <pr> <start-ns>: succeeds when teardown ran at or after start.
+closed_since() {
+  local mark at
+  mark="$(closed_mark "$1")"
+  [[ -f "$mark" ]] || return 1
+  at="$(tr -dc '0-9' <"$mark")"
+  [[ -n "$at" ]] || return 1
+  (( at >= $2 ))
+}
+
+# Each deploy also leaves the time it started (nanoseconds since the epoch), and
+# the newest one is kept. GitHub runs one deploy at a time, but a deploy whose
+# CI step was cut off keeps running here, and a newer deploy of the same pull
+# request can start meanwhile. Whichever of the two takes the lock second must
+# not replace a newer build with an older one, so a deploy that gets the lock
+# after a newer one started refuses, as it does after a teardown.
+started_mark() {
+  printf '%s/started/pr-%s' "$PREVIEW_ROOT" "$1"
+}
+
+# mark_started <pr> <start-ns>: records the start unless a newer one is there.
+# Written before the fetch, outside the deploy lock (which an earlier deploy
+# may hold for minutes), so the read-compare-write takes a small lock of its own.
+mark_started() {
+  local mark at=""
+  mkdir -p "$PREVIEW_ROOT/started"
+  mark="$(started_mark "$1")"
+  exec 8>"$PREVIEW_ROOT/started.lock"
+  flock -w 30 8 || die "could not record the start of this deploy for PR #$1"
+  [[ ! -f "$mark" ]] || at="$(tr -dc '0-9' <"$mark")"
+  if [[ -z "$at" ]] || (( at < $2 )); then
+    printf '%s\n' "$2" >"$mark.tmp"
+    mv -f "$mark.tmp" "$mark"
+  fi
+  exec 8>&-
+}
+
+# superseded_since <pr> <start-ns>: succeeds when another deploy started later.
+superseded_since() {
+  local mark at
+  mark="$(started_mark "$1")"
+  [[ -f "$mark" ]] || return 1
+  at="$(tr -dc '0-9' <"$mark")"
+  [[ -n "$at" ]] || return 1
+  (( at > $2 ))
+}
+
+# Removes every payload one pull request staged here, whole or partial: the
+# per-deploy names CI gives (payload-pr-<n>-<run>-<attempt>.tar.gz) and the one
+# shared name earlier versions of the workflow used (payload-pr-<n>.tar.gz).
+remove_payloads() {
+  local tmp="$PREVIEW_TMP_DIR"
+  rm -f "$tmp/payload-pr-$1.tar.gz" "$tmp/payload-pr-$1.tar.gz.part" \
+    "$tmp/payload-pr-$1-"*.tar.gz "$tmp/payload-pr-$1-"*.tar.gz.part
+}
+
+preview_host() {
+  printf 'nb3-%s.%s' "$1" "$PREVIEW_DOMAIN"
+}
+
+preview_url() {
+  printf 'https://%s%s/' "$(preview_host "$1")" "$PREVIEW_BASE_PATH"
+}
+
+deps_dir() {
+  printf '%s/%s' "$PREVIEW_DEPS_DIR" "$1"
+}
+
+ensure_layout() {
+  mkdir -p \
+    "$PREVIEW_DEPS_DIR" \
+    "$PREVIEW_INSTANCES_DIR" \
+    "$PREVIEW_TMP_DIR" \
+    "$PREVIEW_LOG_DIR"
+}
+
+network_exists() {
+  docker network inspect "$PREVIEW_NETWORK" >/dev/null 2>&1
+}
+
+require_network() {
+  network_exists ||
+    die "docker network $PREVIEW_NETWORK is missing; run provision.sh first"
+}
+
+container_exists() {
+  docker container inspect "$1" >/dev/null 2>&1
+}
+
+container_running() {
+  [[ "$(docker inspect --format '{{.State.Running}}' "$1" 2>/dev/null || true)" == true ]]
+}
+
+remove_container() {
+  local name="$1"
+  if container_exists "$name"; then
+    docker rm --force "$name" >/dev/null
+  fi
+}
+
+# Reads a single KEY=value pair out of an instance's preview.env.
+read_instance_env() {
+  local dir="$1" key="$2"
+  local file="$dir/preview.env"
+  [[ -f "$file" ]] || return 1
+  sed -n "s/^${key}=//p" "$file" | head -n 1
+}
+
+# Whether an instance already serves exactly the build being deployed.
+#
+# A preview is keyed by the commit it serves and the dependency set its tree was
+# linked against, so an instance whose recorded pair matches the request and
+# whose container is up is already that build. The same request arrives twice
+# whenever the task workflow dispatches this deploy explicitly while GitHub also
+# raises `workflow_run` for the same completed run, and replacing the instance
+# would initialize a fresh disposable dataset underneath whoever was using the
+# preview. So the duplicate is recognized here rather than applied twice.
+instance_serves() {
+  local dir="$1" name="$2" sha="$3" deps_key="$4"
+  [[ -n "$sha" && -n "$deps_key" ]] || return 1
+  [[ "$(read_instance_env "$dir" sha || true)" == "$sha" ]] || return 1
+  [[ "$(read_instance_env "$dir" depsKey || true)" == "$deps_key" ]] || return 1
+  container_running "$name"
+}
+
+# Loads preview.env into the current shell when it exists.
+load_instance_env() {
+  local dir="$1"
+  local file="$dir/preview.env"
+  [[ -f "$file" ]] || return 0
+  set -a
+  # shellcheck disable=SC1090
+  . "$file"
+  set +a
+}
+
+# Polls the preview through Traefik, addressed by Host header, until the SPA
+# answers. Traefik is the component that has to have discovered the container,
+# so probing through it tests the whole path a visitor will take.
+wait_for_preview() {
+  local host="$1" timeout="${2:-90}"
+  local url="http://127.0.0.1:${PREVIEW_TRAEFIK_PORT}${PREVIEW_BASE_PATH}/"
+  local deadline=$((SECONDS + timeout)) remaining code
+
+  # Timed by the clock, not by counting tries: an application that accepts
+  # the connection and answers slowly makes each probe take up to its own
+  # limit, and counting a second per try let "90 s" run to several minutes.
+  while true; do
+    remaining=$((deadline - SECONDS))
+    ((remaining > 0)) || return 1
+    code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+      --header "Host: ${host}" --max-time "$((remaining < 5 ? remaining : 5))" "$url" || true)"
+    if [[ "$code" =~ ^[23] ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+# Lists preview instances, newest first, by the deployedAt recorded in each
+# preview.env. Instances without a readable timestamp sort last.
+list_instances() {
+  local dir
+  for dir in "$PREVIEW_INSTANCES_DIR"/pr-*; do
+    [[ -d "$dir" ]] || continue
+    local pr deployed
+    pr="$(basename "$dir")"
+    deployed="$(read_instance_env "$dir" deployedAt || true)"
+    printf '%s\t%s\n' "${deployed:-0000-00-00T00:00:00Z}" "${pr#pr-}"
+  done | sort -r
+}

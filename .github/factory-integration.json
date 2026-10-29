@@ -1,0 +1,28 @@
+{
+  "source": "https://github.com/gchust/nb3-factory",
+  "commit": "0d8873eb2a0cee1173ef02aa8ac8ab5ac2e7696c",
+  "control_branch": "main",
+  "application_branch": "apps/dingze",
+  "application_source_commit": "0d8873eb2a0cee1173ef02aa8ac8ab5ac2e7696c",
+  "workflows": [
+    "code-agent-task.yml",
+    "code-agent-pr-completed.yml",
+    "comment-build-queue.yml",
+    "report-dispatch-gate.yml",
+    "report-task-progress.yml",
+    "report-task-usage.yml",
+    "publish-agent-history.yml",
+    "publish-retro.yml",
+    "publish-visual-report.yml",
+    "publish-build-review-history.yml",
+    "classify-findings.yml",
+    "deliver-evaluation.yml",
+    "independent-review.yml",
+    "replay-build-review.yml"
+  ],
+  "adaptations": [
+    "省略上游私有预览部署工作流及主工作流中的预览调度；保留构建、浏览器QA、修复、独立终验、PR、进度、用量与验收报告。",
+    "Issue模板默认指定apps/dingze；main保留原v2业务。",
+    "prepare-task通过repository-app-base读取仓库应用分支；拒绝main目标，新分支从v3应用分支创建。"
+  ]
+}

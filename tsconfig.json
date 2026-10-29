@@ -1,27 +1,8 @@
 {
+  "extends": "@nocobase/dev-config/tsconfig/client.json",
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
-    "paths": {
-      "@dingze/shared": ["./server-plugins/plugin-dingze/src/shared"],
-      "@/extensions/*": ["./registry/*", "./src/extensions/*"],
-      "@/*": ["./src/*"]
-    }
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo"
   },
-  "include": ["src", "registry", "server-plugins/plugin-dingze/src/shared"]
+  "include": ["client"],
+  "exclude": ["registry"]
 }

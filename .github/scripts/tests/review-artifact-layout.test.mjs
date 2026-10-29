@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const workflow = readFileSync(new URL('../../workflows/independent-review.yml', import.meta.url), 'utf8');
+const job = name => workflow.split(`\n  ${name}:\n`)[1].split(/\n {2}[a-z][a-z-]*:\n/)[0];
+
+test('every job downloads each exact-ID review input flat within its own role directory', () => {
+  // prepare resolves the IDs; review and publish download the same originals
+  // from the source run rather than a copy prepare re-uploaded, so the ~744 MB
+  // of evidence crosses the artifact store once per reader instead of twice.
+  // prepare binds the rubric from the task evidence alone, so it fetches only that.
+  const sources = {
+    prepare: ['steps.select.outputs', ['task']],
+    review: ['needs.prepare.outputs', ['task', 'agent', 'final']],
+    publish: ['needs.prepare.outputs', ['task', 'agent', 'final']],
+  };
+  for (const [name, [source, roles]] of Object.entries(sources)) {
+    const downloads = job(name).split('      - uses: actions/download-artifact@').slice(1);
+    // The source run's evidence; prepare's own upload comes from this run.
+    const byId = downloads.filter(block => block.split('      - ')[0].includes('run-id:'));
+    assert.equal(byId.length, roles.length, name);
+    for (const role of roles) {
+      const step = byId.find(block => block.includes(`artifact-ids: \${{ ${source}.${role} }}`))?.split('      - ')[0];
+      assert.ok(step, `${name}: ${role}`);
+      assert.match(step, /merge-multiple: true/);
+      assert.ok(step.includes(`path: input/${role}\n`));
+      assert.ok(step.includes(`run-id: \${{ ${source}.source_run }}`));
+      assert.ok(step.includes('github-token: ${{ github.token }}'));
+    }
+  }
+  for (const role of ['source_run', 'task', 'agent', 'final'])
+    assert.match(job('prepare'), new RegExp(`^      ${role}: \\$\\{\\{ steps\\.select\\.outputs\\.${role} \\}\\}$`, 'm'));
+  // Reading another run's artifacts needs actions: read in the reading job.
+  for (const name of ['review', 'publish']) assert.match(job(name), /permissions:\n(?: {6}.*\n)*? {6}actions: read\n/, name);
+});
+
+test('prepare hands on only the files it generated, beside the evidence the readers download', () => {
+  const upload = job('prepare').split('- uses: actions/upload-artifact@')[1];
+  assert.match(upload, /name: factory-review-input-/);
+  assert.match(upload, /path: \|\n\s+input\/source\.json\n\s+input\/binding\.json\n/);
+  assert.doesNotMatch(upload, /path: input\n/);
+  // By the ID prepare exported: after "Re-run failed jobs" a skipped prepare
+  // keeps its first attempt's artifact, which a name built from
+  // github.run_attempt would not find.
+  assert.match(job('prepare'), /^      input_artifact: \$\{\{ steps\.input\.outputs\.artifact-id \}\}$/m);
+  assert.match(job('prepare'), /- uses: actions\/upload-artifact@\S+ # v[\d.]+\n\s+id: input\n/);
+  for (const name of ['review', 'publish'])
+    assert.match(job(name), /artifact-ids: \$\{\{ needs\.prepare\.outputs\.input_artifact \}\}\n\s+merge-multiple: true\n\s+path: input\n/, name);
+});
+
+test('failed input binding preserves the selection without invoking a reviewer', () => {
+  assert.match(workflow, /if: always\(\) && steps.select.outputs.ready == 'true'[\s\S]*?name: factory-review-input/);
+  assert.match(workflow, /ready: \$\{\{ steps.bind.outcome == 'success' \}\}/);
+  assert.match(workflow, /review:[\s\S]*?if: needs.prepare.outputs.ready == 'true'/);
+  // Published after a failed review, so the Issue says so; not after a cancel.
+  assert.match(job('publish'), /if: \$\{\{ !cancelled\(\) && needs\.prepare\.outputs\.ready == 'true' && needs\.prepare\.outputs\.input_artifact != '' \}\}/);
+});

@@ -1,0 +1,254 @@
+name: Classify framework findings
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Reclassify even when the input has not changed
+        type: boolean
+        default: false
+
+env:
+  # Only the public Agent settings agent-configuration.mjs reads. Never pass
+  # the whole vars context: each step prints its env in the public log, so
+  # every repository variable would reach every step, model runs included.
+  FACTORY_AGENT_CONFIG_JSON: >-
+    {
+    "CODE_AGENT_ENGINE": ${{ toJSON(vars.CODE_AGENT_ENGINE) }},
+    "CODE_AGENT_VERSION": ${{ toJSON(vars.CODE_AGENT_VERSION) }},
+    "PI_VERSION": ${{ toJSON(vars.PI_VERSION) }},
+    "CODEBUDDY_VERSION": ${{ toJSON(vars.CODEBUDDY_VERSION) }},
+    "CLAUDE_CODE_VERSION": ${{ toJSON(vars.CLAUDE_CODE_VERSION) }},
+    "CODEX_VERSION": ${{ toJSON(vars.CODEX_VERSION) }},
+    "OPENCODE_VERSION": ${{ toJSON(vars.OPENCODE_VERSION) }},
+    "CODE_AGENT_MODEL": ${{ toJSON(vars.CODE_AGENT_MODEL) }},
+    "PI_MODEL": ${{ toJSON(vars.PI_MODEL) }},
+    "CODEBUDDY_MODEL": ${{ toJSON(vars.CODEBUDDY_MODEL) }},
+    "CLAUDE_CODE_MODEL": ${{ toJSON(vars.CLAUDE_CODE_MODEL) }},
+    "CODEX_MODEL": ${{ toJSON(vars.CODEX_MODEL) }},
+    "OPENCODE_MODEL": ${{ toJSON(vars.OPENCODE_MODEL) }},
+    "CODE_AGENT_API_TYPE": ${{ toJSON(vars.CODE_AGENT_API_TYPE) }},
+    "PI_API_TYPE": ${{ toJSON(vars.PI_API_TYPE) }},
+    "CODE_AGENT_THINKING": ${{ toJSON(vars.CODE_AGENT_THINKING) }},
+    "PI_THINKING": ${{ toJSON(vars.PI_THINKING) }},
+    "CODEBUDDY_THINKING": ${{ toJSON(vars.CODEBUDDY_THINKING) }},
+    "CODE_AGENT_AUTH_HEADER": ${{ toJSON(vars.CODE_AGENT_AUTH_HEADER) }},
+    "PI_AUTH_HEADER": ${{ toJSON(vars.PI_AUTH_HEADER) }},
+    "CODE_AGENT_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE) }},
+    "PI_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.PI_SUPPORTS_DEVELOPER_ROLE) }},
+    "CODE_AGENT_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT) }},
+    "PI_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.PI_SUPPORTS_REASONING_EFFORT) }},
+    "CODE_AGENT_MODEL_REASONING": ${{ toJSON(vars.CODE_AGENT_MODEL_REASONING) }},
+    "CODE_AGENT_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_INVOCATION_TIMEOUT_SECONDS) }},
+    "PI_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.PI_INVOCATION_TIMEOUT_SECONDS) }},
+    "CODE_AGENT_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS) }},
+    "CLAUDE_CODE_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_EFFORT) }},
+    "CLAUDE_CODE_QA_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_QA_EFFORT) }},
+    "CODEX_REASONING_EFFORT": ${{ toJSON(vars.CODEX_REASONING_EFFORT) }},
+    "CODEX_QA_REASONING_EFFORT": ${{ toJSON(vars.CODEX_QA_REASONING_EFFORT) }},
+    "OPENCODE_VARIANT": ${{ toJSON(vars.OPENCODE_VARIANT) }},
+    "OPENCODE_QA_VARIANT": ${{ toJSON(vars.OPENCODE_QA_VARIANT) }},
+    "CODEBUDDY_BASE_URL": ${{ toJSON(vars.CODEBUDDY_BASE_URL) }},
+    "CODEBUDDY_INTERNET_ENVIRONMENT": ${{ toJSON(vars.CODEBUDDY_INTERNET_ENVIRONMENT) }},
+    "ANTHROPIC_BASE_URL": ${{ toJSON(vars.ANTHROPIC_BASE_URL) }},
+    "CODEX_BASE_URL": ${{ toJSON(vars.CODEX_BASE_URL) }},
+    "OPENCODE_BASE_URL": ${{ toJSON(vars.OPENCODE_BASE_URL) }},
+    "CODE_AGENT_PROVIDER_ID": ${{ toJSON(vars.CODE_AGENT_PROVIDER_ID) }},
+    "FACTORY_QA_THINKING": ${{ toJSON(vars.FACTORY_QA_THINKING) }},
+    "FACTORY_REVIEW_THINKING": ${{ toJSON(vars.FACTORY_REVIEW_THINKING) }},
+    "FACTORY_BUILD_REVIEW": ${{ toJSON(vars.FACTORY_BUILD_REVIEW) }},
+    "FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS) }},
+    "FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS) }},
+    "AGENT_BROWSER_VERSION": ${{ toJSON(vars.AGENT_BROWSER_VERSION) }}
+    }
+
+permissions: {}
+concurrency:
+  group: factory-findings-classification
+  queue: max
+
+jobs:
+  classify:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    # The classifier install has 10 minutes, FACTORY_FINDINGS_TIMEOUT_SECONDS
+    # allows the classification up to 1800 s (30 minutes), and checkout,
+    # prepare and the archive upload need a few more.
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      # The pre-model check lists this workflow's queued runs.
+      actions: read
+    outputs:
+      ready: ${{ steps.prepare.outputs.ready }}
+      artifact: ${{ steps.archive.outputs.artifact-id }}
+      control_sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Pin trusted classifier
+        id: pin
+        run: |
+          echo "sha=$(git -C control rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "FACTORY_CONTROL_SHA=$(git -C control rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Read latest published findings and reuse unchanged decisions
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE_CLASSIFY: ${{ inputs.force || 'false' }}
+        run: |
+          node control/.github/scripts/classify-findings.mjs prepare \
+            --output "$RUNNER_TEMP/findings-input" --force "$FORCE_CLASSIFY"
+      # Before the 1-10 minute install: a run that a queued one supersedes
+      # learns it now instead of after installing a CLI it will not use. The
+      # check below repeats it right before the model call. Fails open too.
+      - name: Check for a queued run before installing the classifier
+        id: precheck
+        if: steps.prepare.outputs.ready == 'true'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE_CLASSIFY: ${{ inputs.force || 'false' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          node control/.github/scripts/classify-findings.mjs check \
+            --input "$RUNNER_TEMP/findings-input" --force "$FORCE_CLASSIFY"
+      - name: Install selected pinned classifier
+        timeout-minutes: 10
+        if: steps.prepare.outputs.ready == 'true' && steps.precheck.outputs.current != 'false'
+        env:
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          CODE_AGENT_VERSION: ${{ vars.CODE_AGENT_VERSION }}
+          PI_VERSION: ${{ vars.PI_VERSION }}
+          CODEBUDDY_VERSION: ${{ vars.CODEBUDDY_VERSION }}
+          CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+          CODEX_VERSION: ${{ vars.CODEX_VERSION }}
+          OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+        run: node control/.github/scripts/install-agent.mjs
+      # Right before the paid model call: a run whose input changed, or that a
+      # queued run will supersede, would be discarded as stale at publish.
+      # Fails open: an API error here must not cost the classification, so
+      # only an explicit current=false skips the model call.
+      - name: Check the prepared findings are still current
+        id: check
+        if: steps.prepare.outputs.ready == 'true' && steps.precheck.outputs.current != 'false'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE_CLASSIFY: ${{ inputs.force || 'false' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          node control/.github/scripts/classify-findings.mjs check \
+            --input "$RUNNER_TEMP/findings-input" --force "$FORCE_CLASSIFY"
+      - name: Classify findings with the selected Agent
+        if: steps.prepare.outputs.ready == 'true' && steps.check.outputs.current != 'false' && steps.precheck.outputs.current != 'false'
+        env:
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+          # Explicit engine selection; adding a CLI must not fall through to Pi.
+          # This mapping is shared by implementation, repair/QA, and comment reply.
+          CODE_AGENT_API_ENDPOINT: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_ENDPOINT || secrets.PI_API_ENDPOINT) || '' }}
+          CODE_AGENT_API_KEY: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_KEY || secrets.PI_API_KEY) || '' }}
+          CODEBUDDY_AUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_AUTH_TOKEN || '' }}
+          CODEBUDDY_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_API_KEY || '' }}
+          CODEBUDDY_MODEL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_MODEL || '' }}
+          CODEBUDDY_THINKING: ${{ vars.CODEBUDDY_THINKING || 'max' }}
+          CODEBUDDY_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_BASE_URL || '' }}
+          CODEBUDDY_INTERNET_ENVIRONMENT: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_INTERNET_ENVIRONMENT || '' }}
+          CODE_AGENT_API_TYPE: ${{ vars.CODE_AGENT_API_TYPE || vars.PI_API_TYPE || 'openai-completions' }}
+          CODE_AGENT_MODEL: ${{ vars.CODE_AGENT_MODEL || vars.PI_MODEL }}
+          CODE_AGENT_THINKING: ${{ vars.CODE_AGENT_THINKING || vars.PI_THINKING || 'max' }}
+          CODE_AGENT_AUTH_HEADER: ${{ vars.CODE_AGENT_AUTH_HEADER || vars.PI_AUTH_HEADER || 'true' }}
+          CODE_AGENT_SUPPORTS_DEVELOPER_ROLE: ${{ vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE || vars.PI_SUPPORTS_DEVELOPER_ROLE }}
+          CODE_AGENT_SUPPORTS_REASONING_EFFORT: ${{ vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT || vars.PI_SUPPORTS_REASONING_EFFORT || 'true' }}
+          FACTORY_FINDINGS_TIMEOUT_SECONDS: ${{ vars.FACTORY_FINDINGS_TIMEOUT_SECONDS || '600' }}
+          ANTHROPIC_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.ANTHROPIC_API_KEY || '' }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          ANTHROPIC_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && vars.ANTHROPIC_BASE_URL || '' }}
+          CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}
+          CLAUDE_CODE_EFFORT: ${{ vars.CLAUDE_CODE_EFFORT }}
+          CLAUDE_CODE_QA_EFFORT: ${{ vars.CLAUDE_CODE_QA_EFFORT }}
+          CODEX_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codex' && secrets.CODEX_API_KEY || '' }}
+          CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+          CODEX_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codex' && vars.CODEX_BASE_URL || '' }}
+          CODEX_REASONING_EFFORT: ${{ vars.CODEX_REASONING_EFFORT }}
+          CODEX_QA_REASONING_EFFORT: ${{ vars.CODEX_QA_REASONING_EFFORT }}
+          OPENCODE_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          OPENCODE_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && vars.OPENCODE_BASE_URL || '' }}
+          OPENCODE_VARIANT: ${{ vars.OPENCODE_VARIANT }}
+          OPENCODE_QA_VARIANT: ${{ vars.OPENCODE_QA_VARIANT }}
+          CODE_AGENT_IDLE_TIMEOUT_SECONDS: ${{ vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS }}
+          FACTORY_AGENT_ROLE: review
+          FACTORY_REVIEW_THINKING: ${{ vars.FACTORY_REVIEW_THINKING || 'medium' }}
+        run: |
+          node control/.github/scripts/classify-findings.mjs run \
+            --input "$RUNNER_TEMP/findings-input" --output "$RUNNER_TEMP/findings-output"
+      - name: Archive classification inputs, decisions and invocation history
+        id: archive
+        if: always() && steps.prepare.outputs.ready == 'true' && steps.check.outputs.current != 'false' && steps.precheck.outputs.current != 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-findings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/findings-output
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    needs: classify
+    if: needs.classify.outputs.ready == 'true' && needs.classify.outputs.artifact != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Only the short publish/deploy transaction serializes with task reports.
+    concurrency:
+      group: factory-task-usage
+      queue: max
+    permissions:
+      actions: read
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.classify.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.classify.outputs.artifact }}
+          path: classification
+          merge-multiple: true
+      - name: Validate against current reports and archive classification
+        id: archive
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node control/.github/scripts/classify-findings.mjs publish --result classification/classification.json
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.archive.outputs.updated == 'true'
+        with:
+          ref: ${{ steps.archive.outputs.commit_sha }}
+          path: report-site
+          persist-credentials: false
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: steps.archive.outputs.updated == 'true'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: steps.archive.outputs.updated == 'true'
+        with:
+          path: report-site
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment
+        if: steps.archive.outputs.updated == 'true'

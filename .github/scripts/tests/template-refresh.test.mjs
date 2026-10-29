@@ -1,0 +1,865 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { SOURCE_BASELINE_DEFAULT } from '../source-baseline-ref.mjs';
+
+const scripts = path.resolve(import.meta.dirname, '..');
+const { guidanceDrift, guidanceHashes } = await import(
+  path.join(scripts, 'template-guidance.mjs')
+);
+const sha = 'a'.repeat(40);
+
+test('the checked-in issue baseline uses the current CLI without old wrappers', () => {
+  const root = path.resolve(scripts, '../..');
+  const app = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const baseline = JSON.parse(
+    readFileSync(path.join(root, 'factory-template.json'), 'utf8'),
+  );
+  assert.equal(app.scripts.build, 'nocobase build');
+  assert.equal(app.scripts.postinstall, 'nocobase skills sync');
+  assert.ok(app.dependencies['@nocobase/app-cli']);
+  assert.equal(app.nocobase.defaultTemplateVersion, baseline.templateVersion);
+  for (const alias of [
+    'db:apply',
+    'migrate',
+    'seed',
+    'skills:sync',
+    'plugin:register',
+    'plugin:inspect',
+  ]) {
+    assert.equal(app.scripts[alias], undefined, alias);
+  }
+  for (const file of [
+    'scripts/build.mjs',
+    'cli/index.ts',
+    'client/plugin-dev-authz.ts',
+  ]) {
+    assert.equal(existsSync(path.join(root, file)), false, file);
+  }
+});
+// What `pnpm create @nocobase/app` writes when the published template ships neither `gitignore` nor `.npmignore`.
+const generatedGitignore = [
+  'node_modules/',
+  'dist/',
+  'coverage/',
+  '',
+  '# Local configuration, including the generated AUTH_SECRET.',
+  '/config.yml',
+  '',
+  '# Local application state.',
+  '/storage/',
+  '/.agents/',
+  '/.agent-annotations/',
+  '/.nocobase/',
+  '*.log',
+  '',
+].join('\n');
+const git = (cwd, ...args) =>
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+const write = (root, file, value) => {
+  mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  writeFileSync(path.join(root, file), value);
+};
+const init = (root, branch) => {
+  git(root, 'init', `--initial-branch=${branch}`);
+  git(root, 'config', 'user.name', 'Factory Test');
+  git(root, 'config', 'user.email', 'test@example.invalid');
+};
+const commit = (root) => {
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'fixture');
+  return git(root, 'rev-parse', 'HEAD');
+};
+
+function overlayFixture(root) {
+  const control = path.join(root, 'control');
+  const fresh = path.join(root, 'fresh');
+  write(
+    control,
+    '.github/workflows/refresh-template.yml',
+    'factory-workflow\n',
+  );
+  write(control, '.npmrc', '@nocobase:registry=https://npm.nocobase.ai/\n');
+  write(control, '.github/template.npmrc', '@nocobase:registry=https://registry.npmjs.org/\n');
+  write(control, '.agents/skills/custom/SKILL.md', 'custom guidance');
+  write(control, 'client/old-business.ts', 'must not survive refresh');
+  write(control, 'docs/factory-guide.md', '# Factory guide\n');
+  write(
+    control,
+    'README.MD',
+    '<!-- factory:readme:start -->\n# Factory\n<!-- factory:readme:end -->\nOld upstream README',
+  );
+  write(
+    control,
+    'AGENTS.md',
+    '# Old guide\n<!-- factory:boundary:start -->\nFactory boundary\n<!-- factory:boundary:end -->\nOld upstream guide',
+  );
+  write(
+    control,
+    'package.json',
+    JSON.stringify({
+      scripts: {
+        'factory:test': 'node --test .github/scripts/tests/*.test.mjs',
+      },
+      devDependencies: { '@playwright/test': '1.62.1', 'old-only': '1.0.0' },
+    }),
+  );
+  write(
+    fresh,
+    'package.json',
+    JSON.stringify({
+      name: 'nb3-factory',
+      nocobase: { templateKind: 'app', defaultTemplateVersion: '2.0.0' },
+      scripts: { dev: 'new-dev', build: 'nocobase build' },
+      dependencies: {
+        'new-framework': '2.0.0',
+        '@nocobase/app-cli': '^1.0.0-beta.6',
+      },
+    }),
+  );
+  write(fresh, 'README.MD', '# New application README\n');
+  write(fresh, 'AGENTS.md', '# New application guide\n\nLatest guidance.\n');
+  write(fresh, 'skills/current.md', 'Latest skill\n');
+  write(
+    fresh,
+    'eslint.config.js',
+    'export default [{ rules: { "new-upstream-rule": "error" } }];\n',
+  );
+  write(fresh, 'client/fresh.ts', 'new template\n');
+  write(
+    fresh,
+    '.github/workflows/upstream.yml',
+    'must not enter factory control plane\n',
+  );
+  write(fresh, '.gitignore', generatedGitignore);
+  write(fresh, 'config.yml', 'auth: fixture-secret\n');
+  write(fresh, '.env', 'SECRET=fixture\n');
+  return { control, fresh };
+}
+
+test('refresh preserves controls and the generated guide without inheriting old agent state', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-overlay-'));
+  try {
+    const { control, fresh } = overlayFixture(root);
+    const generatedGuide = readFileSync(path.join(fresh, 'AGENTS.md'));
+    execFileSync(process.execPath, [
+      path.join(scripts, 'overlay-factory.mjs'),
+      control,
+      fresh,
+      sha,
+    ]);
+    assert.equal(
+      readFileSync(
+        path.join(fresh, '.github/workflows/refresh-template.yml'),
+        'utf8',
+      ),
+      'factory-workflow\n',
+    );
+    assert.equal(
+      existsSync(path.join(fresh, '.github/workflows/upstream.yml')),
+      false,
+    );
+    assert.equal(
+      readFileSync(path.join(fresh, '.npmrc'), 'utf8'),
+      readFileSync(path.join(control, '.github/template.npmrc'), 'utf8'),
+    );
+    assert.equal(existsSync(path.join(fresh, 'client/old-business.ts')), false);
+    assert.equal(
+      readFileSync(path.join(fresh, 'skills/current.md'), 'utf8'),
+      'Latest skill\n',
+    );
+    const guide = readFileSync(path.join(fresh, 'AGENTS.md'), 'utf8');
+    assert.deepEqual(
+      readFileSync(path.join(fresh, 'AGENTS.md')),
+      generatedGuide,
+    );
+    assert.doesNotMatch(
+      guide,
+      /factory:boundary|Factory boundary|Old upstream/,
+    );
+    const manifest = JSON.parse(readFileSync(path.join(fresh, 'package.json')));
+    assert.equal(manifest.dependencies['new-framework'], '2.0.0');
+    assert.equal(manifest.devDependencies['old-only'], undefined);
+    assert.equal(manifest.devDependencies['@playwright/test'], '1.62.1');
+    assert.equal(manifest.scripts.dev, 'new-dev');
+    const lint = readFileSync(path.join(fresh, 'eslint.config.js'), 'utf8');
+    assert.match(lint, /new-upstream-rule/);
+    assert.match(lint, /factory-eslint.mjs/);
+    const metadata = JSON.parse(
+      readFileSync(path.join(fresh, 'factory-template.json')),
+    );
+    assert.equal(metadata.templateVersion, '2.0.0');
+    assert.equal(metadata.controlSha, sha);
+    // The generated guide's hash lets factory CI refuse later edits to it.
+    assert.deepEqual(metadata.guidance, guidanceHashes(fresh));
+    assert.deepEqual(Object.keys(metadata.guidance), ['AGENTS.md']);
+    assert.deepEqual(guidanceDrift(fresh), []);
+    // Factory documents survive a refresh; the template ships no docs/.
+    assert.equal(
+      readFileSync(path.join(fresh, 'docs/factory-guide.md'), 'utf8'),
+      '# Factory guide\n',
+    );
+    // Preserve generated ignore rules; newly synchronized skills remain versioned.
+    assert.ok(
+      readFileSync(path.join(fresh, '.gitignore'), 'utf8').startsWith(
+        generatedGitignore,
+      ),
+    );
+    assert.equal(existsSync(path.join(fresh, '.agents')), false);
+    assert.equal(existsSync(path.join(fresh, 'scripts')), false);
+    assert.equal(metadata.tooling, '@nocobase/app-cli');
+    init(fresh, 'template');
+    commit(fresh);
+    const files = git(fresh, 'ls-files');
+    // A runtime secret the generated rules do not cover is refused by the packaging guard rather than ignored
+    // here; that guard has its own test below.
+    assert.ok(files.split('\n').includes('config.yml'));
+    assert.equal(
+      readFileSync(path.join(fresh, 'config.yml'), 'utf8'),
+      'auth: fixture-secret\n',
+    );
+    assert.match(files, /client\/fresh\.ts/);
+    assert.doesNotMatch(files, /\.agents\//);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('overlay refuses a template that starts shipping its own docs/', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-docs-'));
+  try {
+    const { control, fresh } = overlayFixture(root);
+    write(fresh, 'docs/upstream.md', '# Upstream doc\n');
+    const result = spawnSync(
+      process.execPath,
+      [path.join(scripts, 'overlay-factory.mjs'), control, fresh, sha],
+      { encoding: 'utf8' },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /template now ships docs\//);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('overlay keeps fresh skills and ownership without requiring an old factory boundary', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-skills-'));
+  try {
+    const { control, fresh } = overlayFixture(root);
+    // A refresh must work even when the control checkout has no AGENTS.md.
+    rmSync(path.join(control, 'AGENTS.md'));
+    const skill = '.agents/skills/nocobase-app-development/SKILL.md';
+    const staleReference = '.agents/skills/nocobase-app-development/old.md';
+    const ownership = '.agents/.skills-sync.json';
+    write(control, skill, 'Old package skill\n');
+    write(control, staleReference, 'Old reference\n');
+    write(control, ownership, '{"old":"@nocobase/old"}\n');
+    write(fresh, skill, 'New package skill\n');
+    write(
+      fresh,
+      ownership,
+      '{"nocobase-app-development":"@nocobase/app-skills"}\n',
+    );
+    const generatedGuide =
+      'Official guidance without a heading.\n\nKeep spacing.  \n';
+    write(fresh, 'AGENTS.md', generatedGuide);
+    const generatedOwnership = readFileSync(path.join(fresh, ownership));
+    execFileSync(process.execPath, [
+      path.join(scripts, 'overlay-factory.mjs'),
+      control,
+      fresh,
+      sha,
+    ]);
+    assert.equal(
+      readFileSync(path.join(fresh, 'AGENTS.md'), 'utf8'),
+      generatedGuide,
+    );
+    assert.equal(
+      readFileSync(path.join(fresh, skill), 'utf8'),
+      'New package skill\n',
+    );
+    assert.deepEqual(
+      readFileSync(path.join(fresh, ownership)),
+      generatedOwnership,
+    );
+    assert.equal(existsSync(path.join(fresh, staleReference)), false);
+    assert.equal(existsSync(path.join(fresh, '.agents/skills/custom')), false);
+    init(fresh, 'template');
+    commit(fresh);
+    const files = git(fresh, 'ls-files').split('\n');
+    assert.ok(files.includes(skill));
+    assert.ok(files.includes(ownership));
+    assert.ok(!files.includes(staleReference));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const [name, appScripts, dependencies] of [
+  ['inline build', { build: 'node scripts/build.mjs' }, {}],
+  [
+    'app-tools wrapper',
+    { build: 'node scripts/build.mjs' },
+    { '@nocobase/app-tools': '^0.1.0' },
+  ],
+  [
+    'old app-cli wrapper',
+    { build: 'node scripts/build.mjs' },
+    { '@nocobase/app-cli': '^1.0.0-beta.5' },
+  ],
+  ['missing official CLI', { build: 'nocobase build' }, {}],
+]) {
+  test(
+    'refresh rejects ' + name + ' before changing any template files',
+    (t) => {
+      const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-old-template-'));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const { control, fresh } = overlayFixture(root);
+      const manifestPath = path.join(fresh, 'package.json');
+      const app = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      Object.assign(app, { scripts: appScripts, dependencies });
+      writeFileSync(manifestPath, JSON.stringify(app));
+      const before = readFileSync(manifestPath);
+      assert.throws(
+        () =>
+          execFileSync(
+            process.execPath,
+            [path.join(scripts, 'overlay-factory.mjs'), control, fresh, sha],
+            { stdio: 'pipe' },
+          ),
+        /Unsupported legacy template/,
+      );
+      assert.deepEqual(readFileSync(manifestPath), before);
+      assert.equal(
+        existsSync(path.join(fresh, '.github/workflows/upstream.yml')),
+        true,
+      );
+      assert.equal(
+        existsSync(path.join(fresh, 'factory-template.json')),
+        false,
+      );
+    },
+  );
+}
+
+test('overlay refuses to replace the control checkout or a directory with Git history', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-boundary-'));
+  try {
+    const { control, fresh } = overlayFixture(root);
+    assert.throws(
+      () =>
+        execFileSync(
+          process.execPath,
+          [path.join(scripts, 'overlay-factory.mjs'), control, control, sha],
+          { stdio: 'pipe' },
+        ),
+      /separate directories/,
+    );
+    init(fresh, 'template');
+    assert.throws(
+      () =>
+        execFileSync(
+          process.execPath,
+          [path.join(scripts, 'overlay-factory.mjs'), control, fresh, sha],
+          { stdio: 'pipe' },
+        ),
+      /without Git history/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function publishFixture(root) {
+  const remote = path.join(root, 'remote.git');
+  const control = path.join(root, 'control');
+  const candidate = path.join(root, 'candidate');
+  const bundle = path.join(root, 'template.bundle');
+  mkdirSync(remote);
+  git(remote, 'init', '--bare');
+  write(control, '.github/workflows/refresh-template.yml', 'trusted control\n');
+  write(control, '.npmrc', 'previous registry\n');
+  write(control, '.github/template.npmrc', 'trusted registry\n');
+  write(control, 'app.txt', 'old baseline\n');
+  init(control, 'develop');
+  const base = commit(control);
+  git(control, 'remote', 'add', 'origin', remote);
+  git(control, 'push', 'origin', 'develop', 'develop:apps/existing');
+  mkdirSync(candidate);
+  cpSync(path.join(control, '.github'), path.join(candidate, '.github'), {
+    recursive: true,
+  });
+  cpSync(path.join(control, '.github/template.npmrc'), path.join(candidate, '.npmrc'));
+  write(candidate, 'app.txt', 'latest template\n');
+  init(candidate, 'template');
+  const next = commit(candidate);
+  git(candidate, 'bundle', 'create', bundle, 'refs/heads/template');
+  return { remote, control, candidate, bundle, base, next };
+}
+
+test('publish adds the verified baseline on top of develop and atomically backs up the prior baseline', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-publish-'));
+  try {
+    const f = publishFixture(root);
+    execFileSync(
+      'bash',
+      [
+        path.join(scripts, 'publish-template.sh'),
+        f.control,
+        f.bundle,
+        f.base,
+        'factory-backup/develop-123-1',
+      ],
+      { stdio: 'pipe', env: { ...process.env, GITHUB_STEP_SUMMARY: '' } },
+    );
+    const published = git(f.remote, 'rev-parse', 'develop');
+    // History is kept: the generated tree lands as one commit whose parent is
+    // the develop it was generated from, so older branches still share history.
+    assert.equal(git(f.remote, 'rev-parse', `${published}^`), f.base);
+    assert.equal(git(f.remote, 'rev-list', '--count', 'develop'), '2');
+    assert.equal(
+      git(f.remote, 'rev-parse', `${published}^{tree}`),
+      git(f.candidate, 'rev-parse', `${f.next}^{tree}`),
+    );
+    assert.equal(
+      git(f.remote, 'log', '-1', '--format=%s%n%an', published),
+      git(f.candidate, 'log', '-1', '--format=%s%n%an', f.next),
+    );
+    assert.equal(
+      git(f.remote, 'merge-base', 'develop', 'apps/existing'),
+      f.base,
+    );
+    assert.equal(
+      git(f.remote, 'rev-parse', 'factory-backup/develop-123-1'),
+      f.base,
+    );
+    assert.equal(git(f.remote, 'rev-parse', 'apps/existing'), f.base);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('publish refuses a develop commit that changed after generation began', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-lease-'));
+  try {
+    const f = publishFixture(root);
+    write(f.control, 'concurrent.txt', 'new user change\n');
+    const changed = commit(f.control);
+    git(f.control, 'push', 'origin', 'develop');
+    const result = spawnSync(
+      'bash',
+      [
+        path.join(scripts, 'publish-template.sh'),
+        f.control,
+        f.bundle,
+        f.base,
+        'factory-backup/develop-123-1',
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /develop changed/);
+    assert.equal(git(f.remote, 'rev-parse', 'develop'), changed);
+    assert.equal(
+      git(
+        f.remote,
+        'for-each-ref',
+        '--format=%(refname)',
+        'refs/heads/factory-backup',
+      ),
+      '',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const protectedPath of ['.github/workflows/refresh-template.yml', '.npmrc']) {
+  test(`publish rejects a candidate that replaces trusted ${protectedPath}`, () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-template-controls-'));
+    try {
+      const f = publishFixture(root);
+      write(
+        f.candidate,
+        protectedPath,
+        'modified controls\n',
+      );
+      git(f.candidate, 'add', '.');
+      git(f.candidate, 'commit', '--amend', '--no-edit');
+      git(f.candidate, 'bundle', 'create', f.bundle, 'refs/heads/template');
+      const result = spawnSync(
+        'bash',
+        [
+          path.join(scripts, 'publish-template.sh'),
+          f.control,
+          f.bundle,
+          f.base,
+          'factory-backup/develop-123-1',
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.notEqual(result.status, 0);
+      assert.ok(result.stderr.includes(`changed ${protectedPath === '.npmrc' ? '.npmrc' : '.github'}`), result.stderr);
+      assert.equal(git(f.remote, 'rev-parse', 'develop'), f.base);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('packaging allows GitHub issue settings but rejects staged runtime files', () => {
+  const workflow = readFileSync(
+    path.resolve(scripts, '..', 'workflows/refresh-template.yml'),
+    'utf8',
+  );
+  const guard = workflow
+    .match(/node --input-type=module <<'NODE'\n([\s\S]*?)\n {10}NODE/)[1]
+    .replace(/^ {10}/gm, '');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'nb3-package-guard-'));
+  try {
+    write(
+      root,
+      '.github/ISSUE_TEMPLATE/config.yml',
+      'blank_issues_enabled: false',
+    );
+    write(root, 'config.yml', 'auth: fixture-secret');
+    write(root, '.agents/skills/test.md', 'agent guidance');
+    init(root, 'template');
+    git(root, 'add', '.');
+    const run = () =>
+      spawnSync(process.execPath, ['--input-type=module', '-e', guard], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+    assert.equal(run().status, 0);
+    for (const file of [
+      'nested/config.yml',
+      '.env',
+      'nested/.env.local',
+      'node_modules/a/index.js',
+      'dist/server.js',
+      'storage/private.txt',
+    ]) {
+      write(root, file, 'runtime fixture');
+      git(root, 'add', '-f', file);
+      const result = run();
+      assert.notEqual(result.status, 0, file);
+      assert.ok(result.stderr.includes(file), result.stderr);
+      git(root, 'rm', '--cached', file);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('refresh workflow has its own queue and isolates generated code from write permissions', () => {
+  const workflow = readFileSync(
+    path.resolve(scripts, '..', 'workflows/refresh-template.yml'),
+    'utf8',
+  );
+  const task = readFileSync(
+    path.resolve(scripts, '..', 'workflows/code-agent-task.yml'),
+    'utf8',
+  );
+  const group = /group: ([^\n]+)/.exec(workflow)[1];
+  assert.match(group, /'template-refresh-global' \}\}$/);
+  assert.match(group, /format\('template-refresh-pr-\{0\}', github\.event\.pull_request\.number\)/);
+  assert.ok(!task.includes('template-refresh-global'));
+  // Preset syncs commit to develop, so they queue behind a running refresh.
+  const sync = readFileSync(
+    path.resolve(scripts, '..', 'workflows/sync-issue-presets.yml'),
+    'utf8',
+  );
+  assert.match(sync, /group: template-refresh-global\n\s+queue: max/);
+  // Job-level, so issues events the job skips never wait for a refresh.
+  assert.doesNotMatch(sync, /^concurrency:/m);
+  assert.match(sync, /^ {4}concurrency:\n {6}group: template-refresh-global\n/m);
+  // Pull request checks are never skipped for non-owners; publishing still is.
+  assert.match(workflow, /\(github\.event_name == 'workflow_dispatch' && github\.actor == github\.repository_owner\) \|\|/);
+  const publisher = workflow.split('\n  publish:')[1];
+  assert.match(workflow.split('\n  publish:')[0], /contents: read/);
+  assert.match(workflow, /template-creator.mjs pin "\$RUNNER_TEMP\/template-generation"/);
+  assert.match(
+    workflow,
+    /pnpm create "@nocobase\/app@\$FACTORY_CREATOR_VERSION" nb3-factory/,
+  );
+  assert.match(workflow, /template-creator.mjs record/);
+  assert.match(workflow, /--template-tag=beta/);
+  assert.match(workflow, /scripts\/verify.sh/);
+  assert.doesNotMatch(workflow, /rm -f config\.yml/);
+  assert.match(publisher, /contents: write/);
+  assert.doesNotMatch(publisher, /pnpm |npm |secrets\./);
+  assert.match(publisher, /!inputs.dry_run/);
+});
+
+test('a superseded PR refresh run stops before generation and skips every later step', () => {
+  const workflow = readFileSync(
+    path.resolve(scripts, '..', 'workflows/refresh-template.yml'),
+    'utf8',
+  );
+  const generate = workflow.split('\n  publish:')[0];
+  // queue: max cannot be combined with cancel-in-progress.
+  const concurrency = /^concurrency:\n((?: {2}.*\n)+)/m.exec(workflow)[1];
+  assert.match(concurrency, /queue: max/);
+  assert.doesNotMatch(concurrency, /cancel-in-progress/);
+  assert.match(generate, /^ {6}pull-requests: read$/m);
+  const steps = generate
+    .split(/\n {6}- (?=name:|uses:)/)
+    .slice(1)
+    .map((step) => step.split('\n').map((line) => line.trim()));
+  const index = steps.findIndex(
+    ([first]) =>
+      first === 'name: Stop when a newer push superseded this pull request run',
+  );
+  assert.ok(index >= 0);
+  const supersede = steps[index];
+  assert.ok(supersede.includes("if: github.event_name == 'pull_request'"));
+  assert.ok(supersede.includes('id: supersede'));
+  assert.ok(supersede.includes('GH_TOKEN: ${{ github.token }}'));
+  assert.ok(supersede.includes('RUN_HEAD_SHA: ${{ github.event.pull_request.head.sha }}'));
+  assert.ok(
+    supersede.some((line) =>
+      line.includes('gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha'),
+    ),
+  );
+  assert.ok(supersede.some((line) => line.startsWith('echo "::notice::')));
+  assert.ok(supersede.includes('echo "superseded=true" >> "$GITHUB_OUTPUT"'));
+  // Only the develop check runs before it, and no earlier step needs a checkout.
+  assert.deepEqual(
+    steps.slice(0, index).map(([first]) => first),
+    ['name: Require develop as the selected workflow branch'],
+  );
+  const skip = "steps.supersede.outputs.superseded != 'true'";
+  for (const step of steps.slice(index + 1)) {
+    const condition = step.find((line) => line.startsWith('if: '));
+    assert.ok(condition, step[0]);
+    // Dispatch-only steps never run on a superseded PR run anyway.
+    assert.ok(
+      condition.includes(skip) || condition.includes("github.event_name == 'workflow_dispatch'") ||
+        condition.includes("github.event_name != 'pull_request'"),
+      `${step[0]}: ${condition}`,
+    );
+  }
+  assert.match(
+    generate,
+    /- name: Save verification logs and browser screenshot\n {8}if: always\(\) && steps\.supersede\.outputs\.superseded != 'true'\n/,
+  );
+});
+
+test('refresh caches the generated application pnpm store and saves it only from develop', () => {
+  const workflow = readFileSync(
+    path.resolve(scripts, '..', 'workflows/refresh-template.yml'),
+    'utf8',
+  );
+  const generate = workflow.split('\n  publish:')[0];
+  const stepOf = (name) =>
+    generate.split(`- name: ${name}\n`)[1].split(/\n {6}- (?=name:|uses:)/)[0];
+  const order = [
+    'Restore factory controls without changing template guidance',
+    'Locate the pnpm store',
+    'Restore the template pnpm store',
+    'Install and lock the new application dependencies',
+    'Sync Skills and record the template plugin inventory',
+    'Drop store entries the generated lockfile no longer uses',
+    'Save the template pnpm store before verification',
+    'Format the generated application and plugin registrations',
+  ];
+  for (let i = 1; i < order.length; i++)
+    assert.ok(
+      generate.indexOf(`- name: ${order[i - 1]}\n`) < generate.indexOf(`- name: ${order[i]}\n`),
+      order[i],
+    );
+  // The lockfile is generated outside the workspace, so the key is computed
+  // by the step from the template version and the files it hashes.
+  const locate = stepOf('Locate the pnpm store');
+  assert.match(locate, /factory-template\.json/);
+  assert.match(locate, /templateVersion/);
+  assert.match(locate, /\['package\.json', 'pnpm-lock\.yaml'\]/);
+  assert.match(locate, /prefix = `template-pnpm-store-\$\{process\.env\.RUNNER_OS\}-pnpm\$\{pnpm\}-`/);
+  const restore = stepOf('Restore the template pnpm store');
+  assert.match(restore, /uses: actions\/cache\/restore@[0-9a-f]{40} # v6\.\d+\.\d+/);
+  assert.match(restore, /key: \$\{\{ steps\.pnpm-store\.outputs\.key \}\}/);
+  assert.match(restore, /restore-keys: \$\{\{ steps\.pnpm-store\.outputs\.prefix \}\}/);
+  assert.match(restore, /path: \$\{\{ steps\.pnpm-store\.outputs\.path \}\}/);
+  // A post-step cache would also save what verification adds to the store.
+  assert.doesNotMatch(generate, /uses: actions\/cache@/);
+  // A pull_request cache lives in refs/pull/N/merge and no other PR sees it.
+  for (const name of [
+    'Drop store entries the generated lockfile no longer uses',
+    'Save the template pnpm store before verification',
+  ]) {
+    const step = stepOf(name);
+    assert.match(
+      step,
+      /if: github\.event_name == 'workflow_dispatch' && steps\.pnpm-cache\.outputs\.cache-hit != 'true'\n/,
+      name,
+    );
+    assert.match(step, /continue-on-error: true/, name);
+  }
+  const save = stepOf('Save the template pnpm store before verification');
+  assert.match(save, /uses: actions\/cache\/save@[0-9a-f]{40} # v6\.\d+\.\d+/);
+  assert.match(save, /key: \$\{\{ steps\.pnpm-cache\.outputs\.cache-primary-key \}\}/);
+});
+
+test('every building job exposes the factory registry to nested dist installs', () => {
+  const read = (file) =>
+    readFileSync(path.resolve(scripts, '..', 'workflows', file), 'utf8');
+  const refresh = read('refresh-template.yml');
+  const task = read('code-agent-task.yml');
+  const jobs = {
+    'refresh generate': refresh.split('\n  publish:')[0],
+    'task agent': task.split('\n  agent:')[1].split('\n  verify-final:')[0],
+    'task verify-final': task
+      .split('\n  verify-final:')[1]
+      .split('\n  publish:')[0],
+  };
+  // verify-final exposes it through the restore-task-toolchain composite.
+  const toolchain = readFileSync(
+    path.resolve(scripts, '..', 'actions', 'restore-task-toolchain', 'action.yml'),
+    'utf8',
+  );
+  assert.ok(toolchain.includes('cat control/.npmrc >> ~/.npmrc'));
+  for (const [name, job] of Object.entries(jobs)) {
+    const expose =
+      name === 'task verify-final'
+        ? job.indexOf('uses: ./factory-actions/.github/actions/restore-task-toolchain')
+        : job.indexOf(name === 'refresh generate' ? 'cat control/.github/template.npmrc >> ~/.npmrc' : 'cat control/.npmrc >> ~/.npmrc');
+    assert.ok(expose > 0, name);
+    assert.ok(expose < job.search(/pnpm (create|install)/), name);
+  }
+});
+
+test('refresh keeps the template\'s own SQLite driver declaration', () => {
+  const refresh = readFileSync(
+    path.resolve(scripts, '..', 'workflows', 'refresh-template.yml'),
+    'utf8',
+  );
+  const step = refresh
+    .split('- name: Install and lock the new application dependencies\n')[1]
+    .split('\n      - name: ')[0];
+  // An unconditional `pnpm add …@latest` downgraded the declared driver.
+  const guard = step.indexOf('dependencies?.["@nocobase/db-sqlite"]');
+  assert.ok(guard > 0);
+  const add = step.indexOf('pnpm add @nocobase/db-sqlite@latest');
+  assert.ok(add > guard);
+  assert.match(step.slice(guard, add), /then\n\s+$/);
+  assert.equal(step.match(/^\s+pnpm add /gm).length, 1);
+});
+
+test('refresh runs the factory suite like factory-tests, and only when it may publish', () => {
+  const read = (file) =>
+    readFileSync(path.resolve(scripts, '..', 'workflows', file), 'utf8');
+  const refresh = read('refresh-template.yml');
+  const command = (workflow) =>
+    workflow
+      .split('\n')
+      .filter((line) =>
+        /^\s+run: .*scripts\/(tests\/\*\.test\.mjs|run-factory-tests\.sh)/.test(line),
+      )
+      .map((line) => line.trim());
+  const [step] = refresh
+    .split('- name: Run factory regression tests before publication\n')
+    .slice(1);
+  assert.ok(step, 'missing factory test step');
+  const body = step.split('\n      - name: ')[0];
+  // PR checks already run the same suite in factory-tests.yml.
+  assert.match(body, /if: github\.event_name != 'pull_request'\n/);
+  assert.deepEqual(command(refresh), [
+    'run: bash control/.github/scripts/run-factory-tests.sh control/.github/scripts/tests',
+  ]);
+  assert.deepEqual(command(read('factory-tests.yml')), [
+    'run: bash .github/scripts/run-factory-tests.sh',
+  ]);
+  // Before anything is generated: the suite needs only the control checkout,
+  // so a failure ends the run before the long generation steps.
+  const tests = refresh.indexOf(
+    '- name: Run factory regression tests before publication',
+  );
+  assert.ok(
+    tests > refresh.indexOf('- uses: actions/setup-node@') &&
+      tests < refresh.indexOf('- name: Pin the actual published application generator'),
+  );
+});
+
+test('task and replay reject old baselines before installing application dependencies', () => {
+  for (const file of ['code-agent-task.yml', 'replay-build-review.yml']) {
+    const workflow = readFileSync(
+      path.resolve(scripts, '../workflows', file),
+      'utf8',
+    );
+    const guard = workflow.indexOf(
+      'node ../control/.github/scripts/assert-current-template.mjs .',
+    );
+    const install = workflow.indexOf('pnpm install --frozen-lockfile');
+    assert.ok(guard >= 0 && install > guard, file);
+  }
+});
+
+test('source verification rejects retired templates before building source packages', () => {
+  const workflow = readFileSync(
+    path.resolve(scripts, '../workflows/source-baseline.yml'),
+    'utf8',
+  );
+  const guard = workflow.indexOf(
+    'assert-current-template.mjs packages/templates/app-template-default',
+  );
+  assert.ok(
+    guard >= 0 && guard < workflow.indexOf('pnpm install --frozen-lockfile'),
+  );
+  // The input default is the only literal pin; the PR fallback imports it.
+  // Action pins are @<sha>; the source pin is the only bare one.
+  const pins = [...workflow.matchAll(/(?<!@)\b([a-f0-9]{40})\b/g)].map((match) => match[1]);
+  assert.deepEqual(pins, [SOURCE_BASELINE_DEFAULT]);
+  assert.match(workflow, /REQUESTED_SHA: \$\{\{ inputs\.source_sha \}\}\n/);
+  assert.match(workflow, /process\.env\.REQUESTED_SHA\|\|SOURCE_BASELINE_DEFAULT/);
+});
+
+test('factory workflows use only the current package CLI for Skills sync', () => {
+  for (const file of [
+    'workflows/refresh-template.yml',
+    'workflows/code-agent-task.yml',
+    'workflows/replay-build-review.yml',
+    'workflows/source-baseline.yml',
+  ]) {
+    const source = readFileSync(path.resolve(scripts, '..', file), 'utf8');
+    assert.match(
+      source,
+      /pnpm(?: --dir "\$APP_ROOT")? exec nocobase skills sync\b/,
+      file,
+    );
+    assert.doesNotMatch(
+      source,
+      /template-cli\.mjs|pnpm (?:plugin:)?skills:sync\b/,
+      file,
+    );
+  }
+  const workflow = readFileSync(
+    path.resolve(scripts, '..', 'workflows/refresh-template.yml'),
+    'utf8',
+  );
+  assert.ok(
+    workflow.indexOf('exec nocobase skills sync') >
+      workflow.indexOf('pnpm install --no-frozen-lockfile'),
+  );
+  assert.doesNotMatch(workflow, /prettier[^\n]*\bAGENTS\.md\b/);
+  const prompt = readFileSync(
+    path.resolve(scripts, '../prompts/implement.md'),
+    'utf8',
+  );
+  assert.match(prompt, /pnpm exec nocobase skills sync/);
+});

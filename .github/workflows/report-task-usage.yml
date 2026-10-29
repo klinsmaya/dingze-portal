@@ -1,0 +1,466 @@
+name: Report Task Usage
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        required: true
+        type: string
+      attempt:
+        required: true
+        type: string
+      review_run_id:
+        required: false
+        type: string
+      review_artifact_id:
+        required: false
+        type: string
+  workflow_run:
+    workflows: [Code Agent NocoBase Task]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Completed task run ID to report (not Issue number)
+        required: true
+        type: string
+      attempt:
+        description: Run attempt (leave empty for latest)
+        required: false
+        type: string
+
+permissions: {}
+
+# Only the jobs that write serialize, at job level, so a copy the dispatch gate
+# skips never queues behind real reports; business builds remain parallel.
+# The report job writes nothing but its Issue's usage comment, so it queues
+# per Issue (factory-task-usage-issue-<n>): concurrent handoff reports of one
+# Issue cannot lose its totals, and its artifact downloads and HTML rendering
+# no longer hold up other Issues' Pages, daily-findings or classify-findings.
+# The global factory-task-usage lock covers only archive and deploy (pages).
+# A caller must not hold either group itself: GitHub cancels a job whose
+# called workflow waits on its caller's group. The evaluation registry
+# serializes on its own group (its gh-pages writes are compare-and-swap
+# commits, like deliver-evaluation's), and the CDN wait and link comments run
+# in notify, serialized per Issue on factory-report-notify-<n>.
+
+jobs:
+  # The task usually requested this run itself; see report-dispatch-gate.yml.
+  # A skipped task run (an Issue from someone without repository access) ran
+  # nothing to report on, so it does not start this chain either.
+  dispatch-gate:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'skipped'
+    uses: ./.github/workflows/report-dispatch-gate.yml
+    with:
+      workflow: report-task-usage.yml
+    permissions:
+      actions: read
+
+  # Waits for the source run in a job that holds no concurrency group, so the
+  # locked job below never holds it while the task's own dispatch-reports job
+  # is still finishing (up to ten minutes); its select then reads a completed
+  # run at once. Same condition as the job it feeds.
+  wait-for-source:
+    needs: dispatch-gate
+    if: >-
+      !cancelled() && needs.dispatch-gate.outputs.covered != 'true' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
+    outputs:
+      attempt: ${{ steps.wait.outputs.attempt }}
+      # From the run's title; empty for any other title.
+      issue: ${{ steps.wait.outputs.issue }}
+    runs-on: ubuntu-24.04
+    # wait-for-task-run.mjs gives up after 11 minutes.
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Wait for the source task run to complete
+        id: wait
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          SOURCE_ATTEMPT: ${{ inputs.attempt || github.event.workflow_run.run_attempt }}
+        run: |
+          node control/.github/scripts/wait-for-task-run.mjs \
+            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT"
+
+  report:
+    needs: [dispatch-gate, wait-for-source]
+    if: >-
+      !cancelled() && needs.wait-for-source.result == 'success' &&
+      needs.dispatch-gate.outputs.covered != 'true' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
+    outputs:
+      html_ready: ${{ steps.totals.outputs.html_ready }}
+      report_artifact: ${{ steps.archive.outputs.artifact-id }}
+      evaluation_export: ${{ steps.evaluation-export.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Per Issue; see the note above. Without an Issue it keeps the global lock.
+    concurrency:
+      group: ${{ needs.wait-for-source.outputs.issue && format('factory-task-usage-issue-{0}', needs.wait-for-source.outputs.issue) || 'factory-task-usage' }}
+      queue: max
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      issues: write
+    env:
+      SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+      REVIEW_RUN_ID: ${{ inputs.review_run_id }}
+      REVIEW_ARTIFACT_ID: ${{ inputs.review_artifact_id }}
+      # The attempt wait-for-source settled on, so a re-run started meanwhile
+      # cannot make this job, holding its group, wait for a newer attempt.
+      SOURCE_ATTEMPT: ${{ needs.wait-for-source.outputs.attempt || inputs.attempt || github.event.workflow_run.run_attempt }}
+    steps:
+      # Run only trusted control code, never application code from an artifact.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Resolve completed task and attempt
+        id: source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/report-task-usage.mjs select \
+            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT" \
+            --source "$RUNNER_TEMP/usage-source.json" \
+            --review-run-id "$REVIEW_RUN_ID" --review-artifact-id "$REVIEW_ARTIFACT_ID"
+
+      - name: Download usage evidence when available
+        if: steps.source.outputs.ready == 'true' && steps.source.outputs.artifact != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          merge-multiple: true
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/usage-evidence
+
+      # Small prepare-job metadata identifies runs whose Agent stopped before copying it.
+      - name: Download normalized task metadata when available
+        if: steps.source.outputs.ready == 'true' && steps.source.outputs.task_artifact_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.source.outputs.task_artifact_id }}
+          merge-multiple: true
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/usage-task
+
+      # Separate download: Agent artifacts cannot replace final acceptance facts.
+      - name: Download independent final verification results
+        if: steps.source.outputs.ready == 'true' && steps.source.outputs.final_artifact_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.source.outputs.final_artifact_id }}
+          merge-multiple: true
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/usage-final
+
+      - name: Download verified supplemental review
+        if: steps.source.outputs.review_artifact != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.source.outputs.review_artifact }}
+          merge-multiple: true
+          run-id: ${{ env.REVIEW_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/review-supplement
+
+      - name: Report totals to the task Issue
+        id: totals
+        if: steps.source.outputs.ready == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/report-task-usage.mjs publish \
+            --run-id "$SOURCE_RUN_ID" --source "$RUNNER_TEMP/usage-source.json" \
+            --artifacts "$RUNNER_TEMP/usage-evidence" --task "$RUNNER_TEMP/usage-task" --review "$RUNNER_TEMP/review-supplement" --summary "$RUNNER_TEMP/task-report/report.json"
+
+      - name: Save HTML and numeric usage report
+        id: archive
+        if: always() && steps.source.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-usage-${{ env.SOURCE_RUN_ID }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/task-report
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Pure data conversion of the facts above: no model call, no application code.
+      # A failure is diagnosable here and never changes the usage report or the build.
+      - name: Export versioned evaluation report
+        id: export
+        if: always() && steps.totals.outcome == 'success' && vars.FACTORY_EVALUATION_EXPORT != 'false'
+        continue-on-error: true
+        run: |
+          FACTORY_EXPORTER_SHA="$(git -C control rev-parse HEAD)" node control/.github/scripts/evaluation-archive.mjs export \
+            --report "$RUNNER_TEMP/task-report/report.json" --artifacts "$RUNNER_TEMP/usage-evidence" \
+            --task "$RUNNER_TEMP/usage-task" --final "$RUNNER_TEMP/usage-final" --html "$RUNNER_TEMP/task-report/report.html" \
+            --output "$RUNNER_TEMP/evaluation-export"
+
+      # Also isolated: a failed evaluation upload must not fail this job and skip Pages.
+      - name: Save evaluation export for registration
+        id: evaluation-export
+        if: always() && steps.export.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: factory-evaluation-export-${{ env.SOURCE_RUN_ID }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/evaluation-export
+          if-no-files-found: error
+          retention-days: 14
+
+  # Revision registration is independent of Pages: an unavailable site or
+  # receiver never loses the archived evaluation, and vice versa.
+  evaluation:
+    needs: report
+    # report needs dispatch-gate, which is skipped outside workflow_run; the
+    # implicit success() would then skip this job too, so check report itself.
+    if: >-
+      !cancelled() && needs.report.result == 'success' &&
+      needs.report.outputs.evaluation_export != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Not factory-task-usage: every gh-pages write here goes through
+    # commitTree's compare-and-swap retries, and commitRevision re-checks the
+    # revision under it. This group keeps registrations in order among
+    # themselves without holding report archives and deployments.
+    concurrency:
+      group: factory-evaluation-registry
+      queue: max
+    permissions:
+      actions: write
+      contents: write
+    env:
+      FACTORY_EVALUATION_DELIVERY: ${{ vars.FACTORY_EVALUATION_DELIVERY }}
+      EVALUATION_ENDPOINT: ${{ vars.EVALUATION_ENDPOINT }}
+      EVALUATION_AUTH_MODE: ${{ vars.EVALUATION_AUTH_MODE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.report.outputs.evaluation_export }}
+          path: ${{ runner.temp }}/evaluation-export
+          merge-multiple: true
+      - name: Reuse or allocate the report revision
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/evaluation-archive.mjs prepare \
+            --input "$RUNNER_TEMP/evaluation-export" --output "$RUNNER_TEMP/evaluation-bundle"
+      # The name carries no attempt, so "Re-run failed jobs" after a failed
+      # commit uploads it again in this run: overwrite instead of a 409. The
+      # replaced copy was never registered (the commit failed), and a revision
+      # that did register is reused without a new upload for 30 days.
+      - name: Keep the exact bundle bytes for replay
+        id: bundle
+        if: steps.prepare.outputs.upload == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.prepare.outputs.artifact_name }}
+          path: ${{ runner.temp }}/evaluation-bundle/evaluation-bundle.zip
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+      - name: Register the revision and queue optional delivery
+        id: commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUNDLE_ARTIFACT_ID: ${{ steps.bundle.outputs.artifact-id }}
+        run: |
+          node control/.github/scripts/evaluation-archive.mjs commit \
+            --input "$RUNNER_TEMP/evaluation-bundle" --artifact-id "$BUNDLE_ARTIFACT_ID"
+      # Fire-and-forget: this workflow's concurrency group is never held by a receiver.
+      # A scan that has not started yet reads the outbox when it does, so it
+      # already covers this revision; a batch of samples then queues one scan
+      # instead of one per sample. Only scans are counted (run-name carries the
+      # mode; a scheduled run scans too), never one already in progress, which
+      # may have read the outbox before this commit. Any error listing runs
+      # falls through to the request.
+      - name: Request delivery without waiting
+        if: steps.commit.outputs.queued == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          waiting="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deliver-evaluation.yml/runs?branch=$REPORT_REF&per_page=30" \
+            --jq '[.workflow_runs[] | select((.status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested") and (.display_title | endswith("(scan)")))] | length' 2>/dev/null || echo 0)"
+          if [[ "$waiting" =~ ^[1-9][0-9]*$ ]]; then
+            echo "A delivery scan is already waiting; it will send this revision."
+            exit 0
+          fi
+          gh workflow run deliver-evaluation.yml --repo "$GITHUB_REPOSITORY" --ref "$REPORT_REF" --field mode=scan \
+            || echo '::warning::Delivery request failed; the scheduled scan will send the queued revision.'
+
+  pages:
+    outputs:
+      findings_pending: ${{ steps.archive.outputs.findings_pending }}
+      issue: ${{ steps.archive.outputs.issue }}
+      publication: ${{ steps.archive.outputs.publication }}
+      page_url: ${{ steps.deployment.outputs.page_url }}
+      deployed: ${{ steps.deployment.outcome == 'success' }}
+    needs: report
+    # report needs dispatch-gate, which is skipped outside workflow_run; the
+    # implicit success() would then skip publication too.
+    if: >-
+      !cancelled() && needs.report.result == 'success' &&
+      needs.report.outputs.html_ready == 'true' && needs.report.outputs.report_artifact != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: factory-task-usage
+      queue: max
+    permissions:
+      actions: read
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.report.outputs.report_artifact }}
+          path: ${{ runner.temp }}/delivery-report
+          merge-multiple: true
+      - name: Archive report without replacing other Issues
+        id: archive
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/report-pages.mjs archive \
+            --report "$RUNNER_TEMP/delivery-report/report.json" \
+            --html "$RUNNER_TEMP/delivery-report/report.html" \
+            --output "$RUNNER_TEMP/report-publication.json"
+          echo "publication=$(base64 -w0 "$RUNNER_TEMP/report-publication.json")" >> "$GITHUB_OUTPUT"
+      # Archive before configuring Pages: first-time setup failures lose no reports.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.archive.outputs.commit_sha }}
+          path: report-site
+          persist-credentials: false
+      - name: Configure existing Pages site
+        id: pages
+        continue-on-error: true
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Upload the complete archived site
+        if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: report-site
+      - name: Deploy report site
+        if: steps.pages.outcome == 'success'
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Explain one-time Pages setup
+        if: always() && steps.pages.outcome == 'failure'
+        run: |
+          echo '::warning::Report archived, but Pages is not ready. Set Settings > Pages > Source to GitHub Actions, then rerun the Pages job. No rebuild is needed.'
+          echo 'HTML 已归档。首次请将 Settings → Pages → Source 设为 GitHub Actions，然后重跑 Pages 作业；不需要重新搭建。' >> "$GITHUB_STEP_SUMMARY"
+
+  # Waits up to three minutes for the CDN outside factory-task-usage, so the
+  # next report's archive and deploy do not queue behind it. A later deploy
+  # only adds to the site, so this report stays served. The comments it
+  # upserts are serialized here instead: notifyReport compares each receipt,
+  # and two notifies of one Issue must not both create its comment. Only one
+  # Issue's notifies share comments (its own and its build PR's), so the
+  # queue is per Issue and a burst of reports does not wait on each CDN check.
+  notify:
+    needs: pages
+    if: ${{ !cancelled() && needs.pages.outputs.deployed == 'true' && needs.pages.outputs.publication != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: factory-report-notify-${{ needs.pages.outputs.issue }}
+      queue: max
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Verify HTML and update Issue and PR links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPORT_BASE_URL: ${{ needs.pages.outputs.page_url }}
+          PUBLICATION: ${{ needs.pages.outputs.publication }}
+        run: |
+          printf '%s' "$PUBLICATION" | base64 -d > "$RUNNER_TEMP/report-publication.json"
+          node control/.github/scripts/report-pages.mjs notify \
+            --publication "$RUNNER_TEMP/report-publication.json" \
+            --base-url "$REPORT_BASE_URL"
+
+  findings:
+    needs: pages
+    if: ${{ !cancelled() && needs.pages.outputs.findings_pending == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Request Agent classification without delaying report publication
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_REF: ${{ github.event.repository.default_branch }}
+        # A classification run still waiting for its group prepares from the
+        # site as it is when it starts, which already holds this report, so a
+        # second request would only queue a run that finds nothing new. Any
+        # error listing runs falls through to the request.
+        run: |
+          waiting="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/classify-findings.yml/runs?branch=$REPORT_REF&per_page=30" \
+            --jq '[.workflow_runs[] | select(.status == "queued" or .status == "pending" or .status == "waiting" or .status == "requested")] | length' 2>/dev/null || echo 0)"
+          if [[ "$waiting" =~ ^[1-9][0-9]*$ ]]; then
+            echo "A classification run is already waiting; it will include this report."
+            exit 0
+          fi
+          gh workflow run classify-findings.yml --repo "$GITHUB_REPOSITORY" --ref "$REPORT_REF" \
+            || echo '::warning::Classification request failed. Findings remain visible as pending; rerun Classify framework findings.'

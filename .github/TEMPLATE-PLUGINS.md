@@ -1,0 +1,47 @@
+# Refresh template: plugin baseline
+
+`Refresh NocoBase Template` still creates a fresh `@nocobase/app-template-default@latest` application. It then installs and registers an explicit baseline before the existing application verification and publication steps:
+
+| Package                                  | Role                                                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| `@nocobase/app-plugin-ai-employee`       | AI Employee; already in the current default template and required by Knowledge Base |
+| `@nocobase/app-plugin-ai-knowledge-base` | Pro knowledge-base plugin                                                           |
+| `@nocobase/app-plugin-mail`              | Pro user-mailbox plugin; not `@nocobase/plugin-email-manager`                       |
+
+The list is maintained in `.github/scripts/template-plugins.mjs`. This is not an automatic discovery mechanism for all future commercial packages, and it does not use the retired Pro template or copy commercial source into this repository.
+
+## Current-template policy
+
+Only the current NocoBase 3 package CLI is supported. Refresh resolves the official latest template; the verified commit, lockfile, creator and plugin versions remain fixed for each task. Old inline builds, app-tools wrappers, script aliases and migration fallbacks are removed. An unsupported template fails explicitly; it is never patched into compatibility. Refresh must pass before a new baseline replaces develop.
+
+## Refresh sequence
+
+1. Generate the latest official default template and restore factory controls.
+2. Install application dependencies from the template's own declarations (`@nocobase/db-sqlite` is added at `latest` only when the template does not declare it: under pnpm's `minimumReleaseAge` an unconditional `@latest` rewrote the template's `^0.1.0-beta.4` to an older `0.1.0-beta.3`), then read each listed package's `latest` and `beta` dist-tags (`pnpm view <package> dist-tags --json`) and add the higher of the two by semver, all in one package-manager operation. NocoBase does not move `latest` with every prerelease: Mail and Knowledge Base kept `latest` on a 0.x line built for the previous core (`app-plugin-mail@0.1.0-beta.0` requires `@nocobase/app-server ^1` and imports `Job` from `@nocobase/queue`, which current releases removed) while their current releases went to `beta`. The chosen tag and version are recorded in `template-diagnostics/template-plugins/selected-versions.json`, and the generated lockfile retains the resolved versions.
+3. Before registering anything, compare each installed plugin's `@nocobase/app-server` and `@nocobase/app-client` peer ranges with the template's own declarations. The major version, or the minor version within 0.x, must match. A mismatch fails with the plugin, both ranges and the dist-tags to check, instead of surfacing later as a missing export during the application build. A mismatch on the newest published release means NocoBase has not published a compatible plugin yet; report it upstream rather than pinning an old plugin.
+4. Run the official `pnpm exec nocobase plugin register` command for every package with `--no-install --no-skills`. This wires exported Client/Server/CLI entries without repeating dependency installation. Existing registration is accepted as a no-op. Then wire the public `mailConfig` factory through `server/config/mail.ts` and the typed `defaultAppConfigs` composition in `server/config/index.ts`. Do not rely on a plugin release providing fallback defaults.
+5. Run `pnpm exec nocobase skills sync`, then inspect every package with `pnpm exec nocobase plugin inspect <package> --json`. Require production dependencies, Client/Server registration, any exported CLI registration, and matching package-owned Skills. A zero exit code alone is not sufficient; partial registration and inconsistent inspection stop the refresh.
+6. Record installed versions in `factory-template.json.plugins`, CLI responses in `template-diagnostics/template-plugins/`, and an inventory in the Actions summary. The inventory establishes static installation/registration only, not application or external-provider readiness.
+7. Continue the existing factory tests, application checks/build, isolated database initialization, and browser login verification. Only a verified baseline is eligible for publication.
+
+The existing scoped registry in `.npmrc` also reaches nested pnpm roots. Registry authentication, missing packages, incompatible releases, or failed plugin checks fail the workflow; no plugin is silently skipped and no registry/license restriction is bypassed.
+
+## Baseline upgrade in PR #353
+
+The checked-in application merges the official beta.46 → beta.47 source changes and uses the dependency lockfile from successful Refresh run 36219832766. Application identity, the factory README section, Pro plugin registrations, business documentation, and all database migration/seed sources are preserved. Package-owned Skills are regenerated by the official postinstall command.
+
+The removed application CLI wrappers and build scripts now live in `@nocobase/app-cli`. Direct dependencies on `@nocobase/app-tools`, `@nocobase/nb3-cli`, the retired client notification-provider plugin and `sonner` are removed after migrating their imports to the new CLI and official toast provider. Server notification providers, Knowledge Base and Mail remain registered. The obsolete Dev-route authorization shim is removed; current framework authorization and its behavior tests remain in place.
+
+Issue builds and review replays check the current-template contract before installing application dependencies. A historical base that still uses the retired build entry is rejected before model invocation with a request to start a new task from the current verified baseline. There is no automatic conversion or database-command retry.
+
+## Runtime configuration
+
+Installation is not external-service configuration. Do not commit mailbox passwords, OAuth secrets, model API keys, or vector-database credentials. Mail providers and Knowledge Base model/vector services must be configured for the consuming application. The refreshed App explicitly composes the installed Mail package's default configuration factory. Its defaults do not configure external accounts; provider/configuration details belong to its synchronized Skill. Existing application runtime verification remains required even after static inspection passes.
+
+The generated `AGENTS.md` is not modified, and old `.agents` content is not copied. Skills come from the newly installed packages. The default factory application baseline is updated to beta.47 in this PR. Historical task branches are not automatically rewritten: create a new task from the current verified baseline instead of resuming an old template.
+
+After merging this change into `develop`, start a **new** Refresh workflow from `develop`. `dry_run=true` runs generation and verification without publishing; `dry_run=false` retains the existing backup and guarded publish behavior. Re-running an old workflow run does not select this new workflow implementation.
+
+## Pull-request verification
+
+Every PR targeting `develop` that changes the refresh workflow, template integration scripts, overlay, verification scripts or the files the overlay copies (`.npmrc`, `README.MD`) runs the **same** generation, plugin installation, application tests, build, isolated database, and browser checks before merging, whoever opened it and from a fork as well: a skipped check would pass, so the check is never skipped for a non-owner. Such a run checks out the PR merge commit, holds no secrets and only `contents: read` plus `pull-requests: read`, and queues per pull request (`template-refresh-pr-{number}`) rather than in the `template-refresh-global` queue that publishing runs and preset syncs share, so a stack of PR pushes cannot hold a publish back. Because `queue: max` cannot be combined with `cancel-in-progress`, a run that a newer push already superseded still starts; its first step compares the run's head with the pull request's live head and, when they differ, writes a notice and skips every remaining step. The one exception to running everything is the factory regression suite: `factory-tests.yml` already runs it on every such PR, so the refresh runs it only for `workflow_dispatch`, with `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT` unset exactly as there, so a Re-run does not fail the run-identity fixtures. Publication is restricted to `workflow_dispatch` with `dry_run=false`. No PR verification updates `develop`, and fixture-only Factory regression results do not stand in for this integration run.

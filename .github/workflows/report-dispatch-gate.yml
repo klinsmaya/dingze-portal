@@ -1,0 +1,110 @@
+name: Report dispatch gate
+
+# Each task report is requested twice: the task's dispatch-reports job
+# dispatches it explicitly (the only path for bot-started continuations), and
+# GitHub also raises workflow_run when the task completes. When the explicit
+# request for the caller's own workflow went out, the workflow_run copy would
+# only repeat the same work: wait
+# for the run, download its artifacts, and for previews upload the ~84 MB
+# payload again, while holding a global queue. Callers run this only for
+# workflow_run events and skip their work when it reports `covered`.
+#
+# Each report has its own `Request <workflow>` step in the task, and the gate
+# reads only the caller's, so one failed request does not make all six
+# workflow_run copies redo their work. Runs from before that split have one
+# combined step, which still counts for every report.
+#
+# A run that ran no model has nothing to report: prepare decided there was
+# nothing to do (a preset or manual Issue, a duplicate event), so every
+# dispatcher job and every model job (`agent`, `reply`) was skipped. That run
+# also counts as covered, so its six workflow_run copies stop at the gate
+# instead of each waiting for the run and finding no artifact.
+#
+# It fails open: an API error, an older run without either step, or a run
+# without any dispatcher job leaves `covered` false, and the caller does the
+# work as before.
+
+on:
+  workflow_call:
+    inputs:
+      workflow:
+        description: The caller's workflow file, as the task's request step names it
+        required: true
+        type: string
+    outputs:
+      covered:
+        description: "'true' when the source run already requested this report, or ran no model and has nothing to report"
+        value: ${{ jobs.check.outputs.covered }}
+      issue:
+        description: The source run's Issue from its title, or '' when the title has none; only for picking a concurrency group
+        value: ${{ jobs.check.outputs.issue }}
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      actions: read
+    outputs:
+      covered: ${{ steps.check.outputs.covered }}
+      issue: ${{ steps.issue.outputs.issue }}
+    steps:
+      - name: Check whether the task already dispatched this report
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          set -euo pipefail
+          covered=false
+          if [[ "$RUN_ID" =~ ^[1-9][0-9]*$ && "$ATTEMPT" =~ ^[1-9][0-9]*$ && "$WORKFLOW" =~ ^[a-z-]+\.yml$ ]]; then
+            # The step names are the contract with code-agent-task.yml. Three
+            # attempts ride out a transient API error; at most about 70 s.
+            # Dispatcher jobs are the task's `dispatch-*` jobs (wake-comment-queue
+            # dispatches no report).
+            found=''
+            for attempt in 1 2 3; do
+              if found="$(timeout --kill-after=5s 20s gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs?per_page=100" \
+                --jq '[.jobs[] | select(.name | test("^dispatch-"))] as $dispatchers |
+                  ([$dispatchers[] | .steps[]? |
+                    select((.name == "Request '"$WORKFLOW"'" or .name == "Explicitly request task reports (including continuations)") and .conclusion == "success")] | length)
+                  as $requested |
+                  (($dispatchers | length) > 0 and all($dispatchers[]; .conclusion == "skipped") and
+                    all(.jobs[] | select(.name == "agent" or .name == "reply"); .conclusion == "skipped")) as $idle |
+                  "\($requested) \($idle)"')"; then
+                break
+              fi
+              found=''
+              if [[ "$attempt" -lt 3 ]]; then sleep $((attempt * 3)); fi
+            done
+            if [[ "$found" =~ ^([0-9]+)\ (true|false)$ ]]; then
+              if [[ "${BASH_REMATCH[1]}" != 0 ]]; then
+                covered=true
+              elif [[ "${BASH_REMATCH[2]}" == true ]]; then
+                covered=true
+                echo "Run $RUN_ID attempt $ATTEMPT ran no model and requested no report; nothing to do."
+              fi
+            else
+              echo "::warning::Could not read the source run's jobs; doing the work here."
+            fi
+          fi
+          echo "covered=$covered" >> "$GITHUB_OUTPUT"
+          echo "$WORKFLOW already dispatched by run $RUN_ID attempt $ATTEMPT: $covered"
+
+      # The caller may queue per Issue; the task's run-name starts with it.
+      # Same rule as taskRunIssue in wait-for-task-run.mjs.
+      - name: Read the source run's Issue
+        id: issue
+        env:
+          TITLE: ${{ github.event.workflow_run.display_title }}
+        run: |
+          set -euo pipefail
+          issue=''
+          if [[ "${TITLE:-}" =~ ^Factory\ issue\ \#([1-9][0-9]*)\ build\  ]]; then
+            issue="${BASH_REMATCH[1]}"
+          fi
+          echo "issue=$issue" >> "$GITHUB_OUTPUT"

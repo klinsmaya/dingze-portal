@@ -1,40 +1,27 @@
-# Logs
+node_modules/
+dist/
+coverage/
 
-logs
-_.log
-npm-debug.log_
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Local configuration, including the generated secrets key.
+/config.yml
+/config.toml
+/.env
+/.env.local
 
-node_modules
-dist
-dist-ssr
-*.local
-/.extension-state/
-/src/extensions/
-/registry.json
-/public/r/
-/coverage/
-/playwright-report/
-/test-results/
-/.pnpm-store/
+# Local application state.
+/storage/
+/database.sqlite
+/database.sqlite-journal
+/database.sqlite-wal
+/database.sqlite-shm
+/database/*/collections/
+/.agents/*
+!/.agents/rules/
+/.claude/skills/
+/.agent-annotations/
+*.log
 
-# Environment variables
-.env
-.env.local
-.env.e2e
-.env.e2e.local
+# Keep agent guidance and generated configuration in refreshed baselines.
 
-# Editor directories and files
-
-.vscode/_
-!.vscode/extensions.json
-.idea
-.DS_Store
-_.suo
-_.ntvs_
-_.njsproj
-_.sln
-\*.sw?
+# Python bytecode from running the factory's own test scripts.
+__pycache__/

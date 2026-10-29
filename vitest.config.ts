@@ -1,39 +1,38 @@
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from 'node:url';
 
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
 
-const root = fileURLToPath(new URL(".", import.meta.url));
-const registryRoot = fileURLToPath(new URL("./registry", import.meta.url));
-const extensionsRoot = fs.existsSync(registryRoot)
-  ? registryRoot
-  : fileURLToPath(new URL("./src/extensions", import.meta.url));
+const root = fileURLToPath(new URL('.', import.meta.url));
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@dingze/shared": fileURLToPath(
-        new URL("./server-plugins/plugin-dingze/src/shared", import.meta.url)
-      ),
-      "@/extensions": extensionsRoot,
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
-  },
+export default createReactVitestConfig({
   test: {
     root,
-    environment: "jsdom",
-    setupFiles: ["./tests/setup/vitest.ts"],
-    include: [
-      "tests/logic/**/*.test.{ts,tsx}",
-      "tests/components/**/*.test.{ts,tsx}",
-      "registry/*/tests/**/*.test.{ts,tsx}",
-    ],
+    server: {
+      deps: {
+        // Transform the public Client surfaces so vi.mock applies, without duplicating the Server packages' identity tokens.
+        inline: [
+          // The authentication guards read the location, so they share the test's react-router rather than Node's copy,
+          // together with every client that resolves the authentication tokens and provider.
+          /@nocobase\/app-plugin-(?:authentication|api-keys|users)\/(?:dist\/)?client\//u,
+          /@nocobase\/app-plugin-authorization\/(?:dist\/)?client\//u,
+          /@nocobase\/app-plugin-(?:lifecycle-example|office-flows-example)\/(?:dist\/)?client\//u,
+          /@nocobase\/app-plugin-notification-in-app\/(?:dist\/)?client\//u,
+        ],
+      },
+    },
+    // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
+    // silently drifted: it named a file that no longer existed while several real test files were absent from it, so
+    // those tests were never run at all.
+    include: ['tests/**/*.test.{ts,tsx}'],
+    // Playwright runs tests/playwright/ against a built application; its files are named *.test.ts too.
+    exclude: ['tests/playwright/**'],
+    setupFiles: ['./tests/setup/client-config.ts'],
+    // Keep the command usable if an application intentionally removes all scaffold tests before adding its own.
+    passWithNoTests: true,
     coverage: {
-      provider: "v8",
-      reportsDirectory: "./coverage",
-      reporter: ["text", "html"],
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'html'],
     },
   },
 });
