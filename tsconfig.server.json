@@ -10,5 +10,13 @@
     "outDir": "dist"
   },
   "tsc-alias": { "resolveFullPaths": true },
-  "include": ["server/**/*.ts", "database/**/*.ts", "cli/**/*.ts"]
+  // shared/ is isomorphic domain rules (catalog, lifecycle, validators). The nested
+  // shared/tsconfig.json exists so ESLint's project service can find those files;
+  // this include is what `pnpm build` / `tsc -p tsconfig.server.json` actually emit.
+  "include": [
+    "server/**/*.ts",
+    "database/**/*.ts",
+    "cli/**/*.ts",
+    "shared/**/*.ts"
+  ]
 }
