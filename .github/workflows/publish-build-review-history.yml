@@ -1,0 +1,93 @@
+name: Publish Build Review History
+
+on:
+  workflow_run:
+    workflows: [Reassess Build Quality]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Completed Reassess Build Quality run (not original business run)
+        required: true
+        type: string
+      attempt:
+        description: Review run attempt
+        required: true
+        default: '1'
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    # A reassessment skipped by its own guards left nothing to publish.
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'skipped') ||
+      (github.event_name != 'workflow_run' && github.actor == github.repository_owner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Serialize with the normal history publisher so its shared Issue index is not lost.
+    # At job level, so an event the job condition drops never waits in this queue.
+    concurrency:
+      group: factory-agent-history
+      queue: max
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+    env:
+      SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+      SOURCE_ATTEMPT: ${{ inputs.attempt || github.event.workflow_run.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Select the completed review artifact
+        id: source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node control/.github/scripts/replay-review-history.mjs select "$RUNNER_TEMP/review-history"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: steps.source.outputs.ready == 'true'
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact }}
+          merge-multiple: true
+          run-id: ${{ steps.source.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/review-history/download
+      - name: Bind and archive only the review interaction
+        id: pack
+        if: steps.source.outputs.ready == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node control/.github/scripts/replay-review-history.mjs pack "$RUNNER_TEMP/review-history"
+      - name: Retain the archive alongside the original task
+        id: upload
+        if: steps.pack.outputs.asset != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET: ${{ steps.pack.outputs.asset }}
+        run: |
+          set -euo pipefail
+          url="$(bash control/.github/scripts/upload-history-asset.sh \
+            "$RUNNER_TEMP/review-history/archive/$ASSET" "已脱敏的工厂可观察交互记录。")"
+          echo "asset_url=$url" >> "$GITHUB_OUTPUT"
+      - name: Update task history without changing its business verdict
+        if: ${{ !cancelled() && steps.pack.outputs.issue != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE: ${{ steps.pack.outputs.issue }}
+          SOURCE_RUN: ${{ steps.source.outputs.run }}
+          ATTEMPT: ${{ steps.source.outputs.attempt }}
+          ASSET_URL: ${{ steps.upload.outputs.asset_url }}
+        run: |
+          node control/.github/scripts/agent-history.mjs publish \
+            --source "$RUNNER_TEMP/review-history/source.json" \
+            --manifest "$RUNNER_TEMP/review-history/packed.json" \
+            --issue "$ISSUE" --run "$SOURCE_RUN" --attempt "$ATTEMPT" --status review \
+            --asset-url "$ASSET_URL" --fallback-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN"

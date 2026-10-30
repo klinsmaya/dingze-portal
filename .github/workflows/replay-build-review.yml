@@ -1,0 +1,346 @@
+name: Reassess Build Quality
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Executed task Issue
+        required: true
+        type: string
+      run:
+        description: Original task run ID (does not rebuild)
+        required: true
+        type: string
+      attempt:
+        description: Publication attempt to update
+        required: true
+        type: string
+
+env:
+  # Only the public Agent settings agent-configuration.mjs reads. Never pass
+  # the whole vars context: each step prints its env in the public log, so
+  # every repository variable would reach every step, model runs included.
+  FACTORY_AGENT_CONFIG_JSON: >-
+    {
+    "CODE_AGENT_ENGINE": ${{ toJSON(vars.CODE_AGENT_ENGINE) }},
+    "CODE_AGENT_VERSION": ${{ toJSON(vars.CODE_AGENT_VERSION) }},
+    "PI_VERSION": ${{ toJSON(vars.PI_VERSION) }},
+    "CODEBUDDY_VERSION": ${{ toJSON(vars.CODEBUDDY_VERSION) }},
+    "CLAUDE_CODE_VERSION": ${{ toJSON(vars.CLAUDE_CODE_VERSION) }},
+    "CODEX_VERSION": ${{ toJSON(vars.CODEX_VERSION) }},
+    "OPENCODE_VERSION": ${{ toJSON(vars.OPENCODE_VERSION) }},
+    "CODE_AGENT_MODEL": ${{ toJSON(vars.CODE_AGENT_MODEL) }},
+    "PI_MODEL": ${{ toJSON(vars.PI_MODEL) }},
+    "CODEBUDDY_MODEL": ${{ toJSON(vars.CODEBUDDY_MODEL) }},
+    "CLAUDE_CODE_MODEL": ${{ toJSON(vars.CLAUDE_CODE_MODEL) }},
+    "CODEX_MODEL": ${{ toJSON(vars.CODEX_MODEL) }},
+    "OPENCODE_MODEL": ${{ toJSON(vars.OPENCODE_MODEL) }},
+    "CODE_AGENT_API_TYPE": ${{ toJSON(vars.CODE_AGENT_API_TYPE) }},
+    "PI_API_TYPE": ${{ toJSON(vars.PI_API_TYPE) }},
+    "CODE_AGENT_THINKING": ${{ toJSON(vars.CODE_AGENT_THINKING) }},
+    "PI_THINKING": ${{ toJSON(vars.PI_THINKING) }},
+    "CODEBUDDY_THINKING": ${{ toJSON(vars.CODEBUDDY_THINKING) }},
+    "CODE_AGENT_AUTH_HEADER": ${{ toJSON(vars.CODE_AGENT_AUTH_HEADER) }},
+    "PI_AUTH_HEADER": ${{ toJSON(vars.PI_AUTH_HEADER) }},
+    "CODE_AGENT_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE) }},
+    "PI_SUPPORTS_DEVELOPER_ROLE": ${{ toJSON(vars.PI_SUPPORTS_DEVELOPER_ROLE) }},
+    "CODE_AGENT_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT) }},
+    "PI_SUPPORTS_REASONING_EFFORT": ${{ toJSON(vars.PI_SUPPORTS_REASONING_EFFORT) }},
+    "CODE_AGENT_MODEL_REASONING": ${{ toJSON(vars.CODE_AGENT_MODEL_REASONING) }},
+    "CODE_AGENT_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_INVOCATION_TIMEOUT_SECONDS) }},
+    "PI_INVOCATION_TIMEOUT_SECONDS": ${{ toJSON(vars.PI_INVOCATION_TIMEOUT_SECONDS) }},
+    "CODE_AGENT_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS) }},
+    "CLAUDE_CODE_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_EFFORT) }},
+    "CLAUDE_CODE_QA_EFFORT": ${{ toJSON(vars.CLAUDE_CODE_QA_EFFORT) }},
+    "CODEX_REASONING_EFFORT": ${{ toJSON(vars.CODEX_REASONING_EFFORT) }},
+    "CODEX_QA_REASONING_EFFORT": ${{ toJSON(vars.CODEX_QA_REASONING_EFFORT) }},
+    "OPENCODE_VARIANT": ${{ toJSON(vars.OPENCODE_VARIANT) }},
+    "OPENCODE_QA_VARIANT": ${{ toJSON(vars.OPENCODE_QA_VARIANT) }},
+    "CODEBUDDY_BASE_URL": ${{ toJSON(vars.CODEBUDDY_BASE_URL) }},
+    "CODEBUDDY_INTERNET_ENVIRONMENT": ${{ toJSON(vars.CODEBUDDY_INTERNET_ENVIRONMENT) }},
+    "ANTHROPIC_BASE_URL": ${{ toJSON(vars.ANTHROPIC_BASE_URL) }},
+    "CODEX_BASE_URL": ${{ toJSON(vars.CODEX_BASE_URL) }},
+    "OPENCODE_BASE_URL": ${{ toJSON(vars.OPENCODE_BASE_URL) }},
+    "CODE_AGENT_PROVIDER_ID": ${{ toJSON(vars.CODE_AGENT_PROVIDER_ID) }},
+    "FACTORY_QA_THINKING": ${{ toJSON(vars.FACTORY_QA_THINKING) }},
+    "FACTORY_REVIEW_THINKING": ${{ toJSON(vars.FACTORY_REVIEW_THINKING) }},
+    "FACTORY_BUILD_REVIEW": ${{ toJSON(vars.FACTORY_BUILD_REVIEW) }},
+    "FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS) }},
+    "FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS": ${{ toJSON(vars.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS) }},
+    "AGENT_BROWSER_VERSION": ${{ toJSON(vars.AGENT_BROWSER_VERSION) }}
+    }
+
+permissions: {}
+# One reassessment per Issue at a time, so two replays cannot overwrite each
+# other's published review. (A run_id group never serialized anything.)
+concurrency:
+  group: factory-build-review-issue-${{ inputs.issue }}
+  queue: max
+
+jobs:
+  prepare:
+    # The evaluator and the reused report-task-usage.yml both come from the
+    # dispatched commit, so a run from another branch would publish with that
+    # branch's control code. Only the default branch may reassess.
+    if: >-
+      github.actor == github.repository_owner &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      ready: ${{ steps.bind.outcome == 'success' }}
+      base_sha: ${{ steps.bind.outputs.base_sha }}
+      run_id: ${{ steps.bind.outputs.run_id }}
+      attempt: ${{ steps.bind.outputs.attempt }}
+      control_sha: ${{ steps.pin.outputs.sha }}
+      # By ID: after "Re-run failed jobs" a skipped prepare keeps its first
+      # attempt's artifact, while github.run_attempt names the new attempt.
+      input_artifact: ${{ steps.input.outputs.artifact-id }}
+      # The source task's factory-agent-N, which review downloads itself.
+      source_run: ${{ steps.select.outputs.source_run }}
+      agent_artifact: ${{ steps.select.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - name: Pin evaluator
+        id: pin
+        run: echo "sha=$(git -C control rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Select retained application evidence
+        id: select
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_ISSUE: ${{ inputs.issue }}
+          SOURCE_RUN: ${{ inputs.run }}
+          SOURCE_ATTEMPT: ${{ inputs.attempt }}
+        run: |
+          node control/.github/scripts/replay-build-review.mjs select \
+            --issue "$SOURCE_ISSUE" --run "$SOURCE_RUN" --attempt "$SOURCE_ATTEMPT" --output input
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: steps.select.outputs.ready == 'true'
+        with:
+          artifact-ids: ${{ steps.select.outputs.artifact }}
+          merge-multiple: true
+          run-id: ${{ steps.select.outputs.source_run }}
+          github-token: ${{ github.token }}
+          path: input/agent
+      - name: Validate artifact producer and sealed patch
+        id: bind
+        if: steps.select.outputs.ready == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node control/.github/scripts/replay-build-review.mjs bind --input input
+      # Only what this job produced: the agent evidence stays in the source
+      # run's factory-agent-N, which review downloads by exact ID instead of a
+      # 15-25 MB copy uploaded here.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: input
+        if: steps.bind.outcome == 'success'
+        with:
+          name: factory-build-review-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            input/selected.json
+            input/binding.json
+          retention-days: 14
+          if-no-files-found: error
+
+  review:
+    needs: prepare
+    # An empty artifact-ids input would download every artifact of the run.
+    if: >-
+      needs.prepare.outputs.ready == 'true' && needs.prepare.outputs.input_artifact != '' &&
+      needs.prepare.outputs.agent_artifact != '' && needs.prepare.outputs.source_run != ''
+    runs-on: ubuntu-24.04
+    # Reconstruction and reviewer installation, then at most 60 minutes of review.
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      # To download the source task run's factory-agent-N by ID.
+      actions: read
+    outputs:
+      artifact_id: ${{ steps.export.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.control_sha }}
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: workspace
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.input_artifact }}
+          merge-multiple: true
+          path: input
+      # The same artifact prepare validated and bound (binding.json records its
+      # ID and patch hash, which the review checks again).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.agent_artifact }}
+          merge-multiple: true
+          run-id: ${{ needs.prepare.outputs.source_run }}
+          github-token: ${{ github.token }}
+          path: input/agent
+      - name: Check the downloaded evidence is the bound artifact
+        run: |
+          node --input-type=module - <<'NODE'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { readFileSync } from 'node:fs';
+          const binding = JSON.parse(readFileSync('input/binding.json', 'utf8'));
+          assert.equal(String(binding.artifactId), process.env.AGENT_ARTIFACT, 'Downloaded artifact is not the bound one');
+          const patchHash = createHash('sha256').update(readFileSync('input/agent/agent.patch')).digest('hex');
+          assert.equal(patchHash, binding.patchHash, 'Sealed patch changed since binding');
+          NODE
+        env:
+          AGENT_ARTIFACT: ${{ needs.prepare.outputs.agent_artifact }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.7.0
+          run_install: false
+      # Restore only, from the store the task's agent job saves: same key format
+      # and store path as setup-node there (node-cache-Linux-x64-pnpm-<hash of
+      # the lockfile>, `pnpm store path --silent` run in workspace/), exactly
+      # or by prefix. Nothing is saved: a replay never adds a store of its own.
+      # Source tarballs use an isolated local store (see the restore step
+      # below), not the shared registry cache.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+          package-manager-cache: false
+      - name: Locate the pnpm store
+        id: pnpm_store
+        if: hashFiles('workspace/factory-source.json') == ''
+        working-directory: workspace
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Restore the task's pnpm store
+        if: steps.pnpm_store.outputs.path != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm_store.outputs.path }}
+          key: node-cache-Linux-x64-pnpm-${{ hashFiles('workspace/pnpm-lock.yaml') }}
+          restore-keys: |
+            node-cache-Linux-x64-pnpm-
+      - name: Apply the sealed candidate
+        run: |
+          test -f input/agent/agent.patch
+          test ! -L input/agent/agent.patch
+          if [[ -s input/agent/agent.patch ]]; then
+            git -C workspace apply --index ../input/agent/agent.patch
+          else
+            echo "Sealed candidate has no new patch; reviewing the pinned checkout unchanged."
+          fi
+      - name: Restore original source package snapshot
+        # Separate step: source-snapshot exports isolated registry/store paths via GITHUB_ENV.
+        run: node control/.github/scripts/source-snapshot.mjs restore workspace input/agent/task-metadata.json
+      - name: Reconstruct sealed candidate without rebuilding
+        timeout-minutes: 15
+        run: |
+          cd workspace
+          node ../control/.github/scripts/assert-current-template.mjs .
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm exec nocobase skills sync
+      - name: Install selected pinned reviewer
+        timeout-minutes: 10
+        env:
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          CODE_AGENT_VERSION: ${{ vars.CODE_AGENT_VERSION }}
+          PI_VERSION: ${{ vars.PI_VERSION }}
+          CODEBUDDY_VERSION: ${{ vars.CODEBUDDY_VERSION }}
+          CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+          CODEX_VERSION: ${{ vars.CODEX_VERSION }}
+          OPENCODE_VERSION: ${{ vars.OPENCODE_VERSION }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+        run: node control/.github/scripts/install-agent.mjs
+      - name: Assess modules and persist evidence checkpoints
+        env:
+          CODE_AGENT_ENGINE: ${{ vars.CODE_AGENT_ENGINE }}
+          FACTORY_AGENT_INSTALL_RECORD: ${{ runner.temp }}/agent-install.json
+          # Explicit engine selection; adding a CLI must not fall through to Pi.
+          # This mapping is shared by implementation, repair/QA, and comment reply.
+          CODE_AGENT_API_ENDPOINT: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_ENDPOINT || secrets.PI_API_ENDPOINT) || '' }}
+          CODE_AGENT_API_KEY: ${{ (vars.CODE_AGENT_ENGINE == '' || vars.CODE_AGENT_ENGINE == 'pi') && (secrets.CODE_AGENT_API_KEY || secrets.PI_API_KEY) || '' }}
+          CODEBUDDY_AUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_AUTH_TOKEN || '' }}
+          CODEBUDDY_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && secrets.CODEBUDDY_API_KEY || '' }}
+          CODEBUDDY_MODEL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_MODEL || '' }}
+          CODEBUDDY_THINKING: ${{ vars.CODEBUDDY_THINKING || 'max' }}
+          CODEBUDDY_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_BASE_URL || '' }}
+          CODEBUDDY_INTERNET_ENVIRONMENT: ${{ vars.CODE_AGENT_ENGINE == 'codebuddy' && vars.CODEBUDDY_INTERNET_ENVIRONMENT || '' }}
+          CODE_AGENT_API_TYPE: ${{ vars.CODE_AGENT_API_TYPE || vars.PI_API_TYPE || 'openai-completions' }}
+          CODE_AGENT_MODEL: ${{ vars.CODE_AGENT_MODEL || vars.PI_MODEL }}
+          CODE_AGENT_THINKING: ${{ vars.CODE_AGENT_THINKING || vars.PI_THINKING || 'max' }}
+          CODE_AGENT_AUTH_HEADER: ${{ vars.CODE_AGENT_AUTH_HEADER || vars.PI_AUTH_HEADER || 'true' }}
+          CODE_AGENT_SUPPORTS_DEVELOPER_ROLE: ${{ vars.CODE_AGENT_SUPPORTS_DEVELOPER_ROLE || vars.PI_SUPPORTS_DEVELOPER_ROLE }}
+          CODE_AGENT_SUPPORTS_REASONING_EFFORT: ${{ vars.CODE_AGENT_SUPPORTS_REASONING_EFFORT || vars.PI_SUPPORTS_REASONING_EFFORT || 'true' }}
+          FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS: ${{ vars.FACTORY_BUILD_REVIEW_TIMEOUT_SECONDS || '3600' }}
+          FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS: ${{ vars.FACTORY_BUILD_REVIEW_IDLE_TIMEOUT_SECONDS || '600' }}
+          ANTHROPIC_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.ANTHROPIC_API_KEY || '' }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          ANTHROPIC_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'claude-code' && vars.ANTHROPIC_BASE_URL || '' }}
+          CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}
+          CLAUDE_CODE_EFFORT: ${{ vars.CLAUDE_CODE_EFFORT }}
+          CLAUDE_CODE_QA_EFFORT: ${{ vars.CLAUDE_CODE_QA_EFFORT }}
+          CODEX_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'codex' && secrets.CODEX_API_KEY || '' }}
+          CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+          CODEX_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'codex' && vars.CODEX_BASE_URL || '' }}
+          CODEX_REASONING_EFFORT: ${{ vars.CODEX_REASONING_EFFORT }}
+          CODEX_QA_REASONING_EFFORT: ${{ vars.CODEX_QA_REASONING_EFFORT }}
+          OPENCODE_API_KEY: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && secrets.OPENCODE_API_KEY || '' }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          OPENCODE_BASE_URL: ${{ vars.CODE_AGENT_ENGINE == 'opencode' && vars.OPENCODE_BASE_URL || '' }}
+          OPENCODE_VARIANT: ${{ vars.OPENCODE_VARIANT }}
+          OPENCODE_QA_VARIANT: ${{ vars.OPENCODE_QA_VARIANT }}
+          CODE_AGENT_IDLE_TIMEOUT_SECONDS: ${{ vars.CODE_AGENT_IDLE_TIMEOUT_SECONDS }}
+          FACTORY_AGENT_ROLE: review
+          FACTORY_REVIEW_THINKING: ${{ vars.FACTORY_REVIEW_THINKING || 'medium' }}
+          FACTORY_CONTROL_SHA: ${{ needs.prepare.outputs.control_sha }}
+          FACTORY_TIMINGS_FILE: ${{ runner.temp }}/review/timings.jsonl
+        run: |
+          node control/.github/scripts/replay-build-review.mjs run \
+            --input input --workspace workspace --output "$RUNNER_TEMP/review"
+      - name: Stop the reviewer source registry
+        if: always()
+        run: node control/.github/scripts/source-snapshot.mjs stop
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: export
+        if: always()
+        with:
+          name: factory-build-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/review
+          retention-days: 14
+          if-no-files-found: warn
+
+  report:
+    needs: [prepare, review]
+    if: ${{ !cancelled() && needs.prepare.outputs.ready == 'true' && needs.review.outputs.artifact_id != '' }}
+    # actions: write lets the reused reporter request evaluation delivery without waiting on it.
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+      pull-requests: write
+      pages: write
+      id-token: write
+    # The called reporter's pages job holds factory-task-usage itself, so the
+    # archive and deploy never run beside daily-findings and classify-findings;
+    # its usage comment queues per Issue. Holding the global group here too
+    # would deadlock: GitHub cancels the call.
+    uses: ./.github/workflows/report-task-usage.yml
+    with:
+      run_id: ${{ needs.prepare.outputs.run_id }}
+      attempt: ${{ needs.prepare.outputs.attempt }}
+      review_run_id: ${{ format('{0}', github.run_id) }}
+      review_artifact_id: ${{ needs.review.outputs.artifact_id }}
+    # No secrets: the reporter uses only github.token, and inheriting would
+    # hand every repository secret to a workflow that never reads one.

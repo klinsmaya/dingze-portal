@@ -1,0 +1,110 @@
+name: Publish Task Retrospective
+
+on:
+  workflow_run:
+    workflows: [Code Agent NocoBase Task]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Code Agent task run ID (not Issue or PR number)
+        required: true
+        type: string
+      attempt:
+        description: Run attempt (leave empty for latest)
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: factory-retro-${{ inputs.run_id || github.event.workflow_run.id }}
+  queue: max
+
+jobs:
+  # The task usually requested this run itself; see report-dispatch-gate.yml.
+  # A skipped task run (an Issue from someone without repository access) ran
+  # nothing to report on, so it does not start this chain either.
+  dispatch-gate:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'skipped'
+    uses: ./.github/workflows/report-dispatch-gate.yml
+    with:
+      workflow: publish-retro.yml
+    permissions:
+      actions: read
+
+  publish-retro:
+    # Unlike the media report, a retrospective is worth publishing for failed
+    # runs and handoffs too: those runs are where the next baseline fix hides.
+    # Every completed run has a conclusion, so name the ones that ran a task:
+    # a skipped run (an Issue from someone without repository access) has none.
+    needs: dispatch-gate
+    if: >-
+      !cancelled() && needs.dispatch-gate.outputs.covered != 'true' &&
+      (github.event_name == 'workflow_dispatch' || contains(fromJSON('["success","failure","timed_out","cancelled"]'), github.event.workflow_run.conclusion))
+    runs-on: ubuntu-24.04
+    # Up to 11 minutes waiting for the source run (wait-for-task-run.mjs) plus
+    # the download and comment.
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    env:
+      SOURCE_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+      SOURCE_ATTEMPT: ${{ inputs.attempt || github.event.workflow_run.run_attempt }}
+    steps:
+      # Never check out the application PR or execute anything from its artifact.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Select the completed task run
+        id: source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/publish-retro.mjs select \
+            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT" --source "$RUNNER_TEMP/retro-source.json"
+
+      - name: Download the agent artifact
+        if: steps.source.outputs.ready == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          # By ID: the name is shared by every attempt of the run.
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          # Explicit, as in the factory's other downloads by ID: the files stay at
+          # the path itself, where publish reads them.
+          merge-multiple: true
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/retro-evidence
+
+      # prepare's normalized metadata: an Agent that stopped before copying
+      # task-metadata.json into its artifact still gets a retro.
+      - name: Download normalized task metadata when available
+        if: steps.source.outputs.ready == 'true' && steps.source.outputs.task_artifact_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.source.outputs.task_artifact_id }}
+          merge-multiple: true
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/retro-task
+
+      - name: Publish the retrospective
+        if: steps.source.outputs.ready == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node control/.github/scripts/publish-retro.mjs publish \
+            --run-id "$SOURCE_RUN_ID" \
+            --source "$RUNNER_TEMP/retro-source.json" \
+            --artifacts "$RUNNER_TEMP/retro-evidence" \
+            --task "$RUNNER_TEMP/retro-task"
