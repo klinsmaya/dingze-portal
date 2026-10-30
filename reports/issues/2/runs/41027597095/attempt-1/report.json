@@ -1,0 +1,2037 @@
+{
+  "record": {
+    "version": 1,
+    "repository": "klinsmaya/dingze-portal",
+    "issue": 2,
+    "runId": 41027597095,
+    "attempt": 1,
+    "status": "failure",
+    "start": 1793349395000,
+    "end": 1793365072000,
+    "jobs": [
+      {
+        "id": 123969311123,
+        "name": "prepare",
+        "seconds": 19
+      },
+      {
+        "id": 123969445693,
+        "name": "agent",
+        "seconds": 15651
+      }
+    ],
+    "agentJobId": 123969445693,
+    "invoked": true,
+    "artifact": "factory-agent-2",
+    "artifactId": 12977543416,
+    "finalArtifactId": null,
+    "taskArtifactId": 12964043900,
+    "event": "workflow_dispatch",
+    "previousRunId": null,
+    "usage": {
+      "phases": {
+        "implementation": {
+          "input": 1034422,
+          "output": 77247,
+          "cacheRead": 3803904,
+          "cacheWrite": 0,
+          "reasoning": 42157,
+          "totalTokens": 4915573
+        },
+        "repair": {
+          "input": 3265243,
+          "output": 331029,
+          "cacheRead": 14641536,
+          "cacheWrite": 0,
+          "reasoning": 219567,
+          "totalTokens": 18237808
+        },
+        "qa": {
+          "input": 152362,
+          "output": 52022,
+          "cacheRead": 1785856,
+          "cacheWrite": 0,
+          "reasoning": 33692,
+          "totalTokens": 1990240
+        },
+        "qaFocused": {
+          "input": 292167,
+          "output": 31985,
+          "cacheRead": 4518400,
+          "cacheWrite": 0,
+          "reasoning": 10023,
+          "totalTokens": 4842552
+        },
+        "qaReport": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 0
+        },
+        "review": {
+          "input": 424760,
+          "output": 42772,
+          "cacheRead": 1915648,
+          "cacheWrite": 0,
+          "reasoning": 19633,
+          "totalTokens": 2383180
+        },
+        "compaction": {
+          "input": 1179987,
+          "output": 197322,
+          "cacheRead": 50816,
+          "cacheWrite": 0,
+          "reasoning": 34157,
+          "totalTokens": 1428125
+        }
+      },
+      "records": 546,
+      "missing": 6,
+      "incomplete": 1
+    },
+    "evaluation": {
+      "version": 1,
+      "runKey": "klinsmaya/dingze-portal/issues/2/initial",
+      "kind": "initial",
+      "derivation": "recorded",
+      "agentConfiguration": {
+        "fingerprints": [
+          "0e38db456373c817f6cc61a17dda2425d264814369a084c184757a543024ba4a"
+        ],
+        "complete": false
+      },
+      "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+      "baseSha": "f4e6f328e9ff03aac03cca3aabc99bdccfa5e7da",
+      "inputHash": "1ca2c7ad387489b97e5502123a9736e05d281efa029f4d1c914042c5486fea0c",
+      "patchSha256": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+      "pipelineOutcome": "budget-exhausted",
+      "event": "workflow_dispatch",
+      "previousRunId": null
+    }
+  },
+  "cumulative": {
+    "usage": {
+      "phases": {
+        "implementation": {
+          "input": 1034422,
+          "output": 77247,
+          "cacheRead": 3803904,
+          "cacheWrite": 0,
+          "reasoning": 42157,
+          "totalTokens": 4915573
+        },
+        "repair": {
+          "input": 3265243,
+          "output": 331029,
+          "cacheRead": 14641536,
+          "cacheWrite": 0,
+          "reasoning": 219567,
+          "totalTokens": 18237808
+        },
+        "qa": {
+          "input": 152362,
+          "output": 52022,
+          "cacheRead": 1785856,
+          "cacheWrite": 0,
+          "reasoning": 33692,
+          "totalTokens": 1990240
+        },
+        "qaFocused": {
+          "input": 292167,
+          "output": 31985,
+          "cacheRead": 4518400,
+          "cacheWrite": 0,
+          "reasoning": 10023,
+          "totalTokens": 4842552
+        },
+        "qaReport": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 0
+        },
+        "review": {
+          "input": 424760,
+          "output": 42772,
+          "cacheRead": 1915648,
+          "cacheWrite": 0,
+          "reasoning": 19633,
+          "totalTokens": 2383180
+        },
+        "compaction": {
+          "input": 1179987,
+          "output": 197322,
+          "cacheRead": 50816,
+          "cacheWrite": 0,
+          "reasoning": 34157,
+          "totalTokens": 1428125
+        }
+      },
+      "records": 546,
+      "missing": 6,
+      "incomplete": 1
+    },
+    "total": 33797478,
+    "seconds": 15670,
+    "missingTimes": 0,
+    "elapsed": 15677,
+    "runs": 1,
+    "attempts": 1
+  },
+  "records": [
+    {
+      "version": 1,
+      "repository": "klinsmaya/dingze-portal",
+      "issue": 2,
+      "runId": 41027597095,
+      "attempt": 1,
+      "status": "failure",
+      "start": 1793349395000,
+      "end": 1793365072000,
+      "jobs": [
+        {
+          "id": 123969311123,
+          "name": "prepare",
+          "seconds": 19
+        },
+        {
+          "id": 123969445693,
+          "name": "agent",
+          "seconds": 15651
+        }
+      ],
+      "agentJobId": 123969445693,
+      "invoked": true,
+      "artifact": "factory-agent-2",
+      "artifactId": 12977543416,
+      "finalArtifactId": null,
+      "taskArtifactId": 12964043900,
+      "event": "workflow_dispatch",
+      "previousRunId": null,
+      "usage": {
+        "phases": {
+          "implementation": {
+            "input": 1034422,
+            "output": 77247,
+            "cacheRead": 3803904,
+            "cacheWrite": 0,
+            "reasoning": 42157,
+            "totalTokens": 4915573
+          },
+          "repair": {
+            "input": 3265243,
+            "output": 331029,
+            "cacheRead": 14641536,
+            "cacheWrite": 0,
+            "reasoning": 219567,
+            "totalTokens": 18237808
+          },
+          "qa": {
+            "input": 152362,
+            "output": 52022,
+            "cacheRead": 1785856,
+            "cacheWrite": 0,
+            "reasoning": 33692,
+            "totalTokens": 1990240
+          },
+          "qaFocused": {
+            "input": 292167,
+            "output": 31985,
+            "cacheRead": 4518400,
+            "cacheWrite": 0,
+            "reasoning": 10023,
+            "totalTokens": 4842552
+          },
+          "qaReport": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 0
+          },
+          "review": {
+            "input": 424760,
+            "output": 42772,
+            "cacheRead": 1915648,
+            "cacheWrite": 0,
+            "reasoning": 19633,
+            "totalTokens": 2383180
+          },
+          "compaction": {
+            "input": 1179987,
+            "output": 197322,
+            "cacheRead": 50816,
+            "cacheWrite": 0,
+            "reasoning": 34157,
+            "totalTokens": 1428125
+          }
+        },
+        "records": 546,
+        "missing": 6,
+        "incomplete": 1
+      },
+      "evaluation": {
+        "version": 1,
+        "runKey": "klinsmaya/dingze-portal/issues/2/initial",
+        "kind": "initial",
+        "derivation": "recorded",
+        "agentConfiguration": {
+          "fingerprints": [
+            "0e38db456373c817f6cc61a17dda2425d264814369a084c184757a543024ba4a"
+          ],
+          "complete": false
+        },
+        "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+        "baseSha": "f4e6f328e9ff03aac03cca3aabc99bdccfa5e7da",
+        "inputHash": "1ca2c7ad387489b97e5502123a9736e05d281efa029f4d1c914042c5486fea0c",
+        "patchSha256": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+        "pipelineOutcome": "budget-exhausted",
+        "event": "workflow_dispatch",
+        "previousRunId": null
+      }
+    }
+  ],
+  "timings": [
+    {
+      "stage": "agent:repair",
+      "calls": 3,
+      "durationMs": 9489123
+    },
+    {
+      "stage": "agent:implementation",
+      "calls": 1,
+      "durationMs": 2874783
+    },
+    {
+      "stage": "agent:qa",
+      "calls": 1,
+      "durationMs": 1076092
+    },
+    {
+      "stage": "agent:review",
+      "calls": 1,
+      "durationMs": 869532
+    },
+    {
+      "stage": "agent:qa-focused",
+      "calls": 2,
+      "durationMs": 863435
+    },
+    {
+      "stage": "test",
+      "calls": 3,
+      "durationMs": 132921
+    },
+    {
+      "stage": "build",
+      "calls": 3,
+      "durationMs": 95054
+    },
+    {
+      "stage": "lint",
+      "calls": 4,
+      "durationMs": 73507
+    },
+    {
+      "stage": "typecheck",
+      "calls": 3,
+      "durationMs": 27444
+    },
+    {
+      "stage": "format:check",
+      "calls": 4,
+      "durationMs": 15589
+    },
+    {
+      "stage": "db:apply",
+      "calls": 3,
+      "durationMs": 10584
+    },
+    {
+      "stage": "install",
+      "calls": 1,
+      "durationMs": 8920
+    },
+    {
+      "stage": "format:auto",
+      "calls": 4,
+      "durationMs": 5337
+    },
+    {
+      "stage": "lockfile",
+      "calls": 4,
+      "durationMs": 1543
+    },
+    {
+      "stage": "skills-sync",
+      "calls": 1,
+      "durationMs": 877
+    }
+  ],
+  "delivery": {
+    "version": 1,
+    "meta": {
+      "repository": "klinsmaya/dingze-portal",
+      "issue": 2,
+      "runId": "41027597095",
+      "attempt": 1,
+      "headSha": "",
+      "targetBranch": "apps/dingze",
+      "title": "定三责：通过 nb3-factory 完整流程重建 NocoBase 3 应用（不迁移旧数据）",
+      "snapshotDate": "2026-10-30T12:57:52.000Z"
+    },
+    "delivery": {
+      "status": "failed",
+      "ci": "unknown",
+      "ciSource": "本轮独立最终验证结果未确认。",
+      "qaSummary": "同一验收项 / 检查的相同失败已出现 3 次（首次失败及两次修复后仍失败）；停止自动修复。 最近验收记录（不代表完整交付通过）：管理员可登录独立 nb3-factory 实例，但登录后卡在 Unable to connect，无法进入定三责业务界面。公开注册仍开放；企业/项目/成果/工作台/数字咨询师/流程管理均不存在。C01-C14 全部失败。"
+    },
+    "links": [
+      {
+        "label": "查看需求",
+        "url": "https://github.com/klinsmaya/dingze-portal/issues/2"
+      },
+      {
+        "label": "本轮运行与原始产物",
+        "url": "https://github.com/klinsmaya/dingze-portal/actions/runs/41027597095/attempts/1"
+      }
+    ],
+    "attention": [
+      {
+        "title": "搭建已停止，状态 failed",
+        "detail": "同一验收项 / 检查的相同失败已出现 3 次（首次失败及两次修复后仍失败）；停止自动修复。",
+        "source": "task-diagnostic.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "登录后 realtime 连接失败，Retry 无法进入业务界面",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "无企业开通、用户/角色业务配置与项目成员管理界面，相关 API 404",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "无法创建企业A/B与普通成员，不能验证项目隔离和只读岗位限制",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "无项目搜索/筛选/分页、成果目录、三阶段门禁、流转硬校验、并发冲突恢复",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "无工作台编辑、资料上传、专家咨询、导出、数字咨询师修改卡和流程/运营页",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "中文主界面与关键业务流程不可用；公开 Sign up 未关闭",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "验收失败记录",
+        "detail": "交付物是 nb3-factory 基线而非定三责完整业务，不能以打开登录页替代验收",
+        "source": "verify-4/browser-focused/report.json"
+      },
+      {
+        "title": "报告资料说明",
+        "detail": "本轮只有失败路径复测记录，不代表全量验收通过。"
+      },
+      {
+        "title": "报告资料说明",
+        "detail": "本轮浏览器报告未通过。"
+      }
+    ],
+    "checks": [
+      {
+        "id": "A1",
+        "title": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+        "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+        "status": "failed",
+        "actions": [
+          "打开 http://127.0.0.1:13000/main/ 并使用工厂管理员 nocobase / admin123 登录",
+          "登录后等待进入业务界面并点击 Retry",
+          "用会话 cookie 调用 /main/api/auth/get-session、/main/api/users、/main/api/authorization/permissionSets",
+          "探测企业/项目/成员相关 API 与页面路由"
+        ],
+        "evidence": [
+          "应用可独立打开且管理员能认证，会话用户为 Super Admin（id=9a9f5a05-4d16-4c3a-a079-8589461e84ed，username=nocobase），用户总数=1，未见旧业务数据或原仓库绝对路径依赖",
+          "登录后未能进入业务界面，页面固定为 Unable to connect / The realtime connection could not be prepared，Retry 无效",
+          "GET /main/api/enterprises、/main/api/projects、/main/api/dingze/enterprises、/main/api/dingze/projects 均返回 404 ROUTE_NOT_FOUND",
+          "客户端包 nb3-factory/client 无定三责/企业/项目成员管理入口，管理员无法从界面开通企业或配置企业/项目成员"
+        ],
+        "screenshots": [
+          "login-page.png",
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "客户端包 nb3-factory/client 无定三责/企业/项目成员管理入口，管理员无法从界面开通企业或配置企业/项目成员"
+      },
+      {
+        "id": "A2",
+        "title": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+        "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+        "status": "failed",
+        "actions": [
+          "管理员登录后尝试进入应用并打开 /main/projects",
+          "探测企业/项目/成员 API 与当前用户列表",
+          "因无法创建普通企业成员，未能实测跨企业隔离"
+        ],
+        "evidence": [
+          "管理员登录成功但被卡在 Unable to connect，无法从空库完成企业A/B、项目、用户和成员配置",
+          "业务路由 /main/projects 被重定向回 /main 并继续显示连接失败",
+          "企业/项目 API 不存在（404），当前仅有 Super Admin 一名用户",
+          "未能创建普通企业成员，因此无法实测跨企业项目、历史、原件和导出拒绝"
+        ],
+        "screenshots": [
+          "projects-route.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "未能创建普通企业成员，因此无法实测跨企业项目、历史、原件和导出拒绝"
+      },
+      {
+        "id": "A3",
+        "title": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+        "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+        "status": "failed",
+        "actions": [
+          "管理员登录后检查权限集与项目 API",
+          "尝试进入业务界面以配置全局岗位与项目只读角色"
+        ],
+        "evidence": [
+          "登录后无法进入应用主界面（Unable to connect）",
+          "无项目 API（GET /main/api/projects 404），授权仅有内置 permissionSets member/root，无项目级角色",
+          "无法验证全局岗位不能突破项目只读，也无法验证仅有页面权限不获得业务API权限"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法验证全局岗位不能突破项目只读，也无法验证仅有页面权限不获得业务API权限"
+      },
+      {
+        "id": "A4",
+        "title": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+        "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+        "status": "failed",
+        "actions": [
+          "已登录状态下打开 /main/projects 并等待页面稳定",
+          "探测 GET /main/api/projects 与 /main/api/enterprises",
+          "检查前端包路由是否包含项目列表/搜索/筛选"
+        ],
+        "evidence": [
+          "打开 /main/projects 后仍回到 /main 并显示 Unable to connect",
+          "不存在项目列表、搜索、筛选、分页、排序或企业选择器",
+          "GET /main/api/projects 与 /main/api/enterprises 均为 404，无法验证超过100企业选择、校验失败回填或无权限状态",
+          "前端路由仅有 /login、/register、/forgot-password、/inbox、/device、/invite/:token、/reset-password"
+        ],
+        "screenshots": [
+          "projects-route.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "前端路由仅有 /login、/register、/forgot-password、/inbox、/device、/invite/:token、/reset-password"
+      },
+      {
+        "id": "A5",
+        "title": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+        "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+        "status": "failed",
+        "actions": [
+          "登录后尝试进入工作台/成果页",
+          "检查主包 index-CkqRFlZx.js 业务字符串与成果 API"
+        ],
+        "evidence": [
+          "登录后无法进入业务工作台，停留在 Unable to connect",
+          "主包 index-CkqRFlZx.js 中未找到 定三责、战略地图、定战略、定目标、定行动、陪跑、自助模式、everCompleted、expectedRevision 等字符串",
+          "成果相关 API（/main/api/artifacts、/main/api/workbench、/main/api/dingze/projects）均为 404",
+          "无法实测三阶段P0门禁、逐表解锁、上游变更核对"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法实测三阶段P0门禁、逐表解锁、上游变更核对"
+      },
+      {
+        "id": "A6",
+        "title": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+        "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+        "status": "failed",
+        "actions": [
+          "登录后查找成果流转按钮与六分法校验界面",
+          "检查前端包是否包含待复核/待确认/已定版/六分法文案"
+        ],
+        "evidence": [
+          "无成果编辑界面，登录后被连接失败页挡住",
+          "前端包无 六分法、待复核、待确认、已定版 等业务文案",
+          "无法按角色执行完成/复核/确认/退回/重开/强制，也无法验证空字段或无原因强制被拒绝"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法按角色执行完成/复核/确认/退回/重开/强制，也无法验证空字段或无原因强制被拒绝"
+      },
+      {
+        "id": "A7",
+        "title": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+        "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+        "status": "failed",
+        "actions": [
+          "登录后尝试打开可编辑成果/项目页",
+          "检查客户端是否存在 expectedRevision/冲突恢复实现"
+        ],
+        "evidence": [
+          "应用在登录后无法进入任何可编辑成果/项目页",
+          "客户端无 expectedRevision/冲突恢复相关实现痕迹",
+          "无法验证 409 保留草稿、读取最新后继续保存，以及并发不静默覆盖"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法验证 409 保留草稿、读取最新后继续保存，以及并发不静默覆盖"
+      },
+      {
+        "id": "A8",
+        "title": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+        "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+        "status": "failed",
+        "actions": [
+          "登录后查找版本/历史/批注界面",
+          "探测历史、批注、上游引用 API"
+        ],
+        "evidence": [
+          "无成果保存/版本/批注界面，登录后停在 Unable to connect",
+          "无历史、批注、上游引用 API",
+          "无法验证流转失败时状态、版本和审计的原子提交"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法验证流转失败时状态、版本和审计的原子提交"
+      },
+      {
+        "id": "A9",
+        "title": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+        "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+        "status": "failed",
+        "actions": [
+          "检查前端路由是否包含工作台/任务路线/子步骤",
+          "已登录状态下打开 /main/inbox 观察是否进入业务协作面板"
+        ],
+        "evidence": [
+          "前端路由只有 /login、/register、/forgot-password、/inbox、/device、/invite/:token、/reset-password，没有工作台/任务路线/子步骤",
+          "登录后 /inbox 同样被 Unable to connect 挡住",
+          "无法完成表格/思维导图编辑、手动保存或未保存离开确认"
+        ],
+        "screenshots": [
+          "inbox-unable-to-connect.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "无法完成表格/思维导图编辑、手动保存或未保存离开确认"
+      },
+      {
+        "id": "A10",
+        "title": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+        "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+        "status": "failed",
+        "actions": [
+          "登录后查找资料/画像/专家咨询页面",
+          "探测 files/exports/notifications API",
+          "因无上传入口，未能使用 fixtures 中的 sample.pdf/png/docx/xlsx"
+        ],
+        "evidence": [
+          "无资料/画像/专家咨询业务页，登录后无法进入应用",
+          "GET /main/api/files、/main/api/file、/main/api/attachments、/main/api/exports 均为 404",
+          "通知仅有 /main/api/notifications/logs 空列表，无业务待办/协作通知",
+          "未能使用 sample.pdf/png/docx/xlsx 做原件上传、预览、下载或导出草稿标记验证"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "未能使用 sample.pdf/png/docx/xlsx 做原件上传、预览、下载或导出草稿标记验证"
+      },
+      {
+        "id": "A11",
+        "title": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+        "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+        "status": "failed",
+        "actions": [
+          "检查前端包是否包含数字咨询师/修改卡文案",
+          "探测 /main/api/agents 与 /main/api/ai/agents",
+          "登录后尝试进入右侧协作/咨询师面板"
+        ],
+        "evidence": [
+          "前端包无 数字咨询师、修改卡 文案",
+          "GET /main/api/agents 与 /main/api/ai/agents 返回 404",
+          "登录后无法进入右侧协作/咨询师面板，无法验证未配置时的真实不可用状态或人工确认后保存"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "登录后无法进入右侧协作/咨询师面板，无法验证未配置时的真实不可用状态或人工确认后保存"
+      },
+      {
+        "id": "A12",
+        "title": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+        "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+        "status": "failed",
+        "actions": [
+          "用管理员会话读取 /main/api/users 与 /main/api/authorization/permissionSets",
+          "探测 workflows/flows/flow-definitions API",
+          "登录后查找运营页面与流程管理入口"
+        ],
+        "evidence": [
+          "用户 API 可用但界面不可达：仅 Super Admin 1 人；permissionSets 仅内置 member/root",
+          "GET /main/api/workflows、/main/api/flows、/main/api/flow-definitions 均为 404，无流程图、参数编辑或执行历史界面",
+          "登录后 Unable to connect，无运营页面或业务配置入口"
+        ],
+        "screenshots": [
+          "post-login-connection-failed.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "登录后 Unable to connect，无运营页面或业务配置入口"
+      },
+      {
+        "id": "A13",
+        "title": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+        "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+        "status": "failed",
+        "actions": [
+          "打开公开注册页，检查 Appearance 菜单（Light/Dark/System、Compact/Spacious）",
+          "将视口设为 375x812 并截图",
+          "请求 /main/assets/locales/workspace.zh-CN.js",
+          "登录后观察关键业务流程是否可操作"
+        ],
+        "evidence": [
+          "注册页可在 375px 视口渲染，Appearance 含 Light/Dark/System 和 Compact/Spacious",
+          "页面默认 en-US，GET /main/assets/locales/workspace.zh-CN.js 返回 404，未见中文为主要界面",
+          "登录后关键业务流程被 Unable to connect 阻断，无法验证业务表单的中文IME、中间编辑、未保存离开或提交中状态",
+          "公开注册页仍可操作，但这不是定三责关键流程"
+        ],
+        "screenshots": [
+          "register-375px.png",
+          "register-appearance-menu.png",
+          "register-page-public-signup.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "公开注册页仍可操作，但这不是定三责关键流程"
+      },
+      {
+        "id": "A14",
+        "title": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+        "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+        "status": "failed",
+        "actions": [
+          "打开独立实例并完成管理员登录",
+          "检查客户端包名称、业务路由与定三责入口是否存在",
+          "按咨询管理员/咨询师/企业成员等角色尝试业务验收"
+        ],
+        "evidence": [
+          "应用能打开并完成管理员登录，说明有独立安装，但登录后不能进入业务界面",
+          "交付物表现为 nb3-factory 基线（客户端插件名 nb3-factory/client，标题 NocoBase），不是定三责企业战略咨询平台",
+          "未能按咨询管理员/咨询师/企业成员等真实角色完成业务验收，仅打开登录页/连接失败页不能替代完整交付",
+          "公开 Sign up 仍开放，与需求关闭公开自助注册不符"
+        ],
+        "screenshots": [
+          "login-page.png",
+          "post-login-connection-failed.png",
+          "register-page-public-signup.png"
+        ],
+        "evidenceUnavailable": false,
+        "source": "verify-4/browser-focused/report.json",
+        "result": "公开 Sign up 仍开放，与需求关闭公开自助注册不符"
+      },
+      {
+        "id": "A15",
+        "title": "未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+        "criterion": "未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+        "status": "not-verified",
+        "actions": [],
+        "evidence": [],
+        "screenshots": [],
+        "source": "task-metadata.json",
+        "result": "本轮没有此项实际验收记录。"
+      }
+    ],
+    "media": [
+      {
+        "id": "login-page.png",
+        "title": "登录页",
+        "path": "verify-4/browser-focused/evidence/login-page.png",
+        "category": "业务界面",
+        "featured": true
+      },
+      {
+        "id": "post-login-connection-failed.png",
+        "title": "登录后无法连接",
+        "path": "verify-4/browser-focused/evidence/post-login-connection-failed.png",
+        "category": "业务界面",
+        "featured": true
+      },
+      {
+        "id": "projects-route.png",
+        "title": "projects-route.png",
+        "path": "verify-4/browser-focused/evidence/projects-route.png",
+        "category": "验收 2",
+        "featured": true
+      },
+      {
+        "id": "inbox-unable-to-connect.png",
+        "title": "inbox-unable-to-connect.png",
+        "path": "verify-4/browser-focused/evidence/inbox-unable-to-connect.png",
+        "category": "验收 9",
+        "featured": true
+      },
+      {
+        "id": "register-375px.png",
+        "title": "register-375px.png",
+        "path": "verify-4/browser-focused/evidence/register-375px.png",
+        "category": "验收 13",
+        "featured": true
+      },
+      {
+        "id": "register-appearance-menu.png",
+        "title": "register-appearance-menu.png",
+        "path": "verify-4/browser-focused/evidence/register-appearance-menu.png",
+        "category": "验收 13",
+        "featured": true
+      },
+      {
+        "id": "register-page-public-signup.png",
+        "title": "register-page-public-signup.png",
+        "path": "verify-4/browser-focused/evidence/register-page-public-signup.png",
+        "category": "验收 13",
+        "featured": false
+      }
+    ],
+    "uncovered": [
+      "focused 复测轮不额外制作展示素材",
+      "因登录后 Unable to connect，未能覆盖企业/项目/工作台/成果等业务页展示"
+    ],
+    "rawQaReport": {
+      "passed": false,
+      "authenticated": true,
+      "summary": "管理员可登录独立 nb3-factory 实例，但登录后卡在 Unable to connect，无法进入定三责业务界面。公开注册仍开放；企业/项目/成果/工作台/数字咨询师/流程管理均不存在。C01-C14 全部失败。",
+      "checks": [
+        {
+          "id": "C01",
+          "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+          "status": "failed",
+          "actions": [
+            "打开 http://127.0.0.1:13000/main/ 并使用工厂管理员 nocobase / admin123 登录",
+            "登录后等待进入业务界面并点击 Retry",
+            "用会话 cookie 调用 /main/api/auth/get-session、/main/api/users、/main/api/authorization/permissionSets",
+            "探测企业/项目/成员相关 API 与页面路由"
+          ],
+          "evidence": [
+            "应用可独立打开且管理员能认证，会话用户为 Super Admin（id=9a9f5a05-4d16-4c3a-a079-8589461e84ed，username=nocobase），用户总数=1，未见旧业务数据或原仓库绝对路径依赖",
+            "登录后未能进入业务界面，页面固定为 Unable to connect / The realtime connection could not be prepared，Retry 无效",
+            "GET /main/api/enterprises、/main/api/projects、/main/api/dingze/enterprises、/main/api/dingze/projects 均返回 404 ROUTE_NOT_FOUND",
+            "客户端包 nb3-factory/client 无定三责/企业/项目成员管理入口，管理员无法从界面开通企业或配置企业/项目成员"
+          ],
+          "screenshots": [
+            "login-page.png",
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165685
+        },
+        {
+          "id": "C02",
+          "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+          "status": "failed",
+          "actions": [
+            "管理员登录后尝试进入应用并打开 /main/projects",
+            "探测企业/项目/成员 API 与当前用户列表",
+            "因无法创建普通企业成员，未能实测跨企业隔离"
+          ],
+          "evidence": [
+            "管理员登录成功但被卡在 Unable to connect，无法从空库完成企业A/B、项目、用户和成员配置",
+            "业务路由 /main/projects 被重定向回 /main 并继续显示连接失败",
+            "企业/项目 API 不存在（404），当前仅有 Super Admin 一名用户",
+            "未能创建普通企业成员，因此无法实测跨企业项目、历史、原件和导出拒绝"
+          ],
+          "screenshots": [
+            "projects-route.png"
+          ],
+          "recordedAt": 1793364165715
+        },
+        {
+          "id": "C03",
+          "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+          "status": "failed",
+          "actions": [
+            "管理员登录后检查权限集与项目 API",
+            "尝试进入业务界面以配置全局岗位与项目只读角色"
+          ],
+          "evidence": [
+            "登录后无法进入应用主界面（Unable to connect）",
+            "无项目 API（GET /main/api/projects 404），授权仅有内置 permissionSets member/root，无项目级角色",
+            "无法验证全局岗位不能突破项目只读，也无法验证仅有页面权限不获得业务API权限"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165744
+        },
+        {
+          "id": "C04",
+          "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+          "status": "failed",
+          "actions": [
+            "已登录状态下打开 /main/projects 并等待页面稳定",
+            "探测 GET /main/api/projects 与 /main/api/enterprises",
+            "检查前端包路由是否包含项目列表/搜索/筛选"
+          ],
+          "evidence": [
+            "打开 /main/projects 后仍回到 /main 并显示 Unable to connect",
+            "不存在项目列表、搜索、筛选、分页、排序或企业选择器",
+            "GET /main/api/projects 与 /main/api/enterprises 均为 404，无法验证超过100企业选择、校验失败回填或无权限状态",
+            "前端路由仅有 /login、/register、/forgot-password、/inbox、/device、/invite/:token、/reset-password"
+          ],
+          "screenshots": [
+            "projects-route.png"
+          ],
+          "recordedAt": 1793364165777
+        },
+        {
+          "id": "C05",
+          "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+          "status": "failed",
+          "actions": [
+            "登录后尝试进入工作台/成果页",
+            "检查主包 index-CkqRFlZx.js 业务字符串与成果 API"
+          ],
+          "evidence": [
+            "登录后无法进入业务工作台，停留在 Unable to connect",
+            "主包 index-CkqRFlZx.js 中未找到 定三责、战略地图、定战略、定目标、定行动、陪跑、自助模式、everCompleted、expectedRevision 等字符串",
+            "成果相关 API（/main/api/artifacts、/main/api/workbench、/main/api/dingze/projects）均为 404",
+            "无法实测三阶段P0门禁、逐表解锁、上游变更核对"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165810
+        },
+        {
+          "id": "C06",
+          "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+          "status": "failed",
+          "actions": [
+            "登录后查找成果流转按钮与六分法校验界面",
+            "检查前端包是否包含待复核/待确认/已定版/六分法文案"
+          ],
+          "evidence": [
+            "无成果编辑界面，登录后被连接失败页挡住",
+            "前端包无 六分法、待复核、待确认、已定版 等业务文案",
+            "无法按角色执行完成/复核/确认/退回/重开/强制，也无法验证空字段或无原因强制被拒绝"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165842
+        },
+        {
+          "id": "C07",
+          "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+          "status": "failed",
+          "actions": [
+            "登录后尝试打开可编辑成果/项目页",
+            "检查客户端是否存在 expectedRevision/冲突恢复实现"
+          ],
+          "evidence": [
+            "应用在登录后无法进入任何可编辑成果/项目页",
+            "客户端无 expectedRevision/冲突恢复相关实现痕迹",
+            "无法验证 409 保留草稿、读取最新后继续保存，以及并发不静默覆盖"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165873
+        },
+        {
+          "id": "C08",
+          "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+          "status": "failed",
+          "actions": [
+            "登录后查找版本/历史/批注界面",
+            "探测历史、批注、上游引用 API"
+          ],
+          "evidence": [
+            "无成果保存/版本/批注界面，登录后停在 Unable to connect",
+            "无历史、批注、上游引用 API",
+            "无法验证流转失败时状态、版本和审计的原子提交"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165904
+        },
+        {
+          "id": "C09",
+          "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+          "status": "failed",
+          "actions": [
+            "检查前端路由是否包含工作台/任务路线/子步骤",
+            "已登录状态下打开 /main/inbox 观察是否进入业务协作面板"
+          ],
+          "evidence": [
+            "前端路由只有 /login、/register、/forgot-password、/inbox、/device、/invite/:token、/reset-password，没有工作台/任务路线/子步骤",
+            "登录后 /inbox 同样被 Unable to connect 挡住",
+            "无法完成表格/思维导图编辑、手动保存或未保存离开确认"
+          ],
+          "screenshots": [
+            "inbox-unable-to-connect.png"
+          ],
+          "recordedAt": 1793364165936
+        },
+        {
+          "id": "C10",
+          "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+          "status": "failed",
+          "actions": [
+            "登录后查找资料/画像/专家咨询页面",
+            "探测 files/exports/notifications API",
+            "因无上传入口，未能使用 fixtures 中的 sample.pdf/png/docx/xlsx"
+          ],
+          "evidence": [
+            "无资料/画像/专家咨询业务页，登录后无法进入应用",
+            "GET /main/api/files、/main/api/file、/main/api/attachments、/main/api/exports 均为 404",
+            "通知仅有 /main/api/notifications/logs 空列表，无业务待办/协作通知",
+            "未能使用 sample.pdf/png/docx/xlsx 做原件上传、预览、下载或导出草稿标记验证"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364165968
+        },
+        {
+          "id": "C11",
+          "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+          "status": "failed",
+          "actions": [
+            "检查前端包是否包含数字咨询师/修改卡文案",
+            "探测 /main/api/agents 与 /main/api/ai/agents",
+            "登录后尝试进入右侧协作/咨询师面板"
+          ],
+          "evidence": [
+            "前端包无 数字咨询师、修改卡 文案",
+            "GET /main/api/agents 与 /main/api/ai/agents 返回 404",
+            "登录后无法进入右侧协作/咨询师面板，无法验证未配置时的真实不可用状态或人工确认后保存"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364166000
+        },
+        {
+          "id": "C12",
+          "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+          "status": "failed",
+          "actions": [
+            "用管理员会话读取 /main/api/users 与 /main/api/authorization/permissionSets",
+            "探测 workflows/flows/flow-definitions API",
+            "登录后查找运营页面与流程管理入口"
+          ],
+          "evidence": [
+            "用户 API 可用但界面不可达：仅 Super Admin 1 人；permissionSets 仅内置 member/root",
+            "GET /main/api/workflows、/main/api/flows、/main/api/flow-definitions 均为 404，无流程图、参数编辑或执行历史界面",
+            "登录后 Unable to connect，无运营页面或业务配置入口"
+          ],
+          "screenshots": [
+            "post-login-connection-failed.png"
+          ],
+          "recordedAt": 1793364166030
+        },
+        {
+          "id": "C13",
+          "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+          "status": "failed",
+          "actions": [
+            "打开公开注册页，检查 Appearance 菜单（Light/Dark/System、Compact/Spacious）",
+            "将视口设为 375x812 并截图",
+            "请求 /main/assets/locales/workspace.zh-CN.js",
+            "登录后观察关键业务流程是否可操作"
+          ],
+          "evidence": [
+            "注册页可在 375px 视口渲染，Appearance 含 Light/Dark/System 和 Compact/Spacious",
+            "页面默认 en-US，GET /main/assets/locales/workspace.zh-CN.js 返回 404，未见中文为主要界面",
+            "登录后关键业务流程被 Unable to connect 阻断，无法验证业务表单的中文IME、中间编辑、未保存离开或提交中状态",
+            "公开注册页仍可操作，但这不是定三责关键流程"
+          ],
+          "screenshots": [
+            "register-375px.png",
+            "register-appearance-menu.png",
+            "register-page-public-signup.png"
+          ],
+          "recordedAt": 1793364166061
+        },
+        {
+          "id": "C14",
+          "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+          "status": "failed",
+          "actions": [
+            "打开独立实例并完成管理员登录",
+            "检查客户端包名称、业务路由与定三责入口是否存在",
+            "按咨询管理员/咨询师/企业成员等角色尝试业务验收"
+          ],
+          "evidence": [
+            "应用能打开并完成管理员登录，说明有独立安装，但登录后不能进入业务界面",
+            "交付物表现为 nb3-factory 基线（客户端插件名 nb3-factory/client，标题 NocoBase），不是定三责企业战略咨询平台",
+            "未能按咨询管理员/咨询师/企业成员等真实角色完成业务验收，仅打开登录页/连接失败页不能替代完整交付",
+            "公开 Sign up 仍开放，与需求关闭公开自助注册不符"
+          ],
+          "screenshots": [
+            "login-page.png",
+            "post-login-connection-failed.png",
+            "register-page-public-signup.png"
+          ],
+          "recordedAt": 1793364166094
+        }
+      ],
+      "failures": [
+        "登录后 realtime 连接失败，Retry 无法进入业务界面",
+        "无企业开通、用户/角色业务配置与项目成员管理界面，相关 API 404",
+        "无法创建企业A/B与普通成员，不能验证项目隔离和只读岗位限制",
+        "无项目搜索/筛选/分页、成果目录、三阶段门禁、流转硬校验、并发冲突恢复",
+        "无工作台编辑、资料上传、专家咨询、导出、数字咨询师修改卡和流程/运营页",
+        "中文主界面与关键业务流程不可用；公开 Sign up 未关闭",
+        "交付物是 nb3-factory 基线而非定三责完整业务，不能以打开登录页替代验收"
+      ]
+    },
+    "rawRetro": {
+      "version": 1,
+      "summary": "ESLint failed because shared/*.ts sat outside every TypeScript project. Nested shared/tsconfig.json plus tsconfig.server.json include, and four type-aware lint fixes, restored the lint stage.",
+      "blockers": [],
+      "improvements": [
+        {
+          "category": "tooling",
+          "title": "Project-service lint of new top-level source trees",
+          "detail": "Adding a directory such as shared/ that is not in the template layout is invisible to ESLint until a nested tsconfig.json exists. The first failure is a project-service parse error on every file, not a real rule.",
+          "suggestedChange": "When introducing a new top-level TypeScript tree, add the nested tsconfig (like server/ and database/) and include it in the emitting tsconfig.server.json in the same change as the first source file.",
+          "mechanizable": true
+        }
+      ],
+      "issues": [
+        {
+          "phase": "verify-1",
+          "title": "shared/ not found by ESLint project service",
+          "symptom": "eslint . failed with 20 parse errors: shared/*.ts was not found by the project service; consider including it in tsconfig.json or allowDefaultProject.",
+          "rootCause": "Domain rules were added under shared/ but no tsconfig included those files. Root tsconfig.json only includes client/; tsconfig.server.json only included server, database, and cli. ESLint projectService therefore had no project for shared/.",
+          "resolution": "Added shared/tsconfig.json extending tsconfig.server.json, included shared/**/*.ts in tsconfig.server.json, documented the layout in .agents/rules/shared.md, and fixed four type-aware lint errors that appeared once the files were type-checked (no-base-to-string, unused GoalTargets, unnecessary assertion).",
+          "status": "resolved"
+        }
+      ]
+    },
+    "acceptanceRequirements": "1. 全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。\n2. 管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。\n3. 同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。\n4. 项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。\n5. 原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。\n6. 逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。\n7. 两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。\n8. 保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。\n9. 工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。\n10. 资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。\n11. 三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。\n12. 用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。\n13. 中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。\n14. 工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。\n15. 未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+    "changes": {
+      "total": 23,
+      "added": 22,
+      "modified": 1,
+      "deleted": 0
+    },
+    "usage": {
+      "scope": "此 Issue 累计：已采集 1 个 Run / 1 次尝试",
+      "source": "现有 task-usage 模块（按 Agent / job ID 去重）",
+      "total": 33797478,
+      "cacheRead": 26716160,
+      "uncachedInput": 6348941,
+      "output": 732377,
+      "executionSeconds": 15670,
+      "endToEndSeconds": 15677,
+      "incomplete": true,
+      "phases": [
+        {
+          "label": "初始实现",
+          "input": 1034422,
+          "output": 77247,
+          "cacheRead": 3803904,
+          "cacheWrite": 0,
+          "total": 4915573
+        },
+        {
+          "label": "应用修复",
+          "input": 3265243,
+          "output": 331029,
+          "cacheRead": 14641536,
+          "cacheWrite": 0,
+          "total": 18237808
+        },
+        {
+          "label": "完整业务 QA",
+          "input": 152362,
+          "output": 52022,
+          "cacheRead": 1785856,
+          "cacheWrite": 0,
+          "total": 1990240
+        },
+        {
+          "label": "失败路径复测",
+          "input": 292167,
+          "output": 31985,
+          "cacheRead": 4518400,
+          "cacheWrite": 0,
+          "total": 4842552
+        },
+        {
+          "label": "QA 补报告",
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        {
+          "label": "独立搭建评审",
+          "input": 424760,
+          "output": 42772,
+          "cacheRead": 1915648,
+          "cacheWrite": 0,
+          "total": 2383180
+        },
+        {
+          "label": "上下文压缩",
+          "input": 1179987,
+          "output": 197322,
+          "cacheRead": 50816,
+          "cacheWrite": 0,
+          "total": 1428125
+        }
+      ],
+      "coverageNote": "用量记录 546；未报告用量 6；分项不完整 1；缺失作业时间 0。",
+      "note": "不把流式增量、上下文长度和思考 Token 重复相加。旧记录未拆分 QA 时保留原有口径；费用：未知。"
+    },
+    "runs": [
+      {
+        "id": "41027597095",
+        "attempt": 1,
+        "status": "failed",
+        "detail": "失败"
+      }
+    ],
+    "retro": {
+      "version": 1,
+      "summary": "ESLint failed because shared/*.ts sat outside every TypeScript project. Nested shared/tsconfig.json plus tsconfig.server.json include, and four type-aware lint fixes, restored the lint stage.",
+      "source": "Agent · retro.json",
+      "blockers": [],
+      "improvements": [
+        {
+          "category": "tooling",
+          "title": "Project-service lint of new top-level source trees",
+          "detail": "Adding a directory such as shared/ that is not in the template layout is invisible to ESLint until a nested tsconfig.json exists. The first failure is a project-service parse error on every file, not a real rule.",
+          "suggestedChange": "When introducing a new top-level TypeScript tree, add the nested tsconfig (like server/ and database/) and include it in the emitting tsconfig.server.json in the same change as the first source file.",
+          "source": "",
+          "mechanizable": true
+        }
+      ]
+    },
+    "timings": [
+      {
+        "stage": "agent:repair",
+        "calls": 3,
+        "durationMs": 9489123
+      },
+      {
+        "stage": "agent:implementation",
+        "calls": 1,
+        "durationMs": 2874783
+      },
+      {
+        "stage": "agent:qa",
+        "calls": 1,
+        "durationMs": 1076092
+      },
+      {
+        "stage": "agent:review",
+        "calls": 1,
+        "durationMs": 869532
+      },
+      {
+        "stage": "agent:qa-focused",
+        "calls": 2,
+        "durationMs": 863435
+      },
+      {
+        "stage": "test",
+        "calls": 3,
+        "durationMs": 132921
+      },
+      {
+        "stage": "build",
+        "calls": 3,
+        "durationMs": 95054
+      },
+      {
+        "stage": "lint",
+        "calls": 4,
+        "durationMs": 73507
+      },
+      {
+        "stage": "typecheck",
+        "calls": 3,
+        "durationMs": 27444
+      },
+      {
+        "stage": "format:check",
+        "calls": 4,
+        "durationMs": 15589
+      },
+      {
+        "stage": "db:apply",
+        "calls": 3,
+        "durationMs": 10584
+      },
+      {
+        "stage": "install",
+        "calls": 1,
+        "durationMs": 8920
+      },
+      {
+        "stage": "format:auto",
+        "calls": 4,
+        "durationMs": 5337
+      },
+      {
+        "stage": "lockfile",
+        "calls": 4,
+        "durationMs": 1543
+      },
+      {
+        "stage": "skills-sync",
+        "calls": 1,
+        "durationMs": 877
+      }
+    ],
+    "buildReview": {
+      "version": 1,
+      "state": "failed",
+      "reason": "独立评审未完成或证据校验失败：评审达到 866 秒调用时限（timed_out）；未取得可发布的模块检查点：No assessed module checkpoint。业务验收结果保持不变。",
+      "basis": {
+        "repository": "klinsmaya/dingze-portal",
+        "issue": 2,
+        "runId": "41027597095",
+        "attempt": 1,
+        "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+        "rubricVersion": 2,
+        "historyHash": "11665ec69603318d1256f1f138362aebc08d25fbec2fad2b6203bc42b1192a76",
+        "historyVersion": 2,
+        "history": {
+          "version": 2,
+          "path": "artifacts/agent-history/index.json",
+          "scope": "工厂可观察的本次搭建及已恢复 Handoff 交互；不是 CLI 内部上下文，不代表每个文件已被评审者读取。",
+          "coverage": "available",
+          "invocations": 7,
+          "sourceBytes": 83774601,
+          "capturedBytes": 83757102,
+          "errorSignals": 68,
+          "limitations": []
+        },
+        "baseSha": "f4e6f328e9ff03aac03cca3aabc99bdccfa5e7da",
+        "patchHash": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+        "lockfileHash": "aab307cd2649adc76d88c31315972a3c93143fe6393778fcb98f4ce916d4a411",
+        "packages": [
+          {
+            "name": "@nocobase/app-cli",
+            "version": "1.0.0-beta.24"
+          },
+          {
+            "name": "@nocobase/app-client",
+            "version": "3.0.0-beta.2"
+          },
+          {
+            "name": "@nocobase/app-plugin-api-keys",
+            "version": "1.0.0-beta.17"
+          },
+          {
+            "name": "@nocobase/app-plugin-authentication",
+            "version": "2.0.0-beta.10"
+          },
+          {
+            "name": "@nocobase/app-plugin-authorization",
+            "version": "1.0.0-beta.28"
+          },
+          {
+            "name": "@nocobase/app-plugin-authz-default-access",
+            "version": "1.0.0-beta.13"
+          },
+          {
+            "name": "@nocobase/app-plugin-authz-restriction-rules",
+            "version": "1.0.0-beta.12"
+          },
+          {
+            "name": "@nocobase/app-plugin-authz-sharing-rules",
+            "version": "1.0.0-beta.13"
+          },
+          {
+            "name": "@nocobase/app-plugin-database-explorer",
+            "version": "1.0.0-beta.15"
+          },
+          {
+            "name": "@nocobase/app-plugin-file",
+            "version": "1.0.0-beta.24"
+          },
+          {
+            "name": "@nocobase/app-plugin-i18n",
+            "version": "1.0.0-beta.16"
+          },
+          {
+            "name": "@nocobase/app-plugin-mail",
+            "version": "1.0.0-beta.14"
+          },
+          {
+            "name": "@nocobase/app-plugin-notification",
+            "version": "1.0.0-beta.27"
+          },
+          {
+            "name": "@nocobase/app-plugin-notification-in-app",
+            "version": "1.0.0-beta.25"
+          },
+          {
+            "name": "@nocobase/app-plugin-notification-providers",
+            "version": "0.2.0-beta.12"
+          },
+          {
+            "name": "@nocobase/app-plugin-scheduler",
+            "version": "1.0.0-beta.17"
+          },
+          {
+            "name": "@nocobase/app-plugin-template-print",
+            "version": "0.0.2-beta.2"
+          },
+          {
+            "name": "@nocobase/app-plugin-users",
+            "version": "2.0.0-beta.5"
+          },
+          {
+            "name": "@nocobase/app-server",
+            "version": "2.0.0-beta.8"
+          },
+          {
+            "name": "@nocobase/app-skills",
+            "version": "0.1.0-beta.38"
+          },
+          {
+            "name": "@nocobase/app-testing",
+            "version": "0.1.0-beta.4"
+          },
+          {
+            "name": "@nocobase/app-websocket",
+            "version": "0.0.2-beta.0"
+          },
+          {
+            "name": "@nocobase/authorization",
+            "version": "1.0.0-beta.14"
+          },
+          {
+            "name": "@nocobase/caching",
+            "version": "0.1.0-beta.3"
+          },
+          {
+            "name": "@nocobase/config",
+            "version": "0.1.0-beta.3"
+          },
+          {
+            "name": "@nocobase/db",
+            "version": "1.0.0-beta.21"
+          },
+          {
+            "name": "@nocobase/db-sqlite",
+            "version": "0.1.0-beta.6"
+          },
+          {
+            "name": "@nocobase/dev-config",
+            "version": "0.1.0-beta.23"
+          },
+          {
+            "name": "@nocobase/drive",
+            "version": "0.1.0-beta.6"
+          },
+          {
+            "name": "@nocobase/i18n",
+            "version": "1.0.0-beta.7"
+          },
+          {
+            "name": "@nocobase/jobs",
+            "version": "0.1.0-beta.3"
+          },
+          {
+            "name": "@nocobase/lifecycle",
+            "version": "0.1.0-beta.2"
+          },
+          {
+            "name": "@nocobase/logging",
+            "version": "0.1.0-beta.7"
+          },
+          {
+            "name": "@nocobase/queue",
+            "version": "0.1.0-beta.9"
+          },
+          {
+            "name": "@nocobase/repository-input",
+            "version": "0.1.0-beta.3"
+          },
+          {
+            "name": "@nocobase/service-provider",
+            "version": "0.0.2-beta.2"
+          },
+          {
+            "name": "@nocobase/session",
+            "version": "0.1.0-beta.3"
+          },
+          {
+            "name": "@nocobase/snowflake",
+            "version": "1.0.0-beta.4"
+          }
+        ],
+        "reviewCriteriaHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "artifactHash": "fb0608a8234ffbc73ffa16203f709a2b58086c98a60e83fcaa0a06528c9c5926",
+        "inputHash": "0570b3835af032ae15d5f9c2de0b36b6b2c4404a02cf279ac1da6df0bd51d724"
+      },
+      "evaluation": null,
+      "execution": {
+        "buildReviewMode": "full",
+        "source": "task-diagnosis",
+        "reviewCalls": 1
+      },
+      "reviewer": {
+        "engine": "pi",
+        "model": "grok-4.6",
+        "version": "0.86.1",
+        "runId": "41027597095",
+        "attempt": 1,
+        "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+        "replay": false
+      },
+      "process": {
+        "verificationAttempts": 4,
+        "repairAttempts": 3,
+        "finalRound": 4,
+        "rounds": [
+          {
+            "round": 2,
+            "reports": [
+              {
+                "scope": "full",
+                "source": "verify-2/browser-acceptance/report.json",
+                "passed": false,
+                "checks": [
+                  {
+                    "id": "C01",
+                    "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C02",
+                    "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C03",
+                    "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C04",
+                    "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C05",
+                    "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C06",
+                    "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C07",
+                    "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C08",
+                    "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C09",
+                    "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C10",
+                    "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C11",
+                    "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C12",
+                    "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C13",
+                    "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C14",
+                    "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C15",
+                    "criterion": "未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+                    "status": "passed",
+                    "reason": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "round": 3,
+            "reports": [
+              {
+                "scope": "focused",
+                "source": "verify-3/browser-focused/report.json",
+                "passed": false,
+                "checks": [
+                  {
+                    "id": "C01",
+                    "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C02",
+                    "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C03",
+                    "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C04",
+                    "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C05",
+                    "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C06",
+                    "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C07",
+                    "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C08",
+                    "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C09",
+                    "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C10",
+                    "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C11",
+                    "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C12",
+                    "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C13",
+                    "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C14",
+                    "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+                    "status": "failed",
+                    "reason": ""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "round": 4,
+            "reports": [
+              {
+                "scope": "focused",
+                "source": "verify-4/browser-focused/report.json",
+                "passed": false,
+                "checks": [
+                  {
+                    "id": "C01",
+                    "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C02",
+                    "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C03",
+                    "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C04",
+                    "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C05",
+                    "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C06",
+                    "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C07",
+                    "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C08",
+                    "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C09",
+                    "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C10",
+                    "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C11",
+                    "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C12",
+                    "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C13",
+                    "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+                    "status": "failed",
+                    "reason": ""
+                  },
+                  {
+                    "id": "C14",
+                    "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+                    "status": "failed",
+                    "reason": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "warnings": [],
+        "scope": "仅本 Run 已归档记录；工厂修复轮次不等于 Agent 开发中全部试错次数。缺少 verify-1 时不能声称任务首轮通过。"
+      }
+    },
+    "baseline": {
+      "template": "@nocobase/app-template-default",
+      "templateVersion": "1.0.0-beta.70",
+      "creatorVersion": "0.1.0-beta.32",
+      "source": null,
+      "lockSha256": "aab307cd2649adc76d88c31315972a3c93143fe6393778fcb98f4ce916d4a411",
+      "packages": [
+        {
+          "name": "@nocobase/app-cli",
+          "version": "1.0.0-beta.24",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-client",
+          "version": "3.0.0-beta.2",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-api-keys",
+          "version": "1.0.0-beta.17",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-authentication",
+          "version": "2.0.0-beta.10",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-authorization",
+          "version": "1.0.0-beta.28",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-default-access",
+          "version": "1.0.0-beta.13",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-restriction-rules",
+          "version": "1.0.0-beta.12",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-sharing-rules",
+          "version": "1.0.0-beta.13",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-database-explorer",
+          "version": "1.0.0-beta.15",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-file",
+          "version": "1.0.0-beta.24",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-i18n",
+          "version": "1.0.0-beta.16",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-mail",
+          "version": "1.0.0-beta.14",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-notification",
+          "version": "1.0.0-beta.27",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-notification-in-app",
+          "version": "1.0.0-beta.25",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-notification-providers",
+          "version": "0.2.0-beta.12",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-scheduler",
+          "version": "1.0.0-beta.17",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-template-print",
+          "version": "0.0.2-beta.2",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-plugin-users",
+          "version": "2.0.0-beta.5",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-server",
+          "version": "2.0.0-beta.8",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-skills",
+          "version": "0.1.0-beta.38",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-testing",
+          "version": "0.1.0-beta.4",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/app-websocket",
+          "version": "0.0.2-beta.0",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/authorization",
+          "version": "1.0.0-beta.14",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/caching",
+          "version": "0.1.0-beta.3",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/config",
+          "version": "0.1.0-beta.3",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/db",
+          "version": "1.0.0-beta.21",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/db-sqlite",
+          "version": "0.1.0-beta.6",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/dev-config",
+          "version": "0.1.0-beta.23",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/drive",
+          "version": "0.1.0-beta.6",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/i18n",
+          "version": "1.0.0-beta.7",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/jobs",
+          "version": "0.1.0-beta.3",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/lifecycle",
+          "version": "0.1.0-beta.2",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/logging",
+          "version": "0.1.0-beta.7",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/queue",
+          "version": "0.1.0-beta.9",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/repository-input",
+          "version": "0.1.0-beta.3",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/service-provider",
+          "version": "0.0.2-beta.2",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/session",
+          "version": "0.1.0-beta.3",
+          "reason": null
+        },
+        {
+          "name": "@nocobase/snowflake",
+          "version": "1.0.0-beta.4",
+          "reason": null
+        }
+      ]
+    }
+  },
+  "pr": null,
+  "reportId": "klinsmaya/dingze-portal:2:41027597095:1::template-9:review-b46f9118dbfc5e62"
+}
