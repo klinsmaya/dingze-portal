@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "type": "evaluation-report",
+  "key": "klinsmaya/dingze-portal/issues/2/initial",
+  "sourceInstance": "klinsmaya/dingze-portal",
+  "current": 1,
+  "revisions": [
+    {
+      "revision": 1,
+      "fingerprint": "78848f1ba759987bc19a0e201a724f84faeb42a31beb8db22c503d10da884ecb",
+      "createdAt": "2026-10-30T12:59:20Z",
+      "evaluationSha256": "b682c8dff80d83b288e960859466bf323079f5b3fb0bbef74281191c4a012d8e",
+      "manifestSha256": "eb088b30cdc011c0456f612c090ed98895157b0df2138279ebfc9923cc722e66",
+      "bundle": {
+        "sha256": "00b78c2f51367781a18d7251a1023c887642b5a14e5097b23790589639e9ceae",
+        "size": 1176310,
+        "locations": [
+          {
+            "runId": 41059434667,
+            "attempt": 1,
+            "artifactName": "factory-evaluation-run-0b068ac85ab8641b95a1-r1",
+            "artifactId": 12978029055,
+            "at": "2026-10-30T12:59:21.976Z"
+          }
+        ]
+      },
+      "precedence": {
+        "producer": {
+          "runId": 41027597095,
+          "attempt": 1,
+          "startedAt": "2026-10-30T08:36:35Z"
+        },
+        "executionOrder": 1,
+        "knownLaterExecutions": 0,
+        "chainTerminal": true,
+        "reviewRubric": 0,
+        "reviewState": "failed",
+        "review": {
+          "kind": "build",
+          "at": "2026-10-30T08:36:35Z",
+          "runId": 41027597095,
+          "attempt": 1
+        },
+        "qaCoverage": "partial"
+      },
+      "summary": {
+        "execution": "budget-exhausted",
+        "acceptance": "failed",
+        "delivery": "not-published",
+        "reviewState": "failed",
+        "reviewRubric": 0,
+        "agentConfiguration": {
+          "fingerprints": [
+            "0e38db456373c817f6cc61a17dda2425d264814369a084c184757a543024ba4a"
+          ],
+          "complete": false
+        },
+        "evaluationHealth": "incomplete"
+      }
+    }
+  ]
+}

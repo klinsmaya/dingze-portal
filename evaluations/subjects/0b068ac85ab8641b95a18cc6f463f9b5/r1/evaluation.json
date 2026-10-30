@@ -1,0 +1,1144 @@
+{
+  "schemaVersion": 1,
+  "type": "evaluation-report",
+  "source": {
+    "producer": "nb3-factory",
+    "instance": "klinsmaya/dingze-portal",
+    "project": "klinsmaya/dingze-portal",
+    "exporter": {
+      "version": 2,
+      "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+      "runId": 41059434667,
+      "attempt": 1
+    }
+  },
+  "run": {
+    "key": "klinsmaya/dingze-portal/issues/2/initial",
+    "kind": "initial",
+    "identity": "recorded",
+    "batchKey": null,
+    "caseKey": null,
+    "sampleIndex": null,
+    "sampleKey": null,
+    "task": {
+      "repository": "klinsmaya/dingze-portal",
+      "issue": 2,
+      "buildCommentId": null,
+      "title": "定三责：通过 nb3-factory 完整流程重建 NocoBase 3 应用（不迁移旧数据）"
+    },
+    "case": null
+  },
+  "revision": 1,
+  "createdAt": "2026-10-30T12:59:20Z",
+  "precedence": {
+    "producer": {
+      "runId": 41027597095,
+      "attempt": 1,
+      "startedAt": "2026-10-30T08:36:35Z"
+    },
+    "executionOrder": 1,
+    "knownLaterExecutions": 0,
+    "chainTerminal": true,
+    "reviewRubric": 0,
+    "reviewState": "failed",
+    "review": {
+      "kind": "build",
+      "at": "2026-10-30T08:36:35Z",
+      "runId": 41027597095,
+      "attempt": 1
+    },
+    "qaCoverage": "partial"
+  },
+  "baseline": {
+    "track": "published-template",
+    "application": {
+      "baseRef": "apps/dingze",
+      "baseSha": "f4e6f328e9ff03aac03cca3aabc99bdccfa5e7da",
+      "candidate": {
+        "patchSha256": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+        "headSha": null
+      }
+    },
+    "factory": {
+      "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+      "entrySha": "cce950b62a47b449696e8b27e816839b699a3102"
+    },
+    "template": {
+      "creatorVersion": "0.1.0-beta.32",
+      "templateVersion": "1.0.0-beta.70"
+    },
+    "dependencies": {
+      "lockfileSha256": "aab307cd2649adc76d88c31315972a3c93143fe6393778fcb98f4ce916d4a411",
+      "baselineFingerprint": "22dad1d3e17cda2de62170370f6cd536abe7d3d2e7a316be82df604ed9ac5d00",
+      "packages": [
+        {
+          "name": "@nocobase/app-cli",
+          "version": "1.0.0-beta.24"
+        },
+        {
+          "name": "@nocobase/app-client",
+          "version": "3.0.0-beta.2"
+        },
+        {
+          "name": "@nocobase/app-plugin-api-keys",
+          "version": "1.0.0-beta.17"
+        },
+        {
+          "name": "@nocobase/app-plugin-authentication",
+          "version": "2.0.0-beta.10"
+        },
+        {
+          "name": "@nocobase/app-plugin-authorization",
+          "version": "1.0.0-beta.28"
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-default-access",
+          "version": "1.0.0-beta.13"
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-restriction-rules",
+          "version": "1.0.0-beta.12"
+        },
+        {
+          "name": "@nocobase/app-plugin-authz-sharing-rules",
+          "version": "1.0.0-beta.13"
+        },
+        {
+          "name": "@nocobase/app-plugin-database-explorer",
+          "version": "1.0.0-beta.15"
+        },
+        {
+          "name": "@nocobase/app-plugin-file",
+          "version": "1.0.0-beta.24"
+        },
+        {
+          "name": "@nocobase/app-plugin-i18n",
+          "version": "1.0.0-beta.16"
+        },
+        {
+          "name": "@nocobase/app-plugin-mail",
+          "version": "1.0.0-beta.14"
+        },
+        {
+          "name": "@nocobase/app-plugin-notification",
+          "version": "1.0.0-beta.27"
+        },
+        {
+          "name": "@nocobase/app-plugin-notification-in-app",
+          "version": "1.0.0-beta.25"
+        },
+        {
+          "name": "@nocobase/app-plugin-notification-providers",
+          "version": "0.2.0-beta.12"
+        },
+        {
+          "name": "@nocobase/app-plugin-scheduler",
+          "version": "1.0.0-beta.17"
+        },
+        {
+          "name": "@nocobase/app-plugin-template-print",
+          "version": "0.0.2-beta.2"
+        },
+        {
+          "name": "@nocobase/app-plugin-users",
+          "version": "2.0.0-beta.5"
+        },
+        {
+          "name": "@nocobase/app-server",
+          "version": "2.0.0-beta.8"
+        },
+        {
+          "name": "@nocobase/app-skills",
+          "version": "0.1.0-beta.38"
+        },
+        {
+          "name": "@nocobase/app-testing",
+          "version": "0.1.0-beta.4"
+        },
+        {
+          "name": "@nocobase/app-websocket",
+          "version": "0.0.2-beta.0"
+        },
+        {
+          "name": "@nocobase/authorization",
+          "version": "1.0.0-beta.14"
+        },
+        {
+          "name": "@nocobase/caching",
+          "version": "0.1.0-beta.3"
+        },
+        {
+          "name": "@nocobase/config",
+          "version": "0.1.0-beta.3"
+        },
+        {
+          "name": "@nocobase/db",
+          "version": "1.0.0-beta.21"
+        },
+        {
+          "name": "@nocobase/db-sqlite",
+          "version": "0.1.0-beta.6"
+        },
+        {
+          "name": "@nocobase/dev-config",
+          "version": "0.1.0-beta.23"
+        },
+        {
+          "name": "@nocobase/drive",
+          "version": "0.1.0-beta.6"
+        },
+        {
+          "name": "@nocobase/i18n",
+          "version": "1.0.0-beta.7"
+        },
+        {
+          "name": "@nocobase/jobs",
+          "version": "0.1.0-beta.3"
+        },
+        {
+          "name": "@nocobase/lifecycle",
+          "version": "0.1.0-beta.2"
+        },
+        {
+          "name": "@nocobase/logging",
+          "version": "0.1.0-beta.7"
+        },
+        {
+          "name": "@nocobase/queue",
+          "version": "0.1.0-beta.9"
+        },
+        {
+          "name": "@nocobase/repository-input",
+          "version": "0.1.0-beta.3"
+        },
+        {
+          "name": "@nocobase/service-provider",
+          "version": "0.0.2-beta.2"
+        },
+        {
+          "name": "@nocobase/session",
+          "version": "0.1.0-beta.3"
+        },
+        {
+          "name": "@nocobase/snowflake",
+          "version": "1.0.0-beta.4"
+        }
+      ]
+    },
+    "skills": {
+      "fingerprint": "82d32bb69662ade9c5811b89b3ebe2749e82a14278993798e414563028b7ef6d",
+      "files": 153
+    },
+    "sourceSnapshot": null,
+    "inputs": {
+      "taskInputHash": null,
+      "pipelineInputHash": "1ca2c7ad387489b97e5502123a9736e05d281efa029f4d1c914042c5486fea0c",
+      "reviewHash": null,
+      "reviewCriteriaHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "prompts": [
+        {
+          "phase": "implementation",
+          "path": "agent-implement.jsonl.invocation.json",
+          "sha256": "8e525e36d7107da8ef2ff471b19a8eb170294474a1efa39a65393253d4f11722"
+        },
+        {
+          "phase": "repair",
+          "path": "agent-repair-1.jsonl.invocation.json",
+          "sha256": "9afac53da7dc2f709aab3a4567c106505bda60f5ceccfd111ead4367b90015c6"
+        },
+        {
+          "phase": "repair",
+          "path": "agent-repair-2.jsonl.invocation.json",
+          "sha256": "ad5a321ae5f2d14d4c6faa7afd4ca2c80113dd64413c9101e7167aa022cb34a7"
+        },
+        {
+          "phase": "repair",
+          "path": "agent-repair-3.jsonl.invocation.json",
+          "sha256": "bac198eaffb576c4075039334c580f3db3ffbc9da8743277fd06682948275df6"
+        },
+        {
+          "phase": "review",
+          "path": "agent-review.jsonl.invocation.json",
+          "sha256": "090e7598042851b8d6cc610dce3148087555f61358a67bd4fa8cdfa597cced60"
+        },
+        {
+          "phase": "qa",
+          "path": "verify-2/browser-acceptance/agent-browser-acceptance.jsonl.invocation.json",
+          "sha256": "d964f6612fce887b816e1ae175497eae6ece31ae5da97ca55c568a064fcde7e1"
+        },
+        {
+          "phase": "qa-focused",
+          "path": "verify-3/browser-focused/agent-browser-acceptance.jsonl.invocation.json",
+          "sha256": "e93f9a470883eedd6cb783d0d1a01e39d0dab2714f48bdee671eede0ab0f07ed"
+        },
+        {
+          "phase": "qa-focused",
+          "path": "verify-4/browser-focused/agent-browser-acceptance.jsonl.invocation.json",
+          "sha256": "e93f9a470883eedd6cb783d0d1a01e39d0dab2714f48bdee671eede0ab0f07ed"
+        }
+      ]
+    },
+    "rubric": {
+      "id": "nb3-framework",
+      "version": 2
+    },
+    "agent": {
+      "engine": "pi",
+      "model": "grok-4.6",
+      "version": "0.86.1",
+      "buildReviewMode": "full",
+      "configuration": {
+        "fingerprints": [
+          "0e38db456373c817f6cc61a17dda2425d264814369a084c184757a543024ba4a"
+        ],
+        "complete": false
+      }
+    },
+    "environment": {
+      "browserFixturesSha256": "3b527d18aa2f6d58fdfea5cdd916631ea1ee3425abeba09bb1f961f2128c554b",
+      "browserPreflight": "passed"
+    }
+  },
+  "executions": [
+    {
+      "key": "run/41027597095/attempt/1",
+      "kind": "implementation",
+      "order": 1,
+      "workflow": "code-agent-task",
+      "runId": 41027597095,
+      "attempt": 1,
+      "event": "workflow_dispatch",
+      "previousRunId": null,
+      "conclusion": "budget-exhausted",
+      "startedAt": "2026-10-30T08:36:35Z",
+      "endedAt": "2026-10-30T12:57:52Z",
+      "jobSeconds": 15670,
+      "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+      "patchSha256": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+      "source": "usage-receipt"
+    }
+  ],
+  "outcome": {
+    "execution": "budget-exhausted",
+    "acceptance": "failed",
+    "delivery": "not-published",
+    "pullRequest": null,
+    "detail": "达到任务停止条件或更严格的评测计划预算，已保存补丁与事实，进入只读诊断，不再自动修复或续跑。"
+  },
+  "qa": {
+    "coverage": "partial",
+    "rounds": [
+      {
+        "round": 2,
+        "executionKey": "run/41027597095/attempt/1",
+        "scope": "full",
+        "passed": false,
+        "source": "verify-2/browser-acceptance/report.json",
+        "checks": [
+          {
+            "id": "C01",
+            "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/login-page.png",
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C02",
+            "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/admin-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C03",
+            "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C04",
+            "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/inbox-or-main-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C05",
+            "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/admin-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C06",
+            "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C07",
+            "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/login-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C08",
+            "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/admin-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C09",
+            "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/inbox-or-main-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C10",
+            "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C11",
+            "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/admin-unable-to-connect.png"
+            ]
+          },
+          {
+            "id": "C12",
+            "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C13",
+            "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/register-dark-mode.png",
+              "qa/2/register-375px.png",
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C14",
+            "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+            "status": "failed",
+            "evidence": [
+              "qa/2/login-page.png",
+              "qa/2/post-login-connection-failed.png"
+            ]
+          },
+          {
+            "id": "C15",
+            "criterion": "未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+            "status": "passed",
+            "evidence": [
+              "qa/2/login-page.png"
+            ]
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "executionKey": "run/41027597095/attempt/1",
+        "scope": "focused",
+        "passed": false,
+        "source": "verify-3/browser-focused/report.json",
+        "checks": [
+          {
+            "id": "C01",
+            "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C02",
+            "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C03",
+            "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C04",
+            "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C05",
+            "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C06",
+            "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C07",
+            "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C08",
+            "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C09",
+            "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C10",
+            "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C11",
+            "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C12",
+            "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C13",
+            "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C14",
+            "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+            "status": "failed",
+            "evidence": []
+          }
+        ]
+      },
+      {
+        "round": 4,
+        "executionKey": "run/41027597095/attempt/1",
+        "scope": "focused",
+        "passed": false,
+        "source": "verify-4/browser-focused/report.json",
+        "checks": [
+          {
+            "id": "C01",
+            "criterion": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C02",
+            "criterion": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C03",
+            "criterion": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C04",
+            "criterion": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C05",
+            "criterion": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C06",
+            "criterion": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C07",
+            "criterion": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C08",
+            "criterion": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C09",
+            "criterion": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C10",
+            "criterion": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C11",
+            "criterion": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C12",
+            "criterion": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C13",
+            "criterion": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+            "status": "failed",
+            "evidence": []
+          },
+          {
+            "id": "C14",
+            "criterion": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+            "status": "failed",
+            "evidence": []
+          }
+        ]
+      }
+    ],
+    "firstFull": {
+      "status": "unknown",
+      "round": null,
+      "executionKey": null,
+      "basis": "第一轮验证位于更早的执行，本产物未包含，不能推断首轮结果。"
+    },
+    "finalFull": {
+      "status": "failed",
+      "round": 2,
+      "executionKey": "run/41027597095/attempt/1",
+      "basis": "本产物中最后一次实际全量 QA。"
+    },
+    "criteria": [
+      {
+        "id": "C01",
+        "text": "全新独立SQLite安装与重复安装成功；无需旧实例、旧凭据或原仓库绝对路径。用户/角色、企业开通与企业/项目成员配置通过界面可操作。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C02",
+        "text": "管理员从空库完成企业A/B、项目、用户和成员配置；普通企业成员只看到被授权企业且实际参与的项目，直接请求其他企业项目、历史、原件和导出均被拒绝。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C03",
+        "text": "同一人具备全局项目管理岗位但在另一项目是readonly时，界面及直接API都不能修改该项目；仅有页面权限不获得业务API权限。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C04",
+        "text": "项目搜索、筛选、真实分页/排序和返回来源保留有效；超过100企业时仍能定位并选择后面的企业。新建、编辑、校验失败、服务失败及无权限状态符合业务要求。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C05",
+        "text": "原成果目录全部有可用编辑入口和持久化内容；三阶段P0门禁、逐表解锁、everCompleted、陪跑/自助及上游变更核对规则实测正确。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C06",
+        "text": "逐表完成、提交复核、复核、确认、退回、重开、强制动作按状态/角色执行；空字段、六分法不满足、无原因强制或例外绕过硬校验均被拒绝。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C07",
+        "text": "两个编辑会话更新同一成果/项目时，后提交者收到可恢复冲突，草稿保留；读取最新、核对后可继续保存。真正并发请求不静默覆盖，失败不落成无说明500。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C08",
+        "text": "保存版本、修改来源、撤销/重做、版本对比、历史只读、批注锚点/回复/解决和上游引用能追溯，流转失败时状态、版本和审计不会部分提交。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C09",
+        "text": "工作台的表格/思维导图、任务路线、子步骤URL、手动保存、未保存离开确认及右侧协作面板可完成真实编辑流程。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C10",
+        "text": "资料原件上传/下载、画像复核、专家申请到关闭、通知与Excel/Word等导出可实际使用；草稿标记和授权边界正确。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C11",
+        "text": "三位数字咨询师在已配置条件下可提出真实修改建议，修改卡须人工确认和手动保存；未配置时明确不可用，不伪造回复或绕过权限。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C12",
+        "text": "用户/角色与流程管理具备真实数据、标准图、可编辑支持参数和授权执行历史；运营页面与其可管理的业务配置实际可用。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C13",
+        "text": "中文/英文、375px、暗色和现有主题下关键流程可操作；输入框中间编辑、中文IME、键盘焦点、加载/空/错误/提交状态没有阻断问题。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C14",
+        "text": "工厂完成质量检查、全新SQLite Migration/Seed、真实角色的登录后浏览器业务验收、失败修复和独立终验；报告区分通过/失败/未验证，附相应证据。不能以只打开首页、只运行规则单测替代完整交付。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "failed"
+      },
+      {
+        "id": "C15",
+        "text": "未连接或修改原系统、未迁移旧数据、未默认生成产品示例业务数据、未自动合并PR、未发布到旧实例。",
+        "optional": false,
+        "firstFull": "unknown",
+        "finalFull": "passed"
+      }
+    ],
+    "firstPassWithoutRepair": "unknown",
+    "counts": {
+      "execution": {
+        "verificationAttempts": 4,
+        "repairAttempts": 3,
+        "source": "repair-summary.json（仅本执行）"
+      },
+      "chain": {
+        "verificationAttempts": 4,
+        "repairAttempts": 3,
+        "source": "pipeline-state.json（跨 Handoff 累计检查点，不再相加）"
+      }
+    },
+    "note": "工厂修复次数不等于 Agent 开发中的全部自测和修正；未记录 Agent 内部试错，不宣称开发全程无错误。"
+  },
+  "reviews": [
+    {
+      "key": "review/41027597095.1/v2-0570b3835af0",
+      "role": "original",
+      "selected": true,
+      "state": "failed",
+      "reason": "独立评审未完成或证据校验失败：评审达到 866 秒调用时限（timed_out）；未取得可发布的模块检查点：No assessed module checkpoint。业务验收结果保持不变。",
+      "rubric": {
+        "id": "nb3-framework",
+        "version": 2,
+        "scale": {
+          "min": 0,
+          "max": 100
+        },
+        "businessUiIncluded": false,
+        "dimensions": [
+          {
+            "key": "requirementFit",
+            "label": "需求满足度"
+          },
+          {
+            "key": "usability",
+            "label": "使用便利度"
+          },
+          {
+            "key": "agentFriendliness",
+            "label": "Agent 友好度"
+          },
+          {
+            "key": "design",
+            "label": "设计合理性"
+          },
+          {
+            "key": "reliability",
+            "label": "实现完整性与可靠性"
+          }
+        ]
+      },
+      "reviewer": {
+        "engine": "pi",
+        "model": "grok-4.6",
+        "version": "0.86.1",
+        "runId": 41027597095,
+        "attempt": 1,
+        "controlSha": "cce950b62a47b449696e8b27e816839b699a3102",
+        "replay": false
+      },
+      "producer": {
+        "runId": 41027597095,
+        "attempt": 1
+      },
+      "basis": {
+        "inputHash": "0570b3835af032ae15d5f9c2de0b36b6b2c4404a02cf279ac1da6df0bd51d724",
+        "patchSha256": "c57ef12a9d6d4ab1a4463ae740bac971eae215e66d64c7048f29aecdf21413ee",
+        "baseSha": "f4e6f328e9ff03aac03cca3aabc99bdccfa5e7da",
+        "lockfileSha256": "aab307cd2649adc76d88c31315972a3c93143fe6393778fcb98f4ce916d4a411",
+        "reviewCriteriaHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "artifactHash": "fb0608a8234ffbc73ffa16203f709a2b58086c98a60e83fcaa0a06528c9c5926"
+      },
+      "buildReviewMode": "full",
+      "summary": null,
+      "progress": null,
+      "modules": [],
+      "findings": [],
+      "ui": null,
+      "limitations": [],
+      "usageSource": null
+    }
+  ],
+  "health": {
+    "status": "incomplete",
+    "qa": "failed",
+    "requiredChecks": {
+      "status": "passed",
+      "results": []
+    },
+    "review": "failed"
+  },
+  "processNotes": {
+    "state": "present",
+    "source": "retro.json",
+    "author": "implementer",
+    "independent": false,
+    "summary": "ESLint failed because shared/*.ts sat outside every TypeScript project. Nested shared/tsconfig.json plus tsconfig.server.json include, and four type-aware lint fixes, restored the lint stage.",
+    "blockers": [],
+    "improvements": [
+      {
+        "id": "notes/run/41027597095/attempt/1/I1",
+        "category": "tooling",
+        "title": "Project-service lint of new top-level source trees",
+        "detail": "Adding a directory such as shared/ that is not in the template layout is invisible to ESLint until a nested tsconfig.json exists. The first failure is a project-service parse error on every file, not a real rule.",
+        "suggestedChange": "When introducing a new top-level TypeScript tree, add the nested tsconfig (like server/ and database/) and include it in the emitting tsconfig.server.json in the same change as the first source file.",
+        "mechanizable": true
+      }
+    ],
+    "note": "实现者自述，未经独立核验；不是框架评审结论。"
+  },
+  "metrics": {
+    "usage": {
+      "sources": [
+        {
+          "key": "agent-job:123969445693",
+          "executionKey": "run/41027597095/attempt/1",
+          "scope": "一次 Agent 作业内的实现、修复、QA 与同轮评审调用",
+          "phases": {
+            "implementation": {
+              "input": 1034422,
+              "output": 77247,
+              "cacheRead": 3803904,
+              "cacheWrite": 0,
+              "total": 4915573
+            },
+            "repair": {
+              "input": 3265243,
+              "output": 331029,
+              "cacheRead": 14641536,
+              "cacheWrite": 0,
+              "total": 18237808
+            },
+            "qa": {
+              "input": 152362,
+              "output": 52022,
+              "cacheRead": 1785856,
+              "cacheWrite": 0,
+              "total": 1990240
+            },
+            "qaFocused": {
+              "input": 292167,
+              "output": 31985,
+              "cacheRead": 4518400,
+              "cacheWrite": 0,
+              "total": 4842552
+            },
+            "qaReport": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            },
+            "review": {
+              "input": 424760,
+              "output": 42772,
+              "cacheRead": 1915648,
+              "cacheWrite": 0,
+              "total": 2383180
+            },
+            "compaction": {
+              "input": 1179987,
+              "output": 197322,
+              "cacheRead": 50816,
+              "cacheWrite": 0,
+              "total": 1428125
+            }
+          },
+          "records": 546,
+          "missing": 6,
+          "incomplete": 1,
+          "complete": false
+        }
+      ],
+      "totals": {
+        "input": 6348941,
+        "output": 732377,
+        "cacheRead": 26716160,
+        "cacheWrite": 0,
+        "total": 33797478,
+        "complete": false
+      },
+      "definition": "沿用 task-usage 口径：按唯一来源键（Agent 作业 / 后补评审 Run）去重，不相加已含这些调用的汇总，不把思考 Token 再加到输出；缺失为 null，不等同供应商账单。"
+    },
+    "time": {
+      "executionSeconds": 15670,
+      "missingJobTimes": 0,
+      "endToEndSeconds": 15677,
+      "jobs": [
+        {
+          "id": 123969311123,
+          "name": "prepare",
+          "executionKey": "run/41027597095/attempt/1",
+          "seconds": 19
+        },
+        {
+          "id": 123969445693,
+          "name": "agent",
+          "executionKey": "run/41027597095/attempt/1",
+          "seconds": 15651
+        }
+      ],
+      "definition": "executionSeconds 为 prepare / agent / verify-final / publish 唯一作业时长之和，不含排队；endToEndSeconds 含排队及续跑间隔。"
+    },
+    "counts": {
+      "businessBuilds": 1,
+      "executions": 1,
+      "reviewExecutions": 1
+    }
+  },
+  "evidence": [
+    {
+      "id": "qa/2/login-page.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "login-page.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/login-page.png",
+      "lines": null,
+      "sha256": "f612407882b332013514aeb5611a357b3beb08c1c42ef7767da5dccbc5fe0637",
+      "observation": "验收项 C01 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/login-page.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/post-login-connection-failed.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "post-login-connection-failed.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/post-login-connection-failed.png",
+      "lines": null,
+      "sha256": "c56c7bb382f3a3b1b9847de453ec1feee121b0d014bf5e5f2041d3f64782c498",
+      "observation": "验收项 C01 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/post-login-connection-failed.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/admin-unable-to-connect.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "admin-unable-to-connect.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/admin-unable-to-connect.png",
+      "lines": null,
+      "sha256": "52abcf260bb346efa7c947142aae6bec2e4a7fc9fe5ccacae9b306a387370772",
+      "observation": "验收项 C02 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/admin-unable-to-connect.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/inbox-or-main-unable-to-connect.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "inbox-or-main-unable-to-connect.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/inbox-or-main-unable-to-connect.png",
+      "lines": null,
+      "sha256": "52abcf260bb346efa7c947142aae6bec2e4a7fc9fe5ccacae9b306a387370772",
+      "observation": "验收项 C04 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/inbox-or-main-unable-to-connect.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/login-unable-to-connect.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "login-unable-to-connect.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/login-unable-to-connect.png",
+      "lines": null,
+      "sha256": "7e80f42df4fd20838ae9f0eb1c8d3368d34f60a43e106577c69dfb681eb5a4ca",
+      "observation": "验收项 C07 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/login-unable-to-connect.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/register-dark-mode.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "register-dark-mode.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/register-dark-mode.png",
+      "lines": null,
+      "sha256": "1def3a9ea6038a6d4d5a04e97dc4dbe8979ea53a87d601d2a8b0914fe3e6899f",
+      "observation": "验收项 C13 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/register-dark-mode.png",
+      "availability": "attached",
+      "note": null
+    },
+    {
+      "id": "qa/2/register-375px.png",
+      "origin": {
+        "kind": "qa",
+        "key": "qa/2",
+        "localId": "register-375px.png"
+      },
+      "kind": "screenshot",
+      "path": "artifacts/verify-2/browser-acceptance/evidence/register-375px.png",
+      "lines": null,
+      "sha256": "b508a0ea6002268182d550c59e8874270847dc59ff1577fb7a10b8f5d624fa64",
+      "observation": "验收项 C13 的截图",
+      "excerpt": null,
+      "excerptRedacted": false,
+      "attachment": "evidence/verify-2/browser-acceptance/register-375px.png",
+      "availability": "attached",
+      "note": null
+    }
+  ],
+  "links": [
+    {
+      "rel": "task-issue",
+      "label": "Issue #2",
+      "url": "https://github.com/klinsmaya/dingze-portal/issues/2",
+      "path": null
+    },
+    {
+      "rel": "run",
+      "label": "Run 41027597095 / attempt 1",
+      "url": "https://github.com/klinsmaya/dingze-portal/actions/runs/41027597095/attempts/1",
+      "path": null
+    },
+    {
+      "rel": "report-archive",
+      "label": "固定版本 HTML 报告（gh-pages 归档路径）",
+      "url": null,
+      "path": "reports/issues/2/runs/41027597095/attempt-1/index.html"
+    }
+  ],
+  "limitations": [
+    {
+      "code": "first-round-unavailable",
+      "detail": "只取得本执行的验证记录；首轮 QA 标为未知，不冒充整个任务首轮通过。"
+    },
+    {
+      "code": "review-failed",
+      "detail": "独立框架评审未完成或未通过证据校验，不导出评分；业务结果不变。"
+    },
+    {
+      "code": "usage-incomplete",
+      "detail": "部分用量未取得或不完整；缺失值为 null，不按零处理。"
+    }
+  ]
+}

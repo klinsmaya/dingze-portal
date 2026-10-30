@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "type": "evaluation-bundle",
+  "subject": {
+    "type": "evaluation-report",
+    "key": "klinsmaya/dingze-portal/issues/2/initial",
+    "revision": 1,
+    "sourceInstance": "klinsmaya/dingze-portal"
+  },
+  "files": [
+    {
+      "path": "evaluation.json",
+      "role": "evaluation-report",
+      "mediaType": "application/json",
+      "size": 43329,
+      "sha256": "b682c8dff80d83b288e960859466bf323079f5b3fb0bbef74281191c4a012d8e"
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/admin-unable-to-connect.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 16855,
+      "sha256": "52abcf260bb346efa7c947142aae6bec2e4a7fc9fe5ccacae9b306a387370772",
+      "evidenceIds": [
+        "qa/2/admin-unable-to-connect.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/inbox-or-main-unable-to-connect.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 16855,
+      "sha256": "52abcf260bb346efa7c947142aae6bec2e4a7fc9fe5ccacae9b306a387370772",
+      "evidenceIds": [
+        "qa/2/inbox-or-main-unable-to-connect.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/login-page.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 161784,
+      "sha256": "f612407882b332013514aeb5611a357b3beb08c1c42ef7767da5dccbc5fe0637",
+      "evidenceIds": [
+        "qa/2/login-page.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/login-unable-to-connect.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 16145,
+      "sha256": "7e80f42df4fd20838ae9f0eb1c8d3368d34f60a43e106577c69dfb681eb5a4ca",
+      "evidenceIds": [
+        "qa/2/login-unable-to-connect.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/post-login-connection-failed.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 16700,
+      "sha256": "c56c7bb382f3a3b1b9847de453ec1feee121b0d014bf5e5f2041d3f64782c498",
+      "evidenceIds": [
+        "qa/2/post-login-connection-failed.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/register-375px.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 31776,
+      "sha256": "b508a0ea6002268182d550c59e8874270847dc59ff1577fb7a10b8f5d624fa64",
+      "evidenceIds": [
+        "qa/2/register-375px.png"
+      ]
+    },
+    {
+      "path": "evidence/verify-2/browser-acceptance/register-dark-mode.png",
+      "role": "evidence",
+      "mediaType": "image/png",
+      "size": 147484,
+      "sha256": "1def3a9ea6038a6d4d5a04e97dc4dbe8979ea53a87d601d2a8b0914fe3e6899f",
+      "evidenceIds": [
+        "qa/2/register-dark-mode.png"
+      ]
+    },
+    {
+      "path": "report.html",
+      "role": "report-html",
+      "mediaType": "text/html",
+      "size": 720676,
+      "sha256": "c41004b98dd28ab9215f394334e9a07af6f9ab0c4398770154afbd201d0b4d85"
+    }
+  ]
+}
