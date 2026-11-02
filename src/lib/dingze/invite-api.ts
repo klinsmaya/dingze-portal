@@ -82,3 +82,9 @@ export function passwordProblem(password: string): string | null {
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return "要同时包含字母和数字";
   return null;
 }
+
+/** 公开试用注册：一次开好试用企业、企业管理员账号（手机号作登录名）和一个自助项目。 */
+export const trialApi = {
+  signUp: (values: { enterpriseName: string; nickname: string; phone: string; password: string; agree: boolean; website?: string }) =>
+    post<{ username: string; projectId: number }>("trialSignUp", values),
+};

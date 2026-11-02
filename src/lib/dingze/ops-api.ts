@@ -35,6 +35,8 @@ export type Enterprise = {
   createdAt: string;
   /** 运营打开后，企业管理员可以自建项目（企业内训 · 自助）。 */
   allowSelfProject?: boolean;
+  /** 客户在首页自助注册的试用企业。 */
+  trial?: boolean;
 };
 
 export type OpsProject = {

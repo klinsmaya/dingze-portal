@@ -48,7 +48,8 @@ const LETTER_TONE: Record<RaciLetter, string> = {
 
 /** S2-04: rows are key projects (or key paths), columns are departments; A = 1 and R ≥ 1 per row. */
 export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUnits }: Props) {
-  const { project } = useProjectContext();
+  // 示例页（/sample）没有项目上下文：链接到项目页面的地方不显示链接。
+  const project = useProjectContext()?.project;
   const invalid = errorAnchors(issues);
   const [newColumn, setNewColumn] = useState("");
   const columns = value.columns ?? [];
@@ -73,7 +74,7 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
   const headless = depts.filter((d) => !d.headId && !d.headName).map((d) => d.name);
   return (
     <section aria-label="RACI 责任分解矩阵" className="flex flex-col gap-4">
-      <SourceNote to={`/projects/${project.id}/materials#org`} linkLabel="看组织与职责" warn={!depts.length}>
+      <SourceNote to={project ? `/projects/${project.id}/materials#org` : undefined} linkLabel="看组织与职责" warn={!depts.length}>
         {!depts.length
           ? "组织里还没有部门：责任者列只能手动加。请企业管理员先在「本企业 › 组织部门」建好部门和负责人。"
           : `责任者列取自组织部门（${depts.length} 个）${headless.length ? `；${headless.join("、")} 还没写负责人` : ""}，表头小字是部门职责，定 A、R 时对照着看。组织之外的责任者可以加自定义列；定版后组织再变，这里只提示、不自动改。`}

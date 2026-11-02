@@ -33,6 +33,7 @@ import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { type MaterialSummary, downloadOriginal, useAddMaterial, useDeleteMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
+import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
 import { cn } from "@/lib/utils";
 
 import { OrgUnitsEditor } from "../ops/components/org-units-tab";
@@ -376,10 +377,18 @@ export default function MaterialsPage() {
           {/* 标题和页签固定在上面，内容区自己滚动（2026-10-16）。 */}
           <div className="shrink-0 border-b bg-background px-4 pt-4 md:px-6">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="font-heading text-2xl font-bold text-brand">资料</h1>
+              <h1 className="font-heading text-2xl font-bold text-brand">
+                <span className="mr-2 text-base font-semibold text-muted-foreground">第 1 步</span>上传资料
+              </h1>
               <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                填表前先备好企业画像和组织架构：直接填，或先上传资料再让数字咨询师整理，你确认后才写入。
+                上传企业简介、组织架构、上年经营复盘，让数字咨询师整理企业画像，你确认后才写入。试用期间请用脱敏资料。
               </p>
+              <Link
+                to={workspacePath(project.id, stageEntryCode(overview.artifacts, "strategy"))}
+                className="shrink-0 self-center text-sm font-semibold text-primary hover:underline"
+              >
+                下一步：战略解码 →
+              </Link>
             </div>
             <nav aria-label="资料页签" role="tablist" className="mt-3 -mb-px flex flex-wrap items-end gap-1 text-sm">
               {MATERIAL_TABS.map(([key, label]) => {

@@ -61,7 +61,7 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
                         <Badge variant="outline" className="h-4 px-1 text-[10px]">
                           {priorityLabel(def.priority)}
                         </Badge>
-                        {STAGES.find((s) => s.key === def.stage)?.name}
+                        {STAGES.find((s) => s.key === def.stage)?.flow}
                       </div>
                     </td>
                     <td className="px-3 py-2">

@@ -17,7 +17,7 @@ const USERNAME = /^[A-Za-z0-9_.@-]{3,50}$/;
 // ── 限流：公开接口按来源 IP 和邀请码计数（进程内，够挡住撞码和刷注册）。训练营现场几十人常共用一个
 // 出口 IP，所以按 IP 的上限放得比较宽；码本身 8 位、约 8.5×10¹¹ 种，撞码靠的是查询上限。 ──
 const hits = new Map<string, number[]>();
-function limit(key: string, max: number, windowMs: number) {
+export function limit(key: string, max: number, windowMs: number) {
   const now = Date.now();
   const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   if (list.length >= max) throw new HttpError(429, '操作太频繁，请稍后再试');
@@ -25,7 +25,7 @@ function limit(key: string, max: number, windowMs: number) {
   hits.set(key, list);
   if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
 }
-const ip = (ctx: Context) => String((ctx as any).request?.ip ?? (ctx as any).ip ?? 'unknown');
+export const ip = (ctx: Context) => String((ctx as any).request?.ip ?? (ctx as any).ip ?? 'unknown');
 
 function newCode(): string {
   const bytes = crypto.randomBytes(8);

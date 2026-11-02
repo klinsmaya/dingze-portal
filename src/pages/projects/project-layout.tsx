@@ -1,6 +1,6 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Lock } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
+import { Link, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
 
 import { UserDropdown } from "@/components/app-shell/header";
 import { NotificationBell } from "@/components/dingze/notification-bell";
@@ -15,21 +15,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PROJECT_ROLE_LABELS, type ProjectRole } from "@dingze/shared";
-import type { ProjectSummary } from "@/lib/dingze/api";
+import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, type ProjectRole } from "@dingze/shared";
+import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
+import { stageEntryCode, stageProgress } from "@/lib/dingze/progress";
 import { useProject, useProjectOverview } from "@/lib/dingze/queries";
 import { cn } from "@/lib/utils";
 
 import type { ProjectContextValue } from "./project-context";
 
-// 一级入口两端同名（开营前 UX 改版 IA1）：待办 · 定责 · 资料 · 成果；咨询方另有专家咨询。
-const ENTERPRISE_NAV = [
-  { to: "overview", label: "待办", title: "待办：要你处理的表、等别人处理的表和项目启动事项" },
-  { to: "workspace", label: "定责", title: "定责：逐表填写三张检查表，完成后提交复核、定版" },
-  { to: "materials", label: "资料", title: "资料：填表前的准备与参考——资料库、组织与职责、企业画像" },
-  { to: "results", label: "成果", title: "成果：每张表的状态与版本，已定版的交付文件" },
-];
-const FULL_NAV = [...ENTERPRISE_NAV, { to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }];
+// 项目导航按客户流程排（2026-11 甲方反馈）：总览 · ① 资料 · ② 战略解码 · ③ 目标分解 · ④ 计划制定 · ⑤ 成果；
+// 咨询方另有专家咨询。三个阶段各自跳到本阶段第一张还没定版的表。
+type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean };
+
+function flowNav(artifacts: ArtifactOverview[], consulting: boolean): NavItem[] {
+  const stages = stageProgress(artifacts);
+  return [
+    { key: "overview", to: "overview", label: "总览", title: "总览：现在在第几步、下一步做什么" },
+    { key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" },
+    ...STAGES.map((stage, i): NavItem => {
+      const p = stages.find((x) => x.stage === stage.key);
+      return {
+        key: stage.key,
+        to: `workspace/${encodeURIComponent(stageEntryCode(artifacts, stage.key))}`,
+        label: stage.flow,
+        no: i + 2,
+        title: `${stage.flow}（书中：${stage.name}）${p && !p.open ? "：上一步全部定版后开启" : ""}`,
+        locked: !!p && !p.open,
+        done: !!p?.complete,
+      };
+    }),
+    { key: "results", to: "results", label: "成果", no: 5, title: "成果：每张表的状态与版本，下载计划书和各表" },
+    ...(consulting ? [{ key: "expert", to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }] : []),
+  ];
+}
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];
 
 type TeamMember = { userId: number; nickname: string; projectRole: string };
@@ -78,6 +96,7 @@ function ProjectTopbar({
   projectRole,
   isConsultAdmin,
   team,
+  artifacts,
   setSlotActions,
 }: {
   projectId: number;
@@ -85,10 +104,16 @@ function ProjectTopbar({
   projectRole: ProjectRole | null | undefined;
   isConsultAdmin: boolean;
   team: TeamMember[];
+  artifacts: ArtifactOverview[];
   setSlotActions?: (el: HTMLElement | null) => void;
 }) {
-  const section = useLocation().pathname.split("/")[3] || "overview";
-  const nav = projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin ? ENTERPRISE_NAV : FULL_NAV;
+  const parts = useLocation().pathname.split("/");
+  const section = parts[3] || "overview";
+  const consulting = !(projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin);
+  const nav = flowNav(artifacts, consulting);
+  // 在填写页时，亮起当前这张表所在的阶段。
+  const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
+  const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-gold px-3 text-band-foreground md:px-4" style={{ background: "var(--band)" }}>
       <Link to="/projects" aria-label="返回我的项目" title="我的项目" className="flex shrink-0 items-center gap-2 rounded-lg pr-1 hover:bg-white/10">
@@ -98,21 +123,35 @@ function ProjectTopbar({
       <span aria-hidden className="hidden h-5 w-px bg-white/25 xl:block" />
       <ProjectSwitcher projectId={projectId} projects={projects} section={section} />
       <nav aria-label="项目导航" className="ml-2 flex h-full min-w-0 items-stretch overflow-x-auto">
-        {nav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            title={item.title}
-            className={({ isActive }) =>
-              cn(
-                "flex shrink-0 items-center border-b-2 px-3 pt-0.5 text-sm",
-                isActive ? "border-gold font-bold text-band-foreground" : "border-transparent text-band-muted hover:text-band-foreground",
-              )
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
+        {nav.map((item) => {
+          const active = item.key === activeKey;
+          return (
+            <Link
+              key={item.key}
+              to={item.to}
+              title={item.title}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
+                active ? "border-gold font-bold text-band-foreground" : "border-transparent text-band-muted hover:text-band-foreground",
+              )}
+            >
+              {item.no ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex size-[18px] items-center justify-center rounded-full border text-[11px] font-bold",
+                    item.done ? "border-gold bg-gold text-[#0c3d52]" : active ? "border-gold text-gold" : "border-white/40",
+                  )}
+                >
+                  {item.done ? <Check className="size-3" /> : item.no}
+                </span>
+              ) : null}
+              {item.label}
+              {item.locked ? <Lock className="size-3 opacity-70" aria-label="待开启" /> : null}
+            </Link>
+          );
+        })}
       </nav>
       <div className="ml-auto flex shrink-0 items-center gap-2.5">
         {projectRole ? <span className="hidden text-xs text-band-muted lg:inline">{PROJECT_ROLE_LABELS[projectRole]}</span> : null}
@@ -153,6 +192,7 @@ export default function ProjectLayout() {
       projectRole={overview.data?.projectRole ?? project?.projectRole}
       isConsultAdmin={!!overview.data?.isConsultAdmin}
       team={overview.data?.team ?? []}
+      artifacts={overview.data?.artifacts ?? []}
       setSlotActions={inWorkspace ? setSlotActions : undefined}
     />
   );

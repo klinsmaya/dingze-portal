@@ -105,3 +105,14 @@ export function progressOf(artifacts: ArtifactOverview[]): ArtifactProgress[] {
 export function workspacePath(projectId: number, code: string) {
   return `/projects/${projectId}/workspace/${encodeURIComponent(code)}`;
 }
+
+/** Where a stage tab leads: the first open table in the stage that is not 定版 yet, else the stage's first table. */
+export function stageEntryCode(artifacts: ArtifactOverview[], stage: StageKey): string {
+  const map = byCode(artifacts);
+  const steps = STEP_ARTIFACTS.filter((a) => a.stage === stage);
+  const open = steps.find((def) => {
+    const a = map.get(def.code);
+    return !!a && a.unlock.unlocked && a.status !== "locked" && def.priority !== "P1";
+  });
+  return (open ?? steps[0]).code;
+}

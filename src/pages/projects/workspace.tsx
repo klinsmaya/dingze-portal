@@ -1,4 +1,4 @@
-import { ArrowRight, History, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, History, Lock, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
@@ -39,6 +39,7 @@ import { useAddComment } from "@/lib/dingze/comments-api";
 import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
+import { hasSample, samplePath } from "@/lib/dingze/sample";
 import { useArtifactHistory, usePlanBookSources, useRecordExport } from "@/lib/dingze/records-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { locateAnchor } from "@/lib/dingze/locate";
@@ -774,6 +775,18 @@ function Workspace({ code }: { code: string }) {
     />
   );
   const bookOpen = panelOpen && asideTab === "book";
+  // 看示例：新标签页打开虚构企业瀚川燃气的同一张表，对照着填（只读）。
+  const sampleLink = hasSample(code) ? (
+    <Link
+      to={samplePath(code)}
+      target="_blank"
+      rel="noopener"
+      title="新窗口打开示例企业（瀚川燃气，虚构）的同一张表，对照着填"
+      className="mx-1 flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      <Eye className="size-3.5" /> <span className="font-semibold">看示例</span>
+    </Link>
+  ) : null;
   const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
   // 交出去以后的下一张：一个小链接放在状态行，不再占编辑区一整行（2026-10-16）。
   const handedOff = ["step_done", "in_review", "pending_confirm", "locked"].includes(status);
@@ -938,12 +951,13 @@ function Workspace({ code }: { code: string }) {
                     session.setSelecting(!selecting);
                   }}
                   onShortcuts={() => setShortcutsOpen(true)}
-                  method={methodButton}
+                  method={<>{sampleLink}{methodButton}</>}
                   setHowToSlot={setHowToSlot}
                 />
               </div>
             ) : (
               <div className="-mx-4 flex min-h-10 items-center justify-end gap-1 border-t px-3 md:-mx-5">
+                {sampleLink}
                 {methodButton}
                 <span ref={setHowToSlot} className="contents" />
               </div>

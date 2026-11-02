@@ -7,6 +7,7 @@ import { type DecodeMap, type GoalPathSystem, type Perspective } from "@dingze/s
 import { FIGURE_3_7, type Figure37Item, figureTag } from "@/lib/dingze/figure-3-7";
 import { workspacePath } from "@/lib/dingze/progress";
 import { cn } from "@/lib/utils";
+import { samplePath } from "@/lib/dingze/sample";
 import { useProjectContext } from "@/pages/projects/project-context";
 
 // 找路径的五个子步骤 (design 10): 1–4 are the four layers of the decode map (S2-01), 5 imports
@@ -33,7 +34,8 @@ export function FindPathSteps({
   /** Inside S2-01: switch the layer in place instead of navigating. */
   onPick?: (no: number) => void;
 }) {
-  const { project } = useProjectContext();
+  // 示例页（/sample）没有项目上下文，子步骤链到示例里的同一张表。
+  const project = useProjectContext()?.project;
   const themes = map?.themes ?? [];
   const count = (step: (typeof FIND_PATH_STEPS)[number]) =>
     step.perspective ? themes.filter((t) => t.perspective === step.perspective).length : (paths?.nodes ?? []).length;
@@ -64,7 +66,7 @@ export function FindPathSteps({
             </button>
           );
         }
-        const to = inMap ? `${workspacePath(project.id, "S2-01")}?sub=${step.no}` : workspacePath(project.id, "S2-03");
+        const to = !project ? samplePath(inMap ? "S2-01" : "S2-03") : inMap ? `${workspacePath(project.id, "S2-01")}?sub=${step.no}` : workspacePath(project.id, "S2-03");
         return (
           <Link key={step.no} to={to} aria-current={current ? "step" : undefined} className={className}>
             {body}
