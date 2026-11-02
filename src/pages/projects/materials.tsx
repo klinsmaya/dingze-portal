@@ -1,3 +1,4 @@
+import { samePayload } from "@/lib/dingze/stable-json";
 import { CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
@@ -262,7 +263,7 @@ export default function MaterialsPage() {
   const [items, setItems] = useState<ProfileItem[]>([]);
   const [baseRev, setBaseRev] = useState(0);
   const serverItems = profile.data?.items;
-  const dirty = JSON.stringify(items) !== JSON.stringify(serverItems ?? []);
+  const dirty = !samePayload(items, serverItems ?? []);
   useEffect(() => {
     if (!profile.data) return;
     if (!dirty || profile.data.rev !== baseRev) {
