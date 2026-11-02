@@ -86,7 +86,10 @@ export default function EnterprisesPage() {
                 <TableRow key={e.id}>
                   <TableCell>
                     <div className="font-medium">{e.name}</div>
-                    <div className="text-xs text-muted-foreground">{e.shortName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {e.shortName}
+                      {e.trial ? <Badge variant="secondary" className="ml-2">自助试用</Badge> : null}
+                    </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{SIZE_LABELS[e.size]}</TableCell>
                   <TableCell>

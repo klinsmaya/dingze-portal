@@ -276,7 +276,7 @@ export function buildRoute(stage: StageKey, artifacts: ArtifactOverview[], where
   const counted = tasks.flatMap((t) => t.steps).filter((s) => !s.method);
   return {
     stage,
-    stageName: STAGES.find((s) => s.key === stage)!.name,
+    stageName: STAGES.find((s) => s.key === stage)!.flow,
     tasks,
     done: counted.filter((s) => s.state === "final").length,
     total: counted.length,

@@ -1,5 +1,5 @@
 import { ARTIFACTS, SERVICE_LABELS, STATUS_LABELS, type ServiceMode } from "@dingze/shared";
-import { ArrowLeft, Bell, Building2, Download, Pencil, Plus, UserPlus } from "lucide-react";
+import { ArrowLeft, Bell, Building2, Copy, Download, Pencil, Plus, Ticket, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { downloadCsv } from "@/lib/dingze/camp-import";
 import { errorMessage } from "@/lib/dingze/errors";
+import { inviteLink } from "@/lib/dingze/invite-api";
 import { type Camp, type CampProject, opsApi } from "@/lib/dingze/ops-api";
 import { useCampDetail, useOpsMutation } from "@/lib/dingze/ops-queries";
 import { formatTime } from "@/lib/dingze/records";
@@ -120,7 +121,14 @@ function EmptyCamp() {
 
 function PrepTab({ camp, projects, onAccounts }: { camp: Camp; projects: CampProject[]; onAccounts: (p: CampProject) => void }) {
   const remind = useOpsMutation(opsApi.campRemind);
+  const invites = useOpsMutation(opsApi.campInvites);
+  const [codes, setCodes] = useState<{ projectId: number; enterprise: string; code: string; maxUses: number; expiresAt: string | null }[] | null>(null);
   const notReady = projects.filter((p) => !ready(p));
+  const issueCodes = () =>
+    invites.mutate(
+      { campId: camp.id },
+      { onSuccess: (r) => setCodes(r.results), onError: (error) => toast.error(errorMessage(error)) },
+    );
   const send = (projectIds?: number[]) =>
     remind.mutate(
       { campId: camp.id, projectIds },
@@ -134,10 +142,16 @@ function PrepTab({ camp, projects, onAccounts }: { camp: Camp; projects: CampPro
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span>开营前每家企业要准备好三件事：组织与部门、资料与画像、项目团队。企业项目负责人在项目首页能看到同样的清单。</span>
-        <Button size="sm" variant="outline" disabled={!notReady.length || remind.isPending} onClick={() => send()}>
-          <Bell /> 提醒未就绪的 {notReady.length} 家
-        </Button>
+        <span className="flex gap-2">
+          <Button size="sm" disabled={invites.isPending} onClick={issueCodes} title="每家企业一个免审核邀请码（项目成员 · 20 人 · 60 天），转发给企业自己发给参训人员">
+            <Ticket /> {invites.isPending ? "生成中…" : "一键发团队码"}
+          </Button>
+          <Button size="sm" variant="outline" disabled={!notReady.length || remind.isPending} onClick={() => send()}>
+            <Bell /> 提醒未就绪的 {notReady.length} 家
+          </Button>
+        </span>
       </div>
+      {codes ? <TeamCodes codes={codes} onClose={() => setCodes(null)} /> : null}
       <div className="overflow-x-auto rounded-xl border bg-card">
         <Table>
           <TableHeader>
@@ -375,5 +389,47 @@ function CloseTab({ camp, projects }: { camp: Camp; projects: CampProject[] }) {
         </Table>
       </div>
     </div>
+  );
+}
+
+
+/** 团队码清单：每家企业一行，复制全部或单条。企业把码转给自己的人，凭码注册就直接进项目。 */
+function TeamCodes({ codes, onClose }: { codes: { projectId: number; enterprise: string; code: string; maxUses: number; expiresAt: string | null }[]; onClose: () => void }) {
+  const line = (c: (typeof codes)[number]) => `${c.enterprise}：${inviteLink(c.code)} · 邀请码 ${c.code}`;
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`已复制${what}`);
+    } catch {
+      toast.error("复制失败，请手动复制");
+    }
+  };
+  return (
+    <section aria-label="团队码" className="flex flex-col gap-2 rounded-xl border bg-card p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">团队码已生成（{codes.length} 家）</span>
+        <span className="text-xs text-muted-foreground">每个码 20 人、60 天内有效，凭码注册直接进项目（项目成员）。把下面的链接发给各企业对接人。</span>
+        <span className="ml-auto flex gap-1">
+          <Button size="sm" variant="outline" onClick={() => copy(codes.map(line).join("\n"), "全部团队码")}>
+            <Copy /> 复制全部
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            收起
+          </Button>
+        </span>
+      </div>
+      <ul className="divide-y">
+        {codes.map((c) => (
+          <li key={c.projectId} className="flex flex-wrap items-center gap-3 py-1.5">
+            <span className="w-40 truncate font-medium">{c.enterprise}</span>
+            <span className="font-mono tracking-wider">{c.code}</span>
+            <span className="text-xs text-muted-foreground">{c.maxUses} 人 · 到 {c.expiresAt ? formatTime(c.expiresAt).slice(0, 10) : "不限"}</span>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => copy(line(c), `${c.enterprise}的团队码`)} aria-label={`复制 ${c.enterprise} 的团队码`}>
+              <Copy />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

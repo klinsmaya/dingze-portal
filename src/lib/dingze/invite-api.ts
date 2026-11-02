@@ -6,7 +6,7 @@ import type { ProjectRole } from "@dingze/shared";
 // 邀请码注册（审核制）。checkInvite / registerWithInvite / registrationStatus 不需要登录，服务端限流；
 // 其余给企业管理员和运营。
 
-export type InviteScope = { enterprise: string; project: string | null; role: string | null; dept: string | null };
+export type InviteScope = { enterprise: string; project: string | null; role: string | null; dept: string | null; autoApprove: boolean };
 
 export type Invite = {
   id: number;
@@ -21,6 +21,8 @@ export type Invite = {
   expiresAt: string | null;
   status: "active" | "disabled";
   note: string | null;
+  /** 免审核：凭码注册直接开通并加入项目。 */
+  autoApprove: boolean;
   createdBy: string | null;
   createdAt: string;
 };
@@ -52,6 +54,7 @@ export type InviteInput = {
   expiresAt?: string | null;
   status?: "active" | "disabled";
   note?: string;
+  autoApprove?: boolean;
 };
 
 const get = <T>(action: string, query: Record<string, string | number | undefined> = {}) =>
@@ -61,7 +64,7 @@ const post = <T>(action: string, body: unknown) => nocobaseClient.action<T>("din
 export const inviteApi = {
   checkInvite: (code: string) => get<InviteScope>("checkInvite", { code }),
   register: (values: { code: string; nickname: string; username: string; password: string; phone?: string; email?: string; remark?: string }) =>
-    post<{ status: "pending"; enterprise: string }>("registerWithInvite", values),
+    post<{ status: "pending" | "approved"; enterprise: string; projectId: number | null }>("registerWithInvite", values),
   registrationStatus: (account: string) => get<{ status: "pending" | "rejected" | "none" }>("registrationStatus", { account }),
   listInvites: (enterpriseId: number) => get<{ invites: Invite[]; registrations: Registration[] }>("listInvites", { enterpriseId }),
   saveInvite: (values: InviteInput) => post<Invite>("saveInvite", values),
@@ -82,3 +85,9 @@ export function passwordProblem(password: string): string | null {
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return "要同时包含字母和数字";
   return null;
 }
+
+/** 公开试用注册：一次开好试用企业、企业管理员账号（手机号作登录名）和一个自助项目。 */
+export const trialApi = {
+  signUp: (values: { enterpriseName: string; nickname: string; phone: string; password: string; agree: boolean; website?: string }) =>
+    post<{ username: string; projectId: number }>("trialSignUp", values),
+};

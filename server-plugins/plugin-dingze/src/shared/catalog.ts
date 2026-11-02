@@ -59,10 +59,11 @@ export interface DerivedDef {
   kind: 'view' | 'embedded' | 'snapshot';
 }
 
-export const STAGES: { key: StageKey; name: string; goal: string }[] = [
-  { key: 'strategy', name: '定战略责', goal: '清晰共识' },
-  { key: 'goal', name: '定目标责', goal: '纵横贯通' },
-  { key: 'action', name: '定行动责', goal: '可视可控' },
+// name 是书里的说法（定三责），flow 是界面上给客户看的流程名（2026-11 甲方反馈：按客户流程叫）。
+export const STAGES: { key: StageKey; name: string; flow: string; goal: string }[] = [
+  { key: 'strategy', name: '定战略责', flow: '战略解码', goal: '清晰共识' },
+  { key: 'goal', name: '定目标责', flow: '目标分解', goal: '纵横贯通' },
+  { key: 'action', name: '定行动责', flow: '计划制定', goal: '可视可控' },
 ];
 
 export const ARTIFACTS: ArtifactDef[] = [

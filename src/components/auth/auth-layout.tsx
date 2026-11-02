@@ -1,7 +1,15 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { STAGES } from "@dingze/shared";
 
 import { Brand } from "@/components/app-shell/brand";
+
+// 客户从注册到拿到计划书的五步（与项目里的流程条一致）。
+export const CUSTOMER_FLOW = [
+  { name: "注册开通", hint: "填企业名称和手机号，马上开好试用项目" },
+  { name: "上传资料", hint: "企业简介、组织架构、上年经营复盘" },
+  { name: "战略解码", hint: "把战略说清楚、能衡量" },
+  { name: "目标分解", hint: "年度目标找到路径，责任分到部门" },
+  { name: "计划制定", hint: "任务、节点、资源落到人，生成年度经营计划书" },
+];
 
 type AuthLayoutProps = PropsWithChildren<{
   title: string;
@@ -41,14 +49,14 @@ export function AuthLayout({
             自驱战略 · 定三责
           </h2>
           <p className="mt-5 max-w-lg text-base leading-7 text-brand-foreground/75">
-            咨询师与企业团队在同一张表上达成共识：战略说得清，目标对得上，行动落到人。
+            从注册到拿到年度经营计划书，五步走完。每一步都有数字咨询师陪你填。
           </p>
 
-          <ol className="mt-10 flex max-w-md flex-col gap-3">
-            {STAGES.map((stage, index) => (
+          <ol className="mt-8 flex max-w-md flex-col gap-2.5">
+            {CUSTOMER_FLOW.map((stage, index) => (
               <li
-                key={stage.key}
-                className="flex items-center gap-4 rounded-xl border border-white/15 bg-white/5 px-5 py-4"
+                key={stage.name}
+                className="flex items-center gap-4 rounded-xl border border-white/15 bg-white/5 px-5 py-3"
               >
                 <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-gold font-heading text-lg font-bold text-brand dark:text-brand-foreground">
                   {index + 1}
@@ -58,7 +66,7 @@ export function AuthLayout({
                     {stage.name}
                   </span>
                   <span className="text-sm text-brand-foreground/70">
-                    {stage.goal}
+                    {stage.hint}
                   </span>
                 </span>
               </li>

@@ -35,6 +35,8 @@ export type Enterprise = {
   createdAt: string;
   /** 运营打开后，企业管理员可以自建项目（企业内训 · 自助）。 */
   allowSelfProject?: boolean;
+  /** 客户在首页自助注册的试用企业。 */
+  trial?: boolean;
 };
 
 export type OpsProject = {
@@ -216,5 +218,7 @@ export const opsApi = {
   campAccounts: (values: { projectId: number; rows: { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string }[] }) =>
     post<{ results: CampAccountResult[] }>("campAccounts", values),
   campRemind: (values: { campId: number; projectIds?: number[] }) => post<{ sent: number }>("campRemind", values),
+  campInvites: (values: { campId: number; projectIds?: number[] }) =>
+    post<{ results: { projectId: number; enterprise: string; code: string; maxUses: number; expiresAt: string | null; created: boolean }[] }>("campInvites", values),
   campClose: (values: { campId: number; projects: { projectId: number; service: "guided" | "self" }[] }) => post<{ updated: number }>("campClose", values),
 };

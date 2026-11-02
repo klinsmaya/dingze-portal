@@ -1,6 +1,6 @@
 import { Authenticated } from "@refinedev/core";
 import { CatchAllNavigate } from "@refinedev/react-router";
-import { Outlet, Route, Routes } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 
 import { AclBootstrap } from "@/components/access-control/acl-bootstrap";
 import { NavigateToAccessibleResource } from "@/components/access-control/navigate-to-accessible-resource";
@@ -9,11 +9,19 @@ import { Layout } from "@/components/app-shell/layout";
 import { ForgotPassword } from "@/pages/forgot-password";
 import { Login } from "@/pages/login";
 import { InviteRegister } from "@/pages/register/invite";
+import { TrialSignUpPage } from "@/pages/trial";
+import { WelcomePage } from "@/pages/welcome";
 import {
   AppExtensionProviders,
   configuredRouteElements,
   extensionStandaloneRouteElements,
 } from "./extensions";
+
+/** 没登录时：打开网站根地址去首页，打开别的页面去登录（登录后回到原页面）。 */
+function SignedOutFallback() {
+  const { pathname } = useLocation();
+  return pathname === "/" ? <Navigate to="/welcome" replace /> : <CatchAllNavigate to="/login" />;
+}
 
 export function AppRoutes() {
   return (
@@ -22,7 +30,7 @@ export function AppRoutes() {
         element={
           <Authenticated
             key="authenticated-inner"
-            fallback={<CatchAllNavigate to="/login" />}
+            fallback={<SignedOutFallback />}
           >
             <AclBootstrap>
               <AppExtensionProviders>
@@ -59,6 +67,9 @@ export function AppRoutes() {
         <Route path="/signin" element={<Login />} />
         {/* 公开注册关闭；只能凭邀请码申请，审核通过才开通账号。 */}
         <Route path="/register" element={<InviteRegister />} />
+        {/* 客户从首页开始：看五步流程 → 免费试用注册（自动开通、自动登录）。 */}
+        <Route path="/welcome" element={<WelcomePage />} />
+        <Route path="/trial" element={<TrialSignUpPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
       </Route>
     </Routes>

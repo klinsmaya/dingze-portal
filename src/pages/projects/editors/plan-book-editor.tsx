@@ -168,7 +168,7 @@ export function DeptPlanBookEditor({
   enterprise: string;
   projectYear: number;
 }) {
-  const { project } = useProjectContext();
+  const project = useProjectContext()?.project;
   const invalid = errorAnchors(issues);
   const depts = value.depts ?? [];
   const [tab, setTab] = useState<string | null>(null);
@@ -186,7 +186,7 @@ export function DeptPlanBookEditor({
           onClick={() => onChange({ depts: [...depts, ...missing.map(([deptId, deptName]) => ({ id: deptId, deptId, deptName, ...emptyPlanBookText() }))] })}
         />
       </EditorToolbar>
-      <SourceNote to={workspacePath(project.id, "S2-05")} linkLabel="打开部门目标承接">
+      <SourceNote to={project ? workspacePath(project.id, "S2-05") : undefined} linkLabel="打开部门目标承接">
         部门页签来自 S2-05《部门目标承接》里的承接部门（{known.size} 个）{missing.length ? `，其中 ${missing.map(([, n]) => n).join("、")} 还没有建部门计划书${readOnly ? "（解锁后可用“按部门承接表建立部门计划书”补上）" : "，点上方按钮补上"}` : ""}。组织里新增的部门，要先在部门承接里承接目标，才会出现在这里；部门改名不会改已写好的计划书。
       </SourceNote>
       {depts.length === 0 ? (

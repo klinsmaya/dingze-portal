@@ -43,7 +43,7 @@ export function StepBar({ projectId, artifacts, stage, activeCode }: StepBarProp
               )}
             >
               {open ? null : <Lock className="size-3" aria-label="待解锁" />}
-              {s.name}
+              {s.flow}
             </Link>
           );
         })}
@@ -51,7 +51,7 @@ export function StepBar({ projectId, artifacts, stage, activeCode }: StepBarProp
 
       <div>
         <div className="font-heading text-base font-bold">
-          {STAGES.find((s) => s.key === stage)!.name} · {progress.goal}
+          {STAGES.find((s) => s.key === stage)!.flow} · {progress.goal}
         </div>
         <div className="text-xs text-muted-foreground">
           P0 已定版 {progress.locked} / {progress.gateTotal}，全部定版后开启下一阶段
