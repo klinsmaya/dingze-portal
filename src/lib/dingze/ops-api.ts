@@ -218,5 +218,7 @@ export const opsApi = {
   campAccounts: (values: { projectId: number; rows: { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string }[] }) =>
     post<{ results: CampAccountResult[] }>("campAccounts", values),
   campRemind: (values: { campId: number; projectIds?: number[] }) => post<{ sent: number }>("campRemind", values),
+  campInvites: (values: { campId: number; projectIds?: number[] }) =>
+    post<{ results: { projectId: number; enterprise: string; code: string; maxUses: number; expiresAt: string | null; created: boolean }[] }>("campInvites", values),
   campClose: (values: { campId: number; projects: { projectId: number; service: "guided" | "self" }[] }) => post<{ updated: number }>("campClose", values),
 };

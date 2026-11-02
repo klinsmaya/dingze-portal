@@ -268,7 +268,9 @@ function StartupCard({ projectId }: { projectId: number }) {
                   {link.label} →
                 </Link>
               ) : item.key === "team" && item.state !== "done" ? (
-                <span className="mt-auto text-xs text-muted-foreground">成员和角色由咨询机构运营在“项目与分派”里设置，有调整请告诉主咨询师。</span>
+                <span className="mt-auto text-xs text-muted-foreground">
+                  叫同事一起做：企业管理员在<Link to="/enterprise?tab=invites" className="text-primary hover:underline">本企业 › 邀请注册</Link>发一个邀请码，同事凭码注册就进项目；或请运营分派。
+                </span>
               ) : null}
             </li>
           );

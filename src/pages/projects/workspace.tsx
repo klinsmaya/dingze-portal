@@ -54,7 +54,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
-import { CoachPanel } from "./components/coach-panel";
+import { CoachPanel, askCoach } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
 import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
@@ -263,6 +263,9 @@ function Workspace({ code }: { code: string }) {
   };
   const status = artifact?.status ?? "not_started";
   const unlocked = detail.data?.unlock.unlocked ?? false;
+  // 空表上的“让数字咨询师起草”提示，本张表关掉后不再出现（换表重新出现）。
+  const [draftHintOff, setDraftHintOff] = useState(false);
+  useEffect(() => setDraftHintOff(false), [code]);
   const canEditRole =
     !!role &&
     (ENTERPRISE_ROLES.includes(role) || CONSULTANT_ROLES.includes(role));
@@ -1140,6 +1143,16 @@ function Workspace({ code }: { code: string }) {
                     </span>
                   </div>
                 ) : null}
+                {status === "not_started" && serverRev === 0 && !readOnly && !previewDraft && !viewRev && edit.log.length === 0 && !draftHintOff ? (
+                  <DraftHint
+                    code={code}
+                    onDraft={() => {
+                      openAside.current("coach");
+                      askCoach(`请结合我们企业的资料、画像和已定版的上游表，直接起草《${def.plain}》整张表，用修改卡给我，我确认后再写入。缺的信息先用【待补】标出来。`);
+                    }}
+                    onDismiss={() => setDraftHintOff(true)}
+                  />
+                ) : null}
                 {EDITABLE_CODES.has(code) ? (
                   <div data-dz-readonly={(readOnly && !previewDraft) || viewRev ? "" : undefined} className="contents">
                   <RegionErrorBoundary
@@ -1308,5 +1321,31 @@ function Workspace({ code }: { code: string }) {
     </AIPageContextScope>
     </HowToSlotContext.Provider>
     </EditSessionContext.Provider>
+  );
+}
+
+
+/** 空表提示：一张新表最省力的开头是让数字咨询师按资料起草，再改；也可以先看示例。 */
+function DraftHint({ code, onDraft, onDismiss }: { code: string; onDraft: () => void; onDismiss: () => void }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm">
+      <Sparkles className="size-4 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">
+        <span className="font-semibold">这张表还是空的。</span> 不用一格一格填：让数字咨询师按你上传的资料先起草一版，你再改。它只给修改卡，确认后才写进表里。
+      </span>
+      <span className="flex shrink-0 gap-2">
+        <Button size="sm" onClick={onDraft}>
+          <Sparkles /> 按资料起草这张表
+        </Button>
+        {hasSample(code) ? (
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to={samplePath(code)} target="_blank" rel="noopener" />}>
+            <Eye /> 看示例
+          </Button>
+        ) : null}
+        <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="关闭提示">
+          自己填
+        </Button>
+      </span>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,8 @@ function useInviteMutation<TVars, TResult>(enterpriseId: number, fn: (vars: TVar
 }
 
 function scopeText(i: Invite) {
-  return [i.projectName && `项目「${i.projectName}」`, i.projectRole && PROJECT_ROLE_LABELS[i.projectRole], i.orgUnitName].filter(Boolean).join(" · ") || "只加入企业";
+  const scope = [i.projectName && `项目「${i.projectName}」`, i.projectRole && PROJECT_ROLE_LABELS[i.projectRole], i.orgUnitName].filter(Boolean).join(" · ") || "只加入企业";
+  return i.autoApprove ? `${scope} · 免审核` : scope;
 }
 
 function inviteState(i: Invite): { label: string; muted: boolean } {
@@ -185,7 +187,7 @@ export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
                           disabled={save.isPending}
                           onClick={() =>
                             save.mutate(
-                              { enterpriseId, id: i.id, projectId: i.projectId, projectRole: i.projectRole, orgUnitId: i.orgUnitId, maxUses: i.maxUses, expiresAt: i.expiresAt, note: i.note ?? undefined, status: i.status === "active" ? "disabled" : "active" },
+                              { enterpriseId, id: i.id, projectId: i.projectId, projectRole: i.projectRole, orgUnitId: i.orgUnitId, maxUses: i.maxUses, expiresAt: i.expiresAt, note: i.note ?? undefined, autoApprove: i.autoApprove, status: i.status === "active" ? "disabled" : "active" },
                               { onSuccess: () => toast.success(i.status === "active" ? "已停用，这个码不能再用来申请" : "已重新启用"), onError: (e) => toast.error(errorMessage(e)) },
                             )
                           }
@@ -269,6 +271,8 @@ function InviteDialog({
   const [maxUses, setMaxUses] = useState("20");
   const [expiresAt, setExpiresAt] = useState(() => new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10));
   const [note, setNote] = useState("");
+  // 默认免审核：训练营和内训都是几十人一起进来，审核一遍太重；需要把关时再关掉。
+  const [autoApprove, setAutoApprove] = useState(true);
   const [busy, setBusy] = useState(false);
   const roles = ENTERPRISE_ROLES.filter((r) => asOps || r !== "ent_lead");
   const submit = async (event: React.FormEvent) => {
@@ -284,6 +288,7 @@ function InviteDialog({
         // 到期日当天整天有效。
         expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null,
         note: note.trim() || undefined,
+        autoApprove,
       });
       onClose();
       onCreated({ ...invite, used: 0, projectName: null, orgUnitName: null, createdBy: null } as Invite);
@@ -301,7 +306,7 @@ function InviteDialog({
             <DialogTitle className="flex items-center gap-2">
               <Ticket className="size-4" /> 新建邀请码
             </DialogTitle>
-            <DialogDescription>凭码申请的人审核通过后成为「{detail.enterprise.shortName}」的企业成员，并按下面的设置加入项目。建好后会自动复制邀请链接。</DialogDescription>
+            <DialogDescription>凭码注册的人成为「{detail.enterprise.shortName}」的企业成员，并按下面的设置加入项目。建好后会自动复制邀请链接。</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -349,6 +354,13 @@ function InviteDialog({
                 <Input id="inv-expires" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
               </Field>
             </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={autoApprove} onCheckedChange={(v) => setAutoApprove(v === true)} className="mt-0.5" />
+              <span>
+                免审核
+                <span className="block text-xs text-muted-foreground">勾上：凭码注册马上开通、直接进项目。不勾：先申请，由管理员审核后开通。</span>
+              </span>
+            </label>
             <Field>
               <FieldLabel htmlFor="inv-note">备注</FieldLabel>
               <Input id="inv-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：储能事业部新同事" maxLength={100} />

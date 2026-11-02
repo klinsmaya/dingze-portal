@@ -23,7 +23,7 @@ import { exportSnapshot, importSnapshot } from './services/snapshot';
 import { opsBoard } from './services/usage';
 import { checkInvite, listInvites, registerWithInvite, registrationStatus, reviewRegistration, saveInvite } from './services/invites';
 import { trialSignUp } from './services/trial';
-import { campAccounts, campAttach, campClose, campDetail, campEnroll, campRemind, listCamps, saveCamp } from './services/camps';
+import { campAccounts, campAttach, campClose, campDetail, campEnroll, campInvites, campRemind, listCamps, saveCamp } from './services/camps';
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
@@ -119,6 +119,7 @@ export class PluginDingzeServer extends Plugin {
         campAttach: action((ctx) => campAttach(ctx, values(ctx) as any)),
         campAccounts: action((ctx) => campAccounts(ctx, values(ctx) as any)),
         campRemind: action((ctx) => campRemind(ctx, values(ctx) as any)),
+        campInvites: action((ctx) => campInvites(ctx, values(ctx) as any)),
         campClose: action((ctx) => campClose(ctx, values(ctx) as any)),
         checkInvite: action((ctx) => checkInvite(ctx, ctx.action.params as any)),
         registerWithInvite: action((ctx) => registerWithInvite(ctx, values(ctx))),
