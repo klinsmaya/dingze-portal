@@ -20,6 +20,8 @@ export default defineCollection({
     // active 可用 / disabled 已停用
     { type: 'string', name: 'status', defaultValue: 'active' },
     { type: 'string', name: 'note' },
+    // 免审核：凭码注册直接开通账号并加入项目（训练营、企业内训批量进人用）。
+    { type: 'boolean', name: 'autoApprove', defaultValue: false },
     spaceField,
   ],
 });

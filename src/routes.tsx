@@ -1,4 +1,4 @@
-import { Activity, BookOpenCheck, Building, Building2, ClipboardList, FolderKanban, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
+import { Activity, BookOpenCheck, Building, Building2, ClipboardList, Eye, FolderKanban, LifeBuoy, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
 import { Navigate, Outlet } from "react-router";
 
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
@@ -43,6 +43,24 @@ export const appRoutes = defineAppRoutes([
       { name: "project.delivery", path: "delivery", element: <Navigate to="../results" replace /> },
       { name: "project.expert", path: "expert", lazy: () => import("@/pages/projects/expert") },
     ],
+  },
+  {
+    // 示例项目：虚构企业的完整一套表，只读，填表时对照着看。
+    name: "sample",
+    path: "/sample",
+    lazy: () => import("@/pages/sample"),
+    resource: {
+      meta: { label: "示例项目", priority: 1.5, icon: <Eye />, description: "虚构企业瀚川燃气的完整成果，只读，填表时对照着看。" },
+    },
+  },
+  { name: "sample.table", path: "/sample/:code", lazy: () => import("@/pages/sample") },
+  {
+    name: "help",
+    path: "/help",
+    lazy: () => import("@/pages/help"),
+    resource: {
+      meta: { label: "使用指南", priority: 6, icon: <LifeBuoy />, description: "五步走完的简明说明。" },
+    },
   },
   {
     name: "board",

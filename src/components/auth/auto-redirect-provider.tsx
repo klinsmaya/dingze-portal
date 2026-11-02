@@ -22,6 +22,8 @@ const publicAuthPaths = new Set([
   "/signin",
   "/register",
   "/forgot-password",
+  "/welcome",
+  "/trial",
 ]);
 
 export function AuthAutoRedirectProvider({

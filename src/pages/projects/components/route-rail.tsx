@@ -76,7 +76,7 @@ function StageBar({ current, stages }: { current: StageKey; stages: RailStage[] 
   return (
     <ol aria-label="三阶段" className="flex min-w-0 flex-1">
       {stages.map((st, i) => {
-        const name = STAGES.find((x) => x.key === st.key)!.name.replace(/责$/, "");
+        const name = STAGES.find((x) => x.key === st.key)!.flow;
         const now = st.key === current;
         const body = (
           <>
@@ -92,11 +92,11 @@ function StageBar({ current, stages }: { current: StageKey; stages: RailStage[] 
         return (
           <li key={st.key} className={cn("min-w-0 flex-1", i > 0 && "-ml-1")} style={{ clipPath: CHEVRON[i] }}>
             {st.open && !now ? (
-              <Link to={st.to} className={cls} title={`切换到${STAGES[i].name}（必做表已定版 ${st.locked} / ${st.gateTotal}）`}>
+              <Link to={st.to} className={cls} title={`切换到${STAGES[i].flow}（必做表已定版 ${st.locked} / ${st.gateTotal}）`}>
                 {body}
               </Link>
             ) : (
-              <span className={cls} aria-current={now ? "step" : undefined} title={st.open ? STAGES[i].name : `${STAGES[i].name}：上一阶段全部定版后开启`}>
+              <span className={cls} aria-current={now ? "step" : undefined} title={st.open ? STAGES[i].flow : `${STAGES[i].flow}：上一步全部定版后开启`}>
                 {body}
               </span>
             )}
@@ -210,7 +210,7 @@ export function RouteRail({
         <div className="mt-2.5 px-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1 font-heading text-[15px] font-bold leading-snug">
-              第{["一", "二", "三"][STAGES.findIndex((x) => x.key === route.stage)]}阶段 {route.stageName}
+              第 {STAGES.findIndex((x) => x.key === route.stage) + 2} 步 · {route.stageName}
             </div>
             <button type="button" onClick={onToggle} aria-label="收起项目路线" title="收起（窄屏时自动收起）" className="flex size-6 shrink-0 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted">
               <ChevronsLeft className="size-3.5" />

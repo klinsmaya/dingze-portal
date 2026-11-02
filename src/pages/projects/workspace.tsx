@@ -1,4 +1,4 @@
-import { ArrowRight, History, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, History, Lock, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
@@ -39,6 +39,7 @@ import { useAddComment } from "@/lib/dingze/comments-api";
 import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
 import { nextArtifact } from "@/lib/dingze/next-step";
+import { hasSample, samplePath } from "@/lib/dingze/sample";
 import { useArtifactHistory, usePlanBookSources, useRecordExport } from "@/lib/dingze/records-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { locateAnchor } from "@/lib/dingze/locate";
@@ -53,7 +54,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
-import { CoachPanel } from "./components/coach-panel";
+import { CoachPanel, askCoach } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
 import { CharterDocxButton } from "./components/charter-export";
 import { ExportButton } from "./components/export-button";
@@ -262,6 +263,9 @@ function Workspace({ code }: { code: string }) {
   };
   const status = artifact?.status ?? "not_started";
   const unlocked = detail.data?.unlock.unlocked ?? false;
+  // 空表上的“让数字咨询师起草”提示，本张表关掉后不再出现（换表重新出现）。
+  const [draftHintOff, setDraftHintOff] = useState(false);
+  useEffect(() => setDraftHintOff(false), [code]);
   const canEditRole =
     !!role &&
     (ENTERPRISE_ROLES.includes(role) || CONSULTANT_ROLES.includes(role));
@@ -774,6 +778,18 @@ function Workspace({ code }: { code: string }) {
     />
   );
   const bookOpen = panelOpen && asideTab === "book";
+  // 看示例：新标签页打开虚构企业瀚川燃气的同一张表，对照着填（只读）。
+  const sampleLink = hasSample(code) ? (
+    <Link
+      to={samplePath(code)}
+      target="_blank"
+      rel="noopener"
+      title="新窗口打开示例企业（瀚川燃气，虚构）的同一张表，对照着填"
+      className="mx-1 flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      <Eye className="size-3.5" /> <span className="font-semibold">看示例</span>
+    </Link>
+  ) : null;
   const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
   // 交出去以后的下一张：一个小链接放在状态行，不再占编辑区一整行（2026-10-16）。
   const handedOff = ["step_done", "in_review", "pending_confirm", "locked"].includes(status);
@@ -938,12 +954,13 @@ function Workspace({ code }: { code: string }) {
                     session.setSelecting(!selecting);
                   }}
                   onShortcuts={() => setShortcutsOpen(true)}
-                  method={methodButton}
+                  method={<>{sampleLink}{methodButton}</>}
                   setHowToSlot={setHowToSlot}
                 />
               </div>
             ) : (
               <div className="-mx-4 flex min-h-10 items-center justify-end gap-1 border-t px-3 md:-mx-5">
+                {sampleLink}
                 {methodButton}
                 <span ref={setHowToSlot} className="contents" />
               </div>
@@ -1126,6 +1143,16 @@ function Workspace({ code }: { code: string }) {
                     </span>
                   </div>
                 ) : null}
+                {status === "not_started" && serverRev === 0 && !readOnly && !previewDraft && !viewRev && edit.log.length === 0 && !draftHintOff ? (
+                  <DraftHint
+                    code={code}
+                    onDraft={() => {
+                      openAside.current("coach");
+                      askCoach(`请结合我们企业的资料、画像和已定版的上游表，直接起草《${def.plain}》整张表，用修改卡给我，我确认后再写入。缺的信息先用【待补】标出来。`);
+                    }}
+                    onDismiss={() => setDraftHintOff(true)}
+                  />
+                ) : null}
                 {EDITABLE_CODES.has(code) ? (
                   <div data-dz-readonly={(readOnly && !previewDraft) || viewRev ? "" : undefined} className="contents">
                   <RegionErrorBoundary
@@ -1294,5 +1321,31 @@ function Workspace({ code }: { code: string }) {
     </AIPageContextScope>
     </HowToSlotContext.Provider>
     </EditSessionContext.Provider>
+  );
+}
+
+
+/** 空表提示：一张新表最省力的开头是让数字咨询师按资料起草，再改；也可以先看示例。 */
+function DraftHint({ code, onDraft, onDismiss }: { code: string; onDraft: () => void; onDismiss: () => void }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm">
+      <Sparkles className="size-4 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">
+        <span className="font-semibold">这张表还是空的。</span> 不用一格一格填：让数字咨询师按你上传的资料先起草一版，你再改。它只给修改卡，确认后才写进表里。
+      </span>
+      <span className="flex shrink-0 gap-2">
+        <Button size="sm" onClick={onDraft}>
+          <Sparkles /> 按资料起草这张表
+        </Button>
+        {hasSample(code) ? (
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to={samplePath(code)} target="_blank" rel="noopener" />}>
+            <Eye /> 看示例
+          </Button>
+        ) : null}
+        <Button size="sm" variant="ghost" onClick={onDismiss} aria-label="关闭提示">
+          自己填
+        </Button>
+      </span>
+    </div>
   );
 }

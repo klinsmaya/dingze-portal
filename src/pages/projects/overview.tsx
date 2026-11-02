@@ -1,18 +1,21 @@
-import { ArrowRight, CircleCheck, CircleDashed, CircleDot, Import } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
+import { STAGES, collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
 
 import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
-import { STEP_ARTIFACTS, nextActionPath, progressOf, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import { type FlowStep, flowSteps } from "@/lib/dingze/flow";
+import type { ArtifactOverview } from "@/lib/dingze/api";
+import { STEP_ARTIFACTS, nextActionPath, progressOf, stageEntryCode, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
 import { cn } from "@/lib/utils";
 
+import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
 import { ImportDialog } from "./components/import-dialog";
 import { useProjectContext } from "./project-context";
 
@@ -35,6 +38,29 @@ export default function ProjectOverviewPage() {
   const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
   const next = nextAction(steps, role, service);
   const stages = stageProgress(artifacts);
+  const materials = useMaterials(project);
+  const profile = useProfile(project);
+  const startup = startupChecklist({ orgUnits: overview.orgUnits ?? [], team: overview.team ?? [], materialCount: materials.data?.length ?? 0, profileItems: profile.data?.items ?? [] });
+  const flow = flowSteps({
+    stages,
+    materialsReady: startup.find((i) => i.key === "materials")?.state === "done",
+    materialCount: materials.data?.length ?? 0,
+    started: artifacts.some((a) => a.status !== "not_started"),
+  });
+  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role !== "readonly";
+  // 首次进项目弹操作指引（本机记住）。只给企业侧的新项目：还没开始填表、不是咨询方。
+  const [guideSeen, setGuideSeen] = useFirstRunGuide();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const freshProject = !artifacts.some((a) => a.status !== "not_started");
+  useEffect(() => {
+    if (!guideSeen && !consulting && freshProject && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    // 只在首次加载完判断一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materials.isLoading, profile.isLoading]);
+  const closeGuide = () => {
+    setGuideOpen(false);
+    setGuideSeen(true);
+  };
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
   const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
   // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
@@ -55,14 +81,20 @@ export default function ProjectOverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
+      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={`/projects/${project.id}/materials`} />
       <div className="flex flex-wrap items-end gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm text-muted-foreground">
           {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
           {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
-        <h1 className="font-heading text-3xl font-bold text-brand">待办</h1>
-        <p className="mt-1 text-sm text-muted-foreground">先做最上面那件事；下面是正在流转的表和项目启动还缺的准备。</p>
+        <h1 className="font-heading text-3xl font-bold text-brand">总览</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          按 1 → 5 往下走。先做蓝色按钮上的那件事。
+          <button type="button" onClick={() => setGuideOpen(true)} className="ml-2 text-primary hover:underline">
+            看操作指引
+          </button>
+        </p>
       </div>
         {canImport ? (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
@@ -71,18 +103,31 @@ export default function ProjectOverviewPage() {
         ) : null}
       </div>
 
-      <StartupCard projectId={project.id} />
+      <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} />
 
-      <section aria-label="待办" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
+      <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
+        {materialsFirst ? (
+          <Link
+            to={`/projects/${project.id}/materials`}
+            className="flex flex-wrap items-center gap-3 rounded-xl bg-primary px-5 py-4 text-primary-foreground hover:bg-primary/90"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs opacity-80">第 1 步</span>
+              <span className="block text-lg font-bold">上传资料</span>
+              <span className="block text-sm opacity-85">传企业简介、组织架构、上年经营复盘，数字咨询师据此整理企业画像。也可以先跳过，直接去战略解码。</span>
+            </span>
+            <ArrowRight className="size-5 shrink-0" />
+          </Link>
+        ) : null}
         <Link
           to={nextActionPath(project.id, next)}
           className={cn(
             "flex flex-wrap items-center gap-3 rounded-xl px-5 py-4",
-            next.kind === "waiting" || next.kind === "view" ? "bg-muted text-foreground hover:bg-muted/80" : "bg-primary text-primary-foreground hover:bg-primary/90"
+            next.kind === "waiting" || next.kind === "view" || materialsFirst ? "bg-muted text-foreground hover:bg-muted/80" : "bg-primary text-primary-foreground hover:bg-primary/90"
           )}
         >
           <span className="min-w-0 flex-1">
-            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : "下一步"}</span>
+            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : materialsFirst ? "或者直接开始" : "下一步"}</span>
             <span className="block text-lg font-bold">{next.label}</span>
             <span className="block text-sm opacity-85">{next.hint}</span>
           </span>
@@ -115,13 +160,15 @@ export default function ProjectOverviewPage() {
         )}
       </section>
 
+      <StartupCard projectId={project.id} />
+
       <section aria-label="三阶段进度" className="grid gap-4 lg:grid-cols-3">
         {stages.map((stage) => (
           <Card key={stage.stage} className={cn(stage.open && !stage.complete && "border-primary ring-3 ring-accent")}>
             <CardHeader className="gap-2">
               <div className="flex items-baseline gap-2">
-                <CardTitle className="text-lg text-brand">{stage.name}</CardTitle>
-                <span className="text-xs text-muted-foreground">{stage.goal}</span>
+                <CardTitle className="text-lg text-brand">{STAGES.find((s) => s.key === stage.stage)?.flow}</CardTitle>
+                <span className="text-xs text-muted-foreground">{stage.name} · {stage.goal}</span>
                 <span className="ml-auto text-xs font-semibold text-muted-foreground">
                   {stage.complete ? "已完成" : stage.open ? "进行中" : "待解锁"}
                 </span>
@@ -129,7 +176,7 @@ export default function ProjectOverviewPage() {
               <Progress value={(stage.locked / stage.gateTotal) * 100} aria-label={`${stage.name}定版进度`} />
               <p className="text-xs text-muted-foreground">
                 必做表已定版 {stage.locked} / {stage.gateTotal}
-                {stage.open ? "" : " · 上一阶段全部定版后开启"}
+                {stage.open ? "" : " · 上一步全部定版后开启"}
               </p>
             </CardHeader>
             <CardContent>
@@ -241,12 +288,58 @@ function StartupCard({ projectId }: { projectId: number }) {
                   {link.label} →
                 </Link>
               ) : item.key === "team" && item.state !== "done" ? (
-                <span className="mt-auto text-xs text-muted-foreground">成员和角色由咨询机构运营在“项目与分派”里设置，有调整请告诉主咨询师。</span>
+                <span className="mt-auto text-xs text-muted-foreground">
+                  叫同事一起做：企业管理员在<Link to="/enterprise?tab=invites" className="text-primary hover:underline">本企业 › 邀请注册</Link>发一个邀请码，同事凭码注册就进项目；或请运营分派。
+                </span>
               ) : null}
             </li>
           );
         })}
       </ol>
     </section>
+  );
+}
+
+
+/** 五步流程条：资料 → 战略解码 → 目标分解 → 计划制定 → 下载成果，标出做完的、当前的和还没开启的。 */
+function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: FlowStep[]; artifacts: ArtifactOverview[] }) {
+  const href = (step: FlowStep) =>
+    step.key === "materials"
+      ? `/projects/${projectId}/materials`
+      : step.key === "deliver"
+        ? `/projects/${projectId}/results`
+        : workspacePath(projectId, stageEntryCode(artifacts, step.key));
+  return (
+    <ol aria-label="流程" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      {steps.map((step) => (
+        <li key={step.key}>
+          <Link
+            to={href(step)}
+            aria-current={step.state === "current" ? "step" : undefined}
+            className={cn(
+              "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",
+              step.state === "current" && "border-primary ring-3 ring-accent",
+              step.state === "locked" && "opacity-60",
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                  step.state === "done" ? "bg-status-done text-status-done-foreground" : step.state === "current" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {step.state === "done" ? <Check className="size-3.5" /> : step.no}
+              </span>
+              <span className="font-heading font-bold text-brand">{step.label}</span>
+              {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
+              {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
+            </span>
+            <span className="text-xs text-muted-foreground">{step.hint}</span>
+            <span className="mt-auto text-xs">{step.detail}</span>
+          </Link>
+        </li>
+      ))}
+    </ol>
   );
 }

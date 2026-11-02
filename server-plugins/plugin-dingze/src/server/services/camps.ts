@@ -5,6 +5,7 @@ import { HttpError, SYSTEM_ROLES, requireOps, systemAccess, userSpaceNames } fro
 import { openCommentCounts } from './comments';
 import { createProject, provisionEnterprise, setProjectMembers } from './enterprises';
 import { notify } from './notify';
+import { ensureTeamInvite } from './invites';
 import { createUser, creator } from './ops';
 import { usageByProject } from './usage';
 
@@ -279,4 +280,25 @@ export async function campClose(ctx: Context, input: { campId: number; projects:
   }
   await camp.update({ status: 'closed' });
   return { updated };
+}
+
+/** 一键发团队码：批次里每个项目一个免审核邀请码，企业转发给自己的人，凭码注册即加入项目。 */
+export async function campInvites(ctx: Context, input: { campId: number; projectIds?: number[] }) {
+  const camp = await loadCamp(ctx, input.campId);
+  const projects = await campProjects(ctx, camp.get('id'));
+  const only = Array.isArray(input.projectIds) && input.projectIds.length ? new Set(input.projectIds.map(Number)) : null;
+  const results = [];
+  for (const p of projects as any[]) {
+    if (only && !only.has(p.get('id'))) continue;
+    const { invite, created } = await ensureTeamInvite(ctx, p, { maxUses: 20, days: 60 });
+    results.push({
+      projectId: p.get('id'),
+      enterprise: p.get('enterprise')?.get('shortName') || p.get('enterprise')?.get('name'),
+      code: invite.get('code'),
+      maxUses: invite.get('maxUses'),
+      expiresAt: invite.get('expiresAt'),
+      created,
+    });
+  }
+  return { results };
 }

@@ -9,6 +9,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Skeleton } from "@/components/ui/skeleton";
 import { nextActionPath } from "@/lib/dingze/progress";
 import { useMyProjects } from "@/lib/dingze/queries";
+import { samplePath } from "@/lib/dingze/sample";
 
 const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
 
@@ -19,7 +20,9 @@ export default function ProjectsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-heading text-2xl font-bold text-brand">我的项目</h1>
-        <p className="mt-1 text-sm text-muted-foreground">往哪打 · 怎么走 · 谁负责 —— 选择一个项目继续定三责。</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          选一个项目继续。不知道怎么填，先看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
+        </p>
       </div>
 
       {error ? (
@@ -40,7 +43,9 @@ export default function ProjectsPage() {
               <FolderKanban />
             </EmptyMedia>
             <EmptyTitle>还没有加入任何项目</EmptyTitle>
-            <EmptyDescription>项目由运营管理员开通。开通后，你会在这里看到并进入项目。</EmptyDescription>
+            <EmptyDescription>
+              项目开通后会出现在这里。可以先看看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -65,7 +70,7 @@ export default function ProjectsPage() {
                         return (
                           <div key={stage.key} className="flex flex-col gap-1 text-xs">
                             <div className="flex justify-between text-muted-foreground">
-                              <span>{stage.name}</span>
+                              <span>{stage.flow}</span>
                               <span className="tabular-nums">
                                 {p.locked}/{p.total}
                               </span>

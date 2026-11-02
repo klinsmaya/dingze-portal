@@ -1,4 +1,5 @@
 import { CheckCircle2, Ticket } from "lucide-react";
+import { useLogin } from "@refinedev/core";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -30,6 +31,7 @@ export function InviteRegister() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ enterprise: string; username: string } | null>(null);
+  const { mutate: login } = useLogin<{ account: string; password: string; redirectTo: string }>();
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const check = async (value = code) => {
@@ -69,6 +71,14 @@ export function InviteRegister() {
         email: form.email.trim() || undefined,
         remark: form.remark.trim() || undefined,
       });
+      if (r.status === "approved") {
+        // 免审核的码：账号已开好，直接登录进项目。
+        login(
+          { account: form.username.trim(), password: form.password, redirectTo: r.projectId ? `/projects/${r.projectId}/overview` : "/projects" },
+          { onError: () => setError("账号已开好，但自动登录没成功。请用登录名和刚设的密码登录。") },
+        );
+        return;
+      }
       setDone({ enterprise: r.enterprise, username: form.username.trim() });
     } catch (e) {
       setError(errorMessage(e));
@@ -92,7 +102,7 @@ export function InviteRegister() {
   }
 
   return (
-    <AuthLayout title="凭邀请码加入" description="邀请码由本企业管理员或平台运营发放。提交后需审核，通过才开通账号。" footer={toLogin}>
+    <AuthLayout title="凭邀请码加入" description={scope?.autoApprove ? "填好就能进，不用等审核。" : "邀请码由本企业管理员或平台运营发放。"} footer={toLogin}>
       <div className="flex flex-col gap-5">
         <form
           className="flex items-end gap-2"
@@ -130,6 +140,7 @@ export function InviteRegister() {
                 <div className="font-medium">加入 {scope.enterprise}</div>
                 <div className="text-muted-foreground">
                   {[scope.project && `项目「${scope.project}」`, scope.role, scope.dept].filter(Boolean).join(" · ") || "加入企业，项目由管理员再分派"}
+                  {scope.autoApprove ? "" : " · 提交后需审核"}
                 </div>
               </div>
             </div>
@@ -171,7 +182,7 @@ export function InviteRegister() {
               </FieldGroup>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
               <Button type="submit" className="w-full" disabled={submitting || !!pwProblem || !!mismatch}>
-                {submitting ? "提交中…" : "提交申请"}
+                {submitting ? "提交中…" : scope.autoApprove ? "加入" : "提交申请"}
               </Button>
             </form>
           </>

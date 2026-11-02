@@ -33,6 +33,7 @@ import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { type MaterialSummary, downloadOriginal, useAddMaterial, useDeleteMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
+import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
 import { cn } from "@/lib/utils";
 
 import { OrgUnitsEditor } from "../ops/components/org-units-tab";
@@ -107,7 +108,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
     <section aria-labelledby="library" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <h2 id="library" className="font-heading text-lg font-bold text-brand">
-          资料库
+          ① 上传资料
         </h2>
         <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载</span>
         {canEdit ? (
@@ -123,9 +124,22 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         ) : null}
       </div>
       {materials.length === 0 ? (
-        <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          还没有资料。可上传原件：Word（docx）、PDF、Excel（xlsx、xls、xlsm、xlsb、ods）、txt、md、csv（不超过 20 MB）；也可以直接粘贴文字。
-        </p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-4 py-10 text-center">
+          <FileUp className="size-8 text-brand" />
+          <div className="font-heading text-lg font-bold">把企业简介、组织架构、上年经营复盘传上来</div>
+          <p className="max-w-md text-sm text-muted-foreground">Word、PDF、Excel、txt 都可以，单个不超过 20 MB；也可以直接粘贴文字。传好后，数字咨询师会据此整理企业画像。</p>
+          {canEdit ? (
+            <div className="mt-1 flex gap-2">
+              <Button size="lg" disabled={busy} onClick={() => fileRef.current?.click()}>
+                <FileUp /> {busy ? "上传中…" : "选择文件上传"}
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => setPasting(true)}>
+                <ClipboardPaste /> 粘贴文字
+              </Button>
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">没有资料也可以先去填表，以后再补。</p>
+        </div>
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">
           {materials.map((m) => (
@@ -184,10 +198,11 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
 }
 
 /** 资料与画像: the enterprise's materials and the profile (事实 / 假设 / 未知 / 待补) built from them. */
+// 顺序按客户做事的顺序：先传资料，再整理画像，再填组织（2026-11 甲方反馈：上传按钮藏太深）。
 const MATERIAL_TABS = [
-  ["profile", "① 企业画像"],
-  ["org", "② 组织与职责"],
-  ["library", "资料库"],
+  ["library", "① 上传资料"],
+  ["profile", "② 企业画像"],
+  ["org", "③ 组织与职责"],
 ] as const;
 type MaterialTab = (typeof MATERIAL_TABS)[number][0];
 
@@ -248,8 +263,8 @@ export default function MaterialsPage() {
   const { hash } = useLocation();
   const [params, setParams] = useSearchParams();
   const fromHash = hash === "#org" ? "org" : hash === "#library" ? "library" : hash === "#profile" ? "profile" : null;
-  const tab: MaterialTab = (MATERIAL_TABS.map(([k]) => k) as string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as MaterialTab) : (fromHash ?? "profile");
-  const setTab = (next: MaterialTab) => setParams(next === "profile" ? {} : { tab: next }, { replace: true });
+  const tab: MaterialTab = (MATERIAL_TABS.map(([k]) => k) as string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as MaterialTab) : (fromHash ?? "library");
+  const setTab = (next: MaterialTab) => setParams(next === "library" ? {} : { tab: next }, { replace: true });
   const { project, overview } = useProjectContext();
   const materials = useMaterials(project);
   const profile = useProfile(project);
@@ -376,10 +391,18 @@ export default function MaterialsPage() {
           {/* 标题和页签固定在上面，内容区自己滚动（2026-10-16）。 */}
           <div className="shrink-0 border-b bg-background px-4 pt-4 md:px-6">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="font-heading text-2xl font-bold text-brand">资料</h1>
+              <h1 className="font-heading text-2xl font-bold text-brand">
+                <span className="mr-2 text-base font-semibold text-muted-foreground">第 1 步</span>上传资料
+              </h1>
               <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                填表前先备好企业画像和组织架构：直接填，或先上传资料再让数字咨询师整理，你确认后才写入。
+                上传企业简介、组织架构、上年经营复盘，让数字咨询师整理企业画像，你确认后才写入。试用期间请用脱敏资料。
               </p>
+              <Link
+                to={workspacePath(project.id, stageEntryCode(overview.artifacts, "strategy"))}
+                className="shrink-0 self-center text-sm font-semibold text-primary hover:underline"
+              >
+                下一步：战略解码 →
+              </Link>
             </div>
             <nav aria-label="资料页签" role="tablist" className="mt-3 -mb-px flex flex-wrap items-end gap-1 text-sm">
               {MATERIAL_TABS.map(([key, label]) => {
@@ -405,11 +428,6 @@ export default function MaterialsPage() {
                 );
               })}
               <span className="ml-auto flex items-center gap-3 pb-2">
-                {canEdit && tab !== "library" ? (
-                  <button type="button" onClick={() => setTab("library")} className="flex items-center gap-1 text-primary hover:underline">
-                    <FileUp className="size-3.5" /> 先上传资料
-                  </button>
-                ) : null}
                 <Link to={`/projects/${project.id}/results`} className="flex items-center gap-1 text-primary hover:underline" title="表一定版就成为资料的一部分；查看、对比、下载在「成果」">
                   <FileCheck2 className="size-3.5" /> 已定版 {lockedCount} 张 →
                 </Link>
@@ -429,7 +447,7 @@ export default function MaterialsPage() {
           <section aria-labelledby="profile" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="profile" className="font-heading text-lg font-bold text-brand">
-                ① 企业画像
+                ② 企业画像
               </h2>
               {profile.data?.updatedAt ? (
                 <span className="text-xs text-muted-foreground">
