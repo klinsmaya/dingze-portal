@@ -1,5 +1,5 @@
 import { Network, Table2 } from "lucide-react";
-import { useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   type Issue,
@@ -39,8 +39,26 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
   const links = value.links ?? [];
   const seed = upstream["S1-01"] ? seedStrategyMap(upstream["S1-01"]) : null;
 
+  // Row callbacks read the latest value through a ref: they stay the same function between renders (so the
+  // relation rows can be memoized — a long list of selects made every delete slow) and two quick clicks never
+  // work from a stale list.
+  const latest = useRef({ value, onChange });
+  latest.current = { value, onChange };
   const setObjectives = (next: MapObjective[]) => onChange({ ...value, objectives: next });
   const setLinks = (next: MapLink[]) => onChange({ ...value, links: next });
+  const patchLink = useCallback((id: string, patch: Partial<MapLink>) => {
+    const { value: v, onChange: change } = latest.current;
+    change({ ...v, links: patchById(v.links ?? [], id, patch) });
+  }, []);
+  const removeLink = useCallback((id: string) => {
+    const { value: v, onChange: change } = latest.current;
+    change({ ...v, links: removeById(v.links ?? [], id) });
+  }, []);
+  const moveLink = useCallback((id: string, delta: -1 | 1) => {
+    const { value: v, onChange: change } = latest.current;
+    change({ ...v, links: moveById(v.links ?? [], id, delta) });
+  }, []);
+  const groups = useMemo(() => PERSPECTIVES.map((p) => ({ key: p.key, label: p.label, items: objectives.filter((o) => o.perspective === p.key) })), [objectives]);
   const removeObjective = (id: string) =>
     onChange({ objectives: removeById(objectives, id), links: links.filter((l) => l.from !== id && l.to !== id) });
 
@@ -129,30 +147,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
             ) : (
               <ul className="overflow-hidden rounded-xl border bg-card">
                 {links.map((link) => (
-                  <li
-                    key={link.id}
-                    data-anchor={link.id}
-                    className={cn(
-                      "grid items-center gap-2 border-b px-3 py-2 last:border-b-0 md:grid-cols-[1fr_auto_1fr_auto]",
-                      invalid.has(link.id) && "bg-destructive/5"
-                    )}
-                  >
-                    <ObjectiveSelect label="起点目标" objectives={objectives} value={link.from} disabled={readOnly} onChange={(from) => setLinks(patchById(links, link.id, { from }))} />
-                    <NativeSelect
-                      aria-label="关系类型"
-                      value={link.kind}
-                      disabled={readOnly}
-                      onChange={(e) => setLinks(patchById(links, link.id, { kind: e.target.value as MapLink["kind"] }))}
-                    >
-                      {Object.entries(KIND_LABELS).map(([k, label]) => (
-                        <NativeSelectOption key={k} value={k}>
-                          {label} →
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                    <ObjectiveSelect label="终点目标" objectives={objectives} value={link.to} disabled={readOnly} onChange={(to) => setLinks(patchById(links, link.id, { to }))} />
-                    <RowActions label="这条关系" readOnly={readOnly} onRemove={() => setLinks(removeById(links, link.id))} onMove={(delta) => setLinks(moveById(links, link.id, delta))} />
-                  </li>
+                  <LinkRow key={link.id} link={link} groups={groups} invalid={invalid.has(link.id)} readOnly={readOnly} onPatch={patchLink} onRemove={removeLink} onMove={moveLink} />
                 ))}
               </ul>
             )}
@@ -163,31 +158,52 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
   );
 }
 
-function ObjectiveSelect({
-  label,
-  objectives,
-  value,
-  onChange,
-  disabled,
+type Group = { key: string; label: string; items: MapObjective[] };
+
+const LinkRow = memo(function LinkRow({
+  link,
+  groups,
+  invalid,
+  readOnly,
+  onPatch,
+  onRemove,
+  onMove,
 }: {
-  label: string;
-  objectives: MapObjective[];
-  value: string;
-  onChange: (id: string) => void;
-  disabled: boolean;
+  link: MapLink;
+  groups: Group[];
+  invalid: boolean;
+  readOnly: boolean;
+  onPatch: (id: string, patch: Partial<MapLink>) => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, delta: -1 | 1) => void;
 }) {
+  return (
+    <li data-anchor={link.id} className={cn("grid items-center gap-2 border-b px-3 py-2 last:border-b-0 md:grid-cols-[1fr_auto_1fr_auto]", invalid && "bg-destructive/5")}>
+      <ObjectiveSelect label="起点目标" groups={groups} value={link.from} disabled={readOnly} onChange={(from) => onPatch(link.id, { from })} />
+      <NativeSelect aria-label="关系类型" value={link.kind} disabled={readOnly} onChange={(e) => onPatch(link.id, { kind: e.target.value as MapLink["kind"] })}>
+        {Object.entries(KIND_LABELS).map(([k, label]) => (
+          <NativeSelectOption key={k} value={k}>
+            {label} →
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+      <ObjectiveSelect label="终点目标" groups={groups} value={link.to} disabled={readOnly} onChange={(to) => onPatch(link.id, { to })} />
+      <RowActions label="这条关系" readOnly={readOnly} onRemove={() => onRemove(link.id)} onMove={(delta) => onMove(link.id, delta)} />
+    </li>
+  );
+});
+
+function ObjectiveSelect({ label, groups, value, onChange, disabled }: { label: string; groups: Group[]; value: string; onChange: (id: string) => void; disabled: boolean }) {
   return (
     <NativeSelect aria-label={label} className="w-full" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
       <NativeSelectOption value="">选择目标…</NativeSelectOption>
-      {PERSPECTIVES.map((p) => (
-        <NativeSelectOptGroup key={p.key} label={p.label}>
-          {objectives
-            .filter((o) => o.perspective === p.key)
-            .map((o) => (
-              <NativeSelectOption key={o.id} value={o.id}>
-                {o.title || "（未命名）"}
-              </NativeSelectOption>
-            ))}
+      {groups.map((g) => (
+        <NativeSelectOptGroup key={g.key} label={g.label}>
+          {g.items.map((o) => (
+            <NativeSelectOption key={o.id} value={o.id}>
+              {o.title || "（未命名）"}
+            </NativeSelectOption>
+          ))}
         </NativeSelectOptGroup>
       ))}
     </NativeSelect>

@@ -172,6 +172,14 @@ async function upsertMembers(ctx: Context, projectId: number, spaceName: string,
   for (const m of list) {
     const existing = await repo.findOne({ filter: { projectId, userId: m.userId }, transaction });
     added.push({ userId: m.userId, projectRole: m.projectRole, isNew: !existing });
+    // A new member with no department takes the one they already have in the enterprise's other projects.
+    if (!existing && !m.orgUnitId) {
+      const known = await repo.find({ filter: { userId: m.userId, spaceName, orgUnitId: { $notEmpty: true } }, transaction });
+      const counts = new Map<number, number>();
+      for (const k of known) counts.set(k.get('orgUnitId'), (counts.get(k.get('orgUnitId')) ?? 0) + 1);
+      const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (best) m.orgUnitId = best;
+    }
     if (existing) {
       await existing.update({ projectRole: m.projectRole, orgUnitId: m.orgUnitId ?? null }, { transaction });
     } else {

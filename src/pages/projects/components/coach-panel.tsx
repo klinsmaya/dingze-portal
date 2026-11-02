@@ -246,6 +246,8 @@ function PendingCard({
     setDecided(true);
     fn();
   };
+  // 改一下 is not a decision: the card stays open, can be cancelled, and 确认修改 stays available.
+  const [revising, setRevising] = useState(false);
   const key = JSON.stringify(built?.items ?? []);
   useEffect(() => {
     if (!session || !built || built.invalid) return;
@@ -361,8 +363,18 @@ function PendingCard({
         <Button size="sm" disabled={disabled || decided || !!built?.invalid} onClick={decide(() => onApprove())}>
           <Check /> 确认修改
         </Button>
-        <Button size="sm" variant="outline" disabled={disabled || decided} onClick={decide(() => onRevise())}>
-          <PencilLine /> 改一下
+        <Button
+          size="sm"
+          variant={revising ? "secondary" : "outline"}
+          disabled={disabled || decided}
+          aria-pressed={revising}
+          onClick={() => {
+            if (revising) return setRevising(false);
+            setRevising(true);
+            onRevise();
+          }}
+        >
+          <PencilLine /> {revising ? "取消改一下" : "改一下"}
         </Button>
         <Button size="sm" variant="ghost" disabled={disabled || decided} onClick={decide(() => onReject("用户不采纳这条建议"))}>
           不采纳
@@ -373,6 +385,11 @@ function PendingCard({
           </Button>
         ) : null}
       </div>
+      {revising ? (
+        <p className="text-[11px]" style={{ color: "var(--dz-ai)" }} role="status">
+          正在改这条建议：请在下面的对话框说明怎么改，数字咨询师会重出修改卡。不改了就点“取消改一下”，仍可直接“确认修改”。
+        </p>
+      ) : null}
       <p className="text-[11px] text-muted-foreground">确认后写入草稿、记入“修改”，可撤销；保存后生效。</p>
     </div>
   );

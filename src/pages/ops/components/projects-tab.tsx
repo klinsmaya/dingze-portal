@@ -29,7 +29,7 @@ import { errorMessage } from "@/lib/dingze/errors";
 import { type EnterpriseDetail, type OpsProject, opsApi } from "@/lib/dingze/ops-api";
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
 import { flattenOrgUnits, orgUnitPath } from "@/lib/dingze/org-units";
-import { type MemberRow, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
+import { type MemberRow, defaultOrgUnitId, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
 
 import { SCENE_LABELS, SCHEDULE_LABELS } from "./labels";
 
@@ -340,7 +340,12 @@ function MembersDialog({
   const addRow = (userId: number) =>
     setRows([
       ...rows,
-      { userId, projectRole: isConsultantAccount(userId) ? "co_consultant" : "member", orgUnitId: null },
+      {
+        userId,
+        projectRole: isConsultantAccount(userId) ? "co_consultant" : "member",
+        // 自动带上所属部门：本企业其他项目里已有的部门，或其负责的部门。
+        orgUnitId: isConsultantAccount(userId) ? null : defaultOrgUnitId(userId, detail.projects, detail.orgUnits),
+      },
     ]);
 
   const save = async () => {
@@ -596,7 +601,7 @@ function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: En
             </Table>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <NativeSelect aria-label="添加成员" value="" onChange={(e) => e.target.value && setRows([...rows, { userId: Number(e.target.value), projectRole: "member", orgUnitId: null }])} disabled={available.length === 0}>
+            <NativeSelect aria-label="添加成员" value="" onChange={(e) => e.target.value && setRows([...rows, { userId: Number(e.target.value), projectRole: "member", orgUnitId: defaultOrgUnitId(Number(e.target.value), detail.projects, detail.orgUnits) }])} disabled={available.length === 0}>
               <NativeSelectOption value="">{available.length ? "＋ 添加本企业成员…" : "本企业的账号都已加入"}</NativeSelectOption>
               {available.map((m) => (
                 <NativeSelectOption key={m.id} value={m.id}>

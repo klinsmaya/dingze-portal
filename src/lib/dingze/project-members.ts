@@ -27,3 +27,20 @@ export function memberWarnings(rows: MemberRow[], service: "guided" | "self" = "
   if (new Set(ids).size !== ids.length) warnings.push("同一个人出现了多次，保存时以最后一行为准。");
   return warnings;
 }
+
+/**
+ * The department a person is placed in when added to a project: the one they already have in the
+ * enterprise's other projects (the most common one), else the department they head.
+ */
+export function defaultOrgUnitId(
+  userId: number,
+  otherProjects: { members: { userId: number; orgUnitId: number | null }[] }[],
+  orgUnits: { id: number; headId?: number | null }[],
+): number | null {
+  const counts = new Map<number, number>();
+  for (const project of otherProjects)
+    for (const m of project.members) if (m.userId === userId && m.orgUnitId) counts.set(m.orgUnitId, (counts.get(m.orgUnitId) ?? 0) + 1);
+  const known = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (known && orgUnits.some((u) => u.id === known)) return known;
+  return orgUnits.find((u) => u.headId === userId)?.id ?? null;
+}

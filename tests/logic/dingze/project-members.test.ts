@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type MemberRow, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
+import { type MemberRow, defaultOrgUnitId, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
 
 const row = (userId: number, projectRole: MemberRow["projectRole"], orgUnitId: number | null = null): MemberRow => ({
   userId,
@@ -25,5 +25,13 @@ describe("project member editing", () => {
       expect.stringContaining("企业项目负责人"),
     ]);
     expect(memberWarnings([row(1, "lead_consultant"), row(2, "ent_lead")])).toEqual([]);
+  });
+
+  it("places a newly added member in the department they already have, else the one they head", () => {
+    const other = [{ members: [{ userId: 7, orgUnitId: 5 }, { userId: 7, orgUnitId: 5 }, { userId: 7, orgUnitId: 6 }] }];
+    expect(defaultOrgUnitId(7, other, [{ id: 5 }, { id: 6 }])).toBe(5);
+    expect(defaultOrgUnitId(8, other, [{ id: 5, headId: 8 }])).toBe(5);
+    expect(defaultOrgUnitId(9, other, [{ id: 5 }])).toBeNull();
+    expect(defaultOrgUnitId(7, other, [{ id: 6 }])).toBe(null);
   });
 });

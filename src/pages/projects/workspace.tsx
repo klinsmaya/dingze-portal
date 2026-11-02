@@ -50,6 +50,7 @@ import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
 import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
 import { workflowContext } from "@/lib/dingze/coach-context";
 import { usePersistentFlag } from "@/lib/dingze/view-prefs";
+import { samePayload } from "@/lib/dingze/stable-json";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
@@ -81,8 +82,9 @@ import { ArtifactEditor } from "./editors/artifact-editor";
 import { useProjectContext } from "./project-context";
 
 type AsideTab = "coach" | "comments" | "changes" | "book";
-type EditState = { payload: unknown; log: Command[]; redo: Command[]; saved: Command[] };
-const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: [], saved: [] });
+/** `base` is what the server has (after our own save: what we saved), so “未保存” is draft vs base. */
+type EditState = { payload: unknown; log: Command[]; redo: Command[]; saved: Command[]; base: unknown };
+const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: [], saved: [], base: payload });
 
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
@@ -121,7 +123,21 @@ function Workspace({ code }: { code: string }) {
   const { project, overview, topbar } = useProjectContext();
   const def = getArtifactDef(code);
   const detail = useArtifactDetail(project, code);
-  const save = useSaveArtifact(project, code);
+  // Our own save: learn the new revision and what was saved before the refetch lands, so edits typed
+  // meanwhile stay as unsaved and the refetch is not mistaken for someone else's change.
+  const [baseRev, setBaseRev] = useState(0);
+  const savingLog = useRef<Command[]>([]);
+  const save = useSaveArtifact(project, code, (result, values) => {
+    const done = new Set(savingLog.current.map((c) => c.id));
+    setBaseRev(result.rev);
+    setEdit((e) => ({
+      ...e,
+      base: values.payload,
+      log: e.log.filter((c) => !done.has(c.id)),
+      redo: [],
+      saved: [...e.saved, ...savingLog.current].slice(-50),
+    }));
+  });
   const liveUpstream = useUpstreamPayloads(project, [...def.dependsOn, ...(def.reads ?? [])]).payloads;
 
   const artifact = detail.data?.artifact ?? null;
@@ -136,8 +152,7 @@ function Workspace({ code }: { code: string }) {
   // commands, and commands saved in this visit can still be undone (as a new 撤销 command).
   const [edit, setEdit] = useState<EditState>(() => freshEdit(serverPayload));
   const draft = edit.payload;
-  const [baseRev, setBaseRev] = useState(serverRev);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(serverPayload);
+  const dirty = useMemo(() => !samePayload(draft, edit.base), [draft, edit.base]);
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const activeCommentRef = useRef(activeComment);
   activeCommentRef.current = activeComment;
@@ -281,12 +296,11 @@ function Workspace({ code }: { code: string }) {
   const addComment = useAddComment(project, code);
   const onSave = () => {
     const log = edit.log;
+    savingLog.current = log;
     save.mutate(
       { payload: draft, baseRev, changes: log.map(toSaved), aiSuggested: log.some((c) => c.via === "chat") || undefined },
       {
         onSuccess: (result) => {
-          setBaseRev(result.rev);
-          setEdit((e) => ({ ...e, log: [], redo: [], saved: [...e.saved, ...log].slice(-50) }));
           toast.success(`已保存 v${result.rev}`);
           // Edits made 按批注 answer their comment thread.
           const byComment = new Map<number, string[]>();

@@ -89,11 +89,20 @@ function useInvalidateProject(project: ProjectSummary | undefined) {
   };
 }
 
-export function useSaveArtifact(project: ProjectSummary | undefined, code: string) {
+type SaveValues = { payload: unknown; baseRev: number; note?: string; fromProposalId?: number; aiSuggested?: boolean; changes?: unknown[] };
+
+/**
+ * `onSaved` runs the moment the server accepts the save, before the artifact is refetched: the page
+ * must learn the new revision first, or the refetch would look like somebody else's change.
+ */
+export function useSaveArtifact(project: ProjectSummary | undefined, code: string, onSaved?: (result: { rev: number }, values: SaveValues) => void) {
   const invalidate = useInvalidateProject(project);
   return useMutation({
-    mutationFn: (values: { payload: unknown; baseRev: number; note?: string; fromProposalId?: number; aiSuggested?: boolean; changes?: unknown[] }) =>
-      saveArtifact(project!.spaceName, { projectId: project!.id, code, ...values }),
+    mutationFn: async (values: SaveValues) => {
+      const result = await saveArtifact(project!.spaceName, { projectId: project!.id, code, ...values });
+      onSaved?.(result, values);
+      return result;
+    },
     onSuccess: () => invalidate(code),
   });
 }
