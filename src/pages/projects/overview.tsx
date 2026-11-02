@@ -1,5 +1,5 @@
 import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { STAGES, collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
@@ -15,6 +15,7 @@ import { STEP_ARTIFACTS, nextActionPath, progressOf, stageEntryCode, stageProgre
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
 import { cn } from "@/lib/utils";
 
+import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
 import { ImportDialog } from "./components/import-dialog";
 import { useProjectContext } from "./project-context";
 
@@ -47,6 +48,19 @@ export default function ProjectOverviewPage() {
     started: artifacts.some((a) => a.status !== "not_started"),
   });
   const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role !== "readonly";
+  // 首次进项目弹操作指引（本机记住）。只给企业侧的新项目：还没开始填表、不是咨询方。
+  const [guideSeen, setGuideSeen] = useFirstRunGuide();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const freshProject = !artifacts.some((a) => a.status !== "not_started");
+  useEffect(() => {
+    if (!guideSeen && !consulting && freshProject && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    // 只在首次加载完判断一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materials.isLoading, profile.isLoading]);
+  const closeGuide = () => {
+    setGuideOpen(false);
+    setGuideSeen(true);
+  };
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
   const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
   // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
@@ -67,6 +81,7 @@ export default function ProjectOverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
+      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={`/projects/${project.id}/materials`} />
       <div className="flex flex-wrap items-end gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm text-muted-foreground">
@@ -74,7 +89,12 @@ export default function ProjectOverviewPage() {
           {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
         </p>
         <h1 className="font-heading text-3xl font-bold text-brand">总览</h1>
-        <p className="mt-1 text-sm text-muted-foreground">按 1 → 5 往下走。先做蓝色按钮上的那件事。</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          按 1 → 5 往下走。先做蓝色按钮上的那件事。
+          <button type="button" onClick={() => setGuideOpen(true)} className="ml-2 text-primary hover:underline">
+            看操作指引
+          </button>
+        </p>
       </div>
         {canImport ? (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
