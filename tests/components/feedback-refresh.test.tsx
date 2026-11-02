@@ -48,7 +48,6 @@ describe("one-click fix in 表 3-10 refreshes the sums", () => {
     render(<PathHost initial={paths()} view="mind" />);
     expect(screen.getAllByText(/1000 ≠ 300 \+ 500|≠/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("external fix"));
-    console.log([...document.querySelectorAll("span, div")].map((e) => e.textContent ?? "").filter((t) => /≠|=/.test(t) && t.length < 80));
     expect(screen.getAllByText(/800 = 300 \+ 500|300 \+ 500 = 800/).length).toBeGreaterThan(0);
   });
 });
