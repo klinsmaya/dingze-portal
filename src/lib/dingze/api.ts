@@ -40,7 +40,9 @@ export type ProjectSummary = {
   primaryExpression: "house" | "sixfold";
   keyProjectLevel: 1 | 2;
   scheduleScale: "month" | "quarter";
-  status: string;
+  status: "active" | "archived";
+  hidden: boolean;
+  canGovern: boolean;
   spaceName: string;
   enterprise?: { id: number; name: string; shortName: string };
   projectRole: ProjectRole | null;

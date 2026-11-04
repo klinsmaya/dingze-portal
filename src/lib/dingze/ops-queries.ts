@@ -12,8 +12,8 @@ export const opsKeys = {
   users: (role?: SystemRole, q?: string) => ["dingze", "ops", "users", role ?? "", q ?? ""] as const,
 };
 
-export function useEnterprises() {
-  return useQuery({ queryKey: opsKeys.enterprises, queryFn: opsApi.listEnterprises });
+export function useEnterprises(enabled = true) {
+  return useQuery({ queryKey: opsKeys.enterprises, queryFn: opsApi.listEnterprises, enabled });
 }
 
 export function useOpsBoard() {

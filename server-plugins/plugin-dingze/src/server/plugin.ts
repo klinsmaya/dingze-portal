@@ -48,6 +48,7 @@ import {
   updateEnterprise,
   updateProject,
 } from './services/ops';
+import { deleteProject, setProjectHidden } from './services/project-lifecycle';
 
 const TRANSITIONS: LifecycleAction[] = [
   'stepDone',
@@ -255,6 +256,8 @@ export class PluginDingzeServer extends Plugin {
         }),
         setProjectMembers: action((ctx) => setProjectMembers(ctx, values(ctx).projectId, values(ctx).members)),
         updateProject: action((ctx) => updateProject(ctx, values(ctx) as any)),
+        setProjectHidden: action((ctx) => setProjectHidden(ctx, values(ctx) as any)),
+        deleteProject: action((ctx) => deleteProject(ctx, values(ctx) as any)),
         removeProjectMember: action((ctx) => removeProjectMember(ctx, values(ctx) as any)),
         enterpriseDetail: action((ctx) => enterpriseDetail(ctx, ctx.action.params.enterpriseId)),
         updateEnterprise: action((ctx) => updateEnterprise(ctx, values(ctx) as any)),

@@ -197,6 +197,9 @@ export const opsApi = {
   createProject: (values: Partial<OpsProject> & { enterpriseId: number; name: string; members?: { userId: number; projectRole: ProjectRole; orgUnitId?: number }[] }) =>
     post<OpsProject>("createProject", values),
   updateProject: (values: Partial<OpsProject> & { projectId: number }) => post<OpsProject>("updateProject", values),
+  setProjectHidden: (values: { projectId: number; hidden: boolean }) =>
+    post<{ id: number; hidden: boolean }>("setProjectHidden", values),
+  deleteProject: (values: { projectId: number }) => post<{ ok: true }>("deleteProject", values),
   /** 企业管理员自建项目：企业内训 · 自助，只分派企业侧角色。 */
   createOwnProject: (values: { enterpriseId: number; name: string; year: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
     post<OpsProject>("createOwnProject", values),
