@@ -73,7 +73,7 @@ export function BasicSignInForm({
       {registration ? (
         <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm leading-relaxed">
           {registration === "pending"
-            ? "你的加入申请还在审核中，审核通过后才能用这个登录名登录。着急的话请联系本企业管理员。"
+            ? "你的加入申请还在审核中，审核通过后才能用这个用户名或邮箱登录。着急的话请联系本企业管理员。"
             : "你的加入申请没有通过审核，请联系发邀请码的人了解原因。"}
         </p>
       ) : null}

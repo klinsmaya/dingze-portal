@@ -13,7 +13,7 @@ export const CUSTOMER_FLOW = [
 
 type AuthLayoutProps = PropsWithChildren<{
   title: string;
-  description: string;
+  description?: string;
   footer?: ReactNode;
 }>;
 
@@ -28,12 +28,18 @@ export function AuthLayout({
       <main className="grid place-items-center bg-card px-6 py-10 sm:px-12">
         <div className="w-full max-w-sm">
           <Brand className="mb-14" logoClassName="h-10" />
-          <h1 className="text-3xl font-semibold tracking-[-0.035em]">
+          <h1
+            className={
+              description
+                ? "text-3xl font-semibold tracking-[-0.035em]"
+                : "mb-8 text-3xl font-semibold tracking-[-0.035em]"
+            }
+          >
             {title}
           </h1>
-          <p className="mb-8 mt-2 text-sm text-muted-foreground">
-            {description}
-          </p>
+          {description ? (
+            <p className="mb-8 mt-2 text-sm text-muted-foreground">{description}</p>
+          ) : null}
           {children}
           {footer && <div className="mt-8 text-sm">{footer}</div>}
         </div>
