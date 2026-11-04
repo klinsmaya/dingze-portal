@@ -35,7 +35,6 @@ async function loadGovernedProject(ctx: Context, projectId: unknown) {
   return { project, spaceName };
 }
 
-/** Writing the current value returns the row and does not audit. */
 export async function setProjectHidden(
   ctx: Context,
   input: { projectId: number; hidden: boolean },
@@ -64,8 +63,6 @@ export async function deleteProject(ctx: Context, input: { projectId: number }):
       values: { currentVersionId: null, stepDoneVersionId: null, lockedVersionId: null },
       transaction,
     });
-    // versionId is a real foreign key, so it has to be clear before those versions are destroyed.
-    await ctx.db.getRepository('dz_dissents').update({ filter: { projectId }, values: { versionId: null }, transaction });
     for (const name of PROJECT_DELETE_ORDER) {
       await ctx.db.getRepository(name).destroy({ filter: { projectId }, transaction });
     }

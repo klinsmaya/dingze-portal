@@ -45,7 +45,6 @@ export const appRoutes = defineAppRoutes([
     ],
   },
   {
-    // 示例项目：虚构企业的完整一套表，只读，填表时对照着看。不进侧栏。
     name: "sample",
     path: "/sample",
     lazy: () => import("@/pages/sample"),

@@ -31,11 +31,6 @@ function named(enterprises: readonly { id: number; name: string }[]) {
   return enterprises.map((enterprise) => ({ id: enterprise.id, name: enterprise.name }));
 }
 
-/**
- * Who may see 新建项目 on the list. Ops win when both flags are set.
- * Own offers drop suspended enterprises and enterprises with allowSelfProject off.
- * An empty enterprise list returns null.
- */
 export function createOffer(
   who: { ops: boolean; entAdmin: boolean },
   enterprises: readonly CreateEnterprise[],
@@ -61,7 +56,6 @@ function shown(project: ProjectSummary, showHidden: boolean) {
   return showHidden && project.canGovern;
 }
 
-/** The only project list. Server order is kept, and the sample fixture is always last. */
 export function projectListEntries(projects: readonly ProjectSummary[], showHidden: boolean): ProjectListEntry[] {
   const entries: ProjectListEntry[] = projects.filter((project) => shown(project, showHidden)).map((project) => ({
     kind: "project",

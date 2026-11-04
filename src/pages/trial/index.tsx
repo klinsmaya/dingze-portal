@@ -11,8 +11,6 @@ import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/dingze/errors";
 import { passwordProblem, trialApi } from "@/lib/dingze/invite-api";
 
-// 免费试用注册：填四项、勾一下，马上开好试用企业和项目，自动登录后进入项目总览。
-
 const toLogin = (
   <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline hover:underline-offset-4">
     已有账号？去登录

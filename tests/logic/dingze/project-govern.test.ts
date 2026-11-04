@@ -80,6 +80,7 @@ describe("project delete collections", () => {
     expect(PROJECT_DELETE_ORDER).not.toContain("dz_projects");
     expect(PROJECT_DELETE_ORDER).not.toContain("dz_invites");
     expect(PROJECT_DELETE_ORDER).not.toContain("dz_audit_events");
+    expect(PROJECT_DELETE_ORDER.indexOf("dz_dissents")).toBeLessThan(PROJECT_DELETE_ORDER.indexOf("dz_artifact_versions"));
     expect(PROJECT_DELETE_ORDER.indexOf("dz_artifact_versions")).toBeLessThan(PROJECT_DELETE_ORDER.indexOf("dz_artifacts"));
   });
 });
