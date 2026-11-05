@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, nextAction, stageGateCodes } from '../../shared';
+import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, canGovernProject, governFacts, nextAction, stageGateCodes } from '../../shared';
 import { projectProgress } from './artifacts';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames } from './access';
 import { notifyAssignment } from './notify';
@@ -237,8 +237,25 @@ export async function myProjects(ctx: Context) {
   const out = [];
   for (const p of projects as any[]) {
     const role = (roleByProject.get(p.get('id')) as ProjectRole | undefined) ?? null;
+    const enterprise = p.get('enterprise');
+    const facts = governFacts({
+      isOps: access.isOps,
+      isEntAdmin: access.roles.includes(SYSTEM_ROLES.entAdmin),
+      isMember: roleByProject.has(p.get('id')),
+      allowSelfProject: enterprise?.get('allowSelfProject') === true,
+      enterpriseStatus: enterprise?.get('status'),
+      scene: p.get('scene'),
+      service: p.get('service'),
+    });
     const steps = await projectProgress(ctx, p.get('id'));
-    out.push({ ...p.toJSON(), projectRole: role, progress: progress(p.get('id')), next: nextAction(steps, role, p.get('service') === 'self' ? 'self' : 'guided') });
+    out.push({
+      ...p.toJSON(),
+      hidden: p.get('hidden') === true,
+      canGovern: canGovernProject(facts),
+      projectRole: role,
+      progress: progress(p.get('id')),
+      next: nextAction(steps, role, p.get('service') === 'self' ? 'self' : 'guided'),
+    });
   }
   return out;
 }

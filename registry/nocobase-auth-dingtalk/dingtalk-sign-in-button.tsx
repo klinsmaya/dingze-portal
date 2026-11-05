@@ -11,6 +11,11 @@ import { resolveTranslatableText } from "@nocobase/portal-sdk/i18n";
 
 import { useDingtalkSignIn } from "./use-dingtalk-sign-in";
 
+function dingtalkLabel(authenticator: AuthenticatorComponentProps["authenticator"]) {
+  const resolved = resolveTranslatableText(authenticator.title || authenticator.authTypeTitle || "钉钉");
+  return resolved === "Sign in via DingTalk" || resolved === "DingTalk" ? "钉钉" : resolved;
+}
+
 export default function DingtalkSignInButton({
   authenticator,
   onSignIn,
@@ -32,13 +37,7 @@ export default function DingtalkSignInButton({
         onClick={onSignIn ?? signIn}
       >
         <MessageSquare />
-        {!onSignIn && isPending
-          ? "Redirecting…"
-          : resolveTranslatableText(
-              authenticator.title ||
-                authenticator.authTypeTitle ||
-                "Sign in via DingTalk"
-            )}
+        {!onSignIn && isPending ? "Redirecting…" : dingtalkLabel(authenticator)}
       </Button>
     </div>
   );

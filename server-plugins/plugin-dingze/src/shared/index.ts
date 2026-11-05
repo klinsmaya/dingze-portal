@@ -17,3 +17,4 @@ export * from './self-review';
 export * from './startup';
 export * from './coherence';
 export * from './project-import';
+export * from './project-govern';

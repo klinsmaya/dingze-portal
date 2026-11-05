@@ -1,7 +1,7 @@
 import { SERVICE_LABELS } from "@dingze/shared";
-import { ArrowRight, FolderKanban, Pencil, Plus, Trash2, TriangleAlert, Users } from "lucide-react";
+import { FolderKanban, Pencil, Trash2, TriangleAlert, Users } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { useGetIdentity } from "@refinedev/core";
 import { toast } from "sonner";
 
@@ -41,7 +41,6 @@ const CONSULTANT_PROJECT_ROLES: ProjectRole[] = ["lead_consultant", "co_consulta
 export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail; asOps?: boolean }) {
   const [editing, setEditing] = useState<ProjectWithMembers | "new" | null>(null);
   const [staffing, setStaffing] = useState<ProjectWithMembers | null>(null);
-  const [creatingOwn, setCreatingOwn] = useState(false);
   const allowSelf = !!detail.enterprise.allowSelfProject;
   const update = useOpsMutation(opsApi.updateEnterprise);
 
@@ -62,25 +61,14 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
           />
           <span className="min-w-0 flex-1">
             <span className="font-medium">允许企业管理员自建项目</span>
-            <span className="block text-xs text-muted-foreground">打开后，企业管理员可以在“本企业 › 项目”里自己建项目（企业内训 · 自助），只能分派本企业账号。需要陪跑时由运营改服务方式并分派咨询师。</span>
+            <span className="block text-xs text-muted-foreground">打开后，企业管理员可以在“我的项目”里自己建项目（企业内训 · 自助），只能分派本企业账号。需要陪跑时由运营改服务方式并分派咨询师。</span>
           </span>
         </label>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          一个项目对应一轮定三责；同一企业可以按年度或专题开多个项目。
-          {asOps ? "" : allowSelf ? "新项目是企业内训 · 自助；建好后可以“从已有项目带入”往年的表。" : "自建项目还没开通，需要新项目请联系运营。"}
-        </p>
-        {asOps ? (
-          <Button onClick={() => setEditing("new")}>
-            <Plus /> 新建项目
-          </Button>
-        ) : allowSelf ? (
-          <Button onClick={() => setCreatingOwn(true)}>
-            <Plus /> 新建项目
-          </Button>
-        ) : null}
-      </div>
+      <p className="text-sm text-muted-foreground">
+        一个项目对应一轮定三责；同一企业可以按年度或专题开多个项目。
+        {asOps ? "" : allowSelf ? "新项目是企业内训 · 自助；建好后可以“从已有项目带入”往年的表。" : "自建项目还没开通，需要新项目请联系运营。"}
+      </p>
 
       {detail.projects.length === 0 ? (
         <Empty className="border bg-card">
@@ -89,7 +77,9 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
               <FolderKanban />
             </EmptyMedia>
             <EmptyTitle>还没有项目</EmptyTitle>
-            <EmptyDescription>新建项目并指定主咨询师、企业项目负责人后，双方就能在“我的项目”里看到它。</EmptyDescription>
+            <EmptyDescription>
+              {asOps ? "在“我的项目”里新建。建好后回到这里指定主咨询师和企业项目负责人。" : "新建项目并指定主咨询师、企业项目负责人后，双方就能在“我的项目”里看到它。"}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -104,21 +94,16 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
                 {project.name}
                 {project.status === "archived" ? <Badge variant="outline">已归档</Badge> : null}
               </CardTitle>
-              <CardAction className="flex flex-wrap gap-1">
-                {asOps ? (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(project)}>
-                      <Pencil /> 编辑
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setStaffing(project)}>
-                      <Users /> 成员
-                    </Button>
-                  </>
-                ) : null}
-                <Button variant="outline" size="sm" nativeButton={false} render={<Link to={`/projects/${project.id}/overview`} />}>
-                  进入 <ArrowRight />
-                </Button>
-              </CardAction>
+              {asOps ? (
+                <CardAction className="flex flex-wrap gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(project)}>
+                    <Pencil /> 编辑
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setStaffing(project)}>
+                    <Users /> 成员
+                  </Button>
+                </CardAction>
+              ) : null}
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {memberWarnings(project.members, project.service).map((w) => (
@@ -144,9 +129,7 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
           <ProjectDialog target={editing} detail={detail} onClose={() => setEditing(null)} />
           <MembersDialog project={staffing} detail={detail} onClose={() => setStaffing(null)} />
         </>
-      ) : (
-        <OwnProjectDialog open={creatingOwn} detail={detail} onClose={() => setCreatingOwn(false)} />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -168,7 +151,7 @@ function draftFor(target: ProjectWithMembers | "new"): ProjectDraft {
   };
 }
 
-function ProjectDialog({
+export function ProjectDialog({
   target,
   detail,
   onClose,
@@ -493,7 +476,7 @@ function MembersDialog({
  * 企业管理员自建项目（运营打开开关后）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
  * 默认把自己设为企业项目负责人。建好后直接进项目并打开“从已有项目带入”。
  */
-function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: EnterpriseDetail; onClose: () => void }) {
+export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: EnterpriseDetail; onClose: () => void }) {
   const { data: me } = useGetIdentity<{ id: number }>();
   const navigate = useNavigate();
   const year = new Date().getFullYear() + 1;

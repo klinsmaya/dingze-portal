@@ -1,4 +1,4 @@
-import { Activity, BookOpenCheck, Building, Building2, ClipboardList, Eye, FolderKanban, LifeBuoy, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
+import { Activity, BookOpenCheck, Building, Building2, ClipboardList, FolderKanban, LifeBuoy, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
 import { Navigate, Outlet } from "react-router";
 
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
@@ -45,13 +45,9 @@ export const appRoutes = defineAppRoutes([
     ],
   },
   {
-    // 示例项目：虚构企业的完整一套表，只读，填表时对照着看。
     name: "sample",
     path: "/sample",
     lazy: () => import("@/pages/sample"),
-    resource: {
-      meta: { label: "示例项目", priority: 1.5, icon: <Eye />, description: "虚构企业瀚川燃气的完整成果，只读，填表时对照着看。" },
-    },
   },
   { name: "sample.table", path: "/sample/:code", lazy: () => import("@/pages/sample") },
   {

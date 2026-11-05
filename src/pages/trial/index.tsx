@@ -11,8 +11,6 @@ import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/dingze/errors";
 import { passwordProblem, trialApi } from "@/lib/dingze/invite-api";
 
-// 免费试用注册：填四项、勾一下，马上开好试用企业和项目，自动登录进第 1 步“上传资料”。
-
 const toLogin = (
   <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline hover:underline-offset-4">
     已有账号？去登录
@@ -45,9 +43,8 @@ export function TrialSignUpPage() {
         agree,
         website: form.website || undefined,
       });
-      // 注册成功直接登录，进项目的第 1 步。
       login(
-        { account: r.username, password: form.password, redirectTo: `/projects/${r.projectId}/materials` },
+        { account: r.username, password: form.password, redirectTo: `/projects/${r.projectId}/overview` },
         { onError: () => setError("账号已开好，但自动登录没成功。请用手机号和刚设的密码登录。") },
       );
     } catch (e) {

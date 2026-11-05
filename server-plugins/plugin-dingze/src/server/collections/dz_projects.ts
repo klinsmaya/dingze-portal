@@ -20,6 +20,7 @@ export default defineCollection({
     { type: 'integer', name: 'keyProjectLevel', defaultValue: 2 },
     { type: 'string', name: 'scheduleScale', defaultValue: 'month' },
     { type: 'string', name: 'status', defaultValue: 'active' },
+    { type: 'boolean', name: 'hidden', defaultValue: false },
     { type: 'hasMany', name: 'members', target: 'dz_project_members', foreignKey: 'projectId' },
     { type: 'hasMany', name: 'artifacts', target: 'dz_artifacts', foreignKey: 'projectId' },
     spaceField,

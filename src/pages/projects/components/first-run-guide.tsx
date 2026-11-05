@@ -6,20 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GUIDE_STEPS } from "@/lib/dingze/guide";
 import { samplePath } from "@/lib/dingze/sample";
-import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 
-const KEY = "dingze:first-run-guide";
-
-/** 本机是否已看过首次指引。 */
-export function useFirstRunGuide(): [boolean, (seen: boolean) => void] {
-  const [seen, setSeen] = usePersistentFlag(KEY);
-  return [seen === true, setSeen];
-}
-
-/**
- * 首次进项目的操作指引：五步各一句话，一页看完。关掉后本机不再弹；
- * 左侧「使用指南」随时能再看完整说明。
- */
 export function FirstRunGuide({ open, onClose, startHref }: { open: boolean; onClose: () => void; startHref: string }) {
   // 注册那一步已经做完了，从第 2 步“上传资料”开始讲。
   const steps = GUIDE_STEPS.filter((s) => s.no !== 1);

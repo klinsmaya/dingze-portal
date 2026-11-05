@@ -37,6 +37,8 @@ export function hasSample(code: string): boolean {
   return SAMPLE_CODES.includes(code);
 }
 
-export function samplePath(code?: string): string {
+export function samplePath(): "/sample";
+export function samplePath(code: string): string;
+export function samplePath(code?: string) {
   return code ? `/sample/${encodeURIComponent(code)}` : "/sample";
 }
