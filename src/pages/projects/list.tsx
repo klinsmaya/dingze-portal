@@ -10,8 +10,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProjectSummary } from "@/lib/dingze/api";
@@ -20,7 +20,6 @@ import { opsApi } from "@/lib/dingze/ops-api";
 import { useEnterpriseDetail, useEnterprises, useOpsMutation } from "@/lib/dingze/ops-queries";
 import { canRevealHidden, createOffer, projectListEntries, type ProjectListEntry } from "@/lib/dingze/project-list";
 import { useMyProjects } from "@/lib/dingze/queries";
-import { samplePath } from "@/lib/dingze/sample";
 import { ConfirmAction } from "@/pages/ops/components/confirm-action";
 import { OwnProjectDialog, ProjectDialog } from "@/pages/ops/components/projects-tab";
 
@@ -95,10 +94,7 @@ export default function ProjectsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-2xl font-bold text-brand">我的项目</h1>
-          <p className="mt-1 text-sm text-muted-foreground">选一个项目继续。列表最后是示例，只能看。</p>
-        </div>
+        <h1 className="font-heading text-2xl font-bold text-brand">我的项目</h1>
         <div className="flex flex-wrap gap-2">
           {canRevealHidden(projects ?? []) ? (
             <Button variant="outline" onClick={() => setShowHidden((value) => !value)}>
@@ -133,9 +129,6 @@ export default function ProjectsPage() {
                   <FolderKanban />
                 </EmptyMedia>
                 <EmptyTitle>还没有加入任何项目</EmptyTitle>
-                <EmptyDescription>
-                  项目开通后会出现在这里。可以先看看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
-                </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : null}
@@ -166,7 +159,6 @@ export default function ProjectsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>新建项目</DialogTitle>
-            <DialogDescription>选一家企业。</DialogDescription>
           </DialogHeader>
           <NativeSelect aria-label="选择企业" value={pickId ?? ""} onChange={(event) => setPickId(Number(event.target.value))}>
             {(offer?.enterprises ?? []).map((enterprise) => (
@@ -216,8 +208,7 @@ function ProjectCard({
               <Badge variant="secondary">示例</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">只能看</p>
+          <CardContent>
             <p className="text-xs text-muted-foreground">{entry.year} 年度</p>
           </CardContent>
           <CardFooter>
@@ -277,7 +268,7 @@ function ProjectCard({
                     </Button>
                   }
                   title="隐藏这个项目？"
-                  description="隐藏后列表里不再显示这个项目，数据还在。需要时可以显示已隐藏，再取消隐藏。"
+                  description="列表不再显示，数据保留。"
                   confirmLabel="隐藏"
                   onConfirm={() => onHide(project.id)}
                 />
