@@ -25,7 +25,7 @@ const lockStage = (stage: string) =>
   Object.fromEntries(ARTIFACTS.filter((a) => a.stage === stage).map((a) => [a.code, { status: "locked" as ArtifactStatus, unlock: { unlocked: true } }]));
 
 const flow = (artifacts: ArtifactOverview[], materialsReady = false) =>
-  flowSteps({ stages: stageProgress(artifacts), materialsReady, materialCount: materialsReady ? 2 : 0, started: artifacts.some((a) => a.status !== "not_started") });
+  flowSteps({ stages: stageProgress(artifacts), materialsReady, started: artifacts.some((a) => a.status !== "not_started") });
 
 describe("customer flow", () => {
   it("starts a fresh project at 上传资料, with 战略解码 open and the rest locked", () => {

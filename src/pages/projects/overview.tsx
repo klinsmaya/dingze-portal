@@ -2,7 +2,7 @@ import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock }
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { STAGES, collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
+import { STAGES, collaborationStatus, getArtifactDef, nextAction, isEmployee } from "@dingze/shared";
 
 import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
@@ -44,16 +44,18 @@ export default function ProjectOverviewPage() {
   const flow = flowSteps({
     stages,
     materialsReady: startup.find((i) => i.key === "materials")?.state === "done",
-    materialCount: materials.data?.length ?? 0,
     started: artifacts.some((a) => a.status !== "not_started"),
   });
-  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role !== "readonly";
+  // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
+  const employee = isEmployee(role) && !overview.isConsultAdmin;
+  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
   // 首次进项目弹操作指引（本机记住）。只给企业侧的新项目：还没开始填表、不是咨询方。
   const [guideSeen, setGuideSeen] = useFirstRunGuide();
   const [guideOpen, setGuideOpen] = useState(false);
   const freshProject = !artifacts.some((a) => a.status !== "not_started");
   useEffect(() => {
-    if (!guideSeen && !consulting && freshProject && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    // 普通员工多半是中途加入的，项目不新也给看一次三步指引。
+    if (!guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
     // 只在首次加载完判断一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [materials.isLoading, profile.isLoading]);
@@ -81,21 +83,12 @@ export default function ProjectOverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
-      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={`/projects/${project.id}/materials`} />
+      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-muted-foreground">
-          {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
-          {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
-        </p>
-        <h1 className="font-heading text-3xl font-bold text-brand">总览</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          按 1 → 5 往下走。先做蓝色按钮上的那件事。
-          <button type="button" onClick={() => setGuideOpen(true)} className="ml-2 text-primary hover:underline">
-            看操作指引
-          </button>
-        </p>
-      </div>
+        <h1 className="min-w-0 flex-1 font-heading text-3xl font-bold text-brand">总览</h1>
+        <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
+          看操作指引
+        </Button>
         {canImport ? (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
             <Import /> 从已有项目带入
@@ -114,7 +107,6 @@ export default function ProjectOverviewPage() {
             <span className="min-w-0 flex-1">
               <span className="block text-xs opacity-80">第 1 步</span>
               <span className="block text-lg font-bold">上传资料</span>
-              <span className="block text-sm opacity-85">传企业简介、组织架构、上年经营复盘，数字咨询师据此整理企业画像。也可以先跳过，直接去战略解码。</span>
             </span>
             <ArrowRight className="size-5 shrink-0" />
           </Link>
@@ -129,7 +121,6 @@ export default function ProjectOverviewPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : materialsFirst ? "或者直接开始" : "下一步"}</span>
             <span className="block text-lg font-bold">{next.label}</span>
-            <span className="block text-sm opacity-85">{next.hint}</span>
           </span>
           <ArrowRight className="size-5 shrink-0" />
         </Link>
@@ -160,7 +151,7 @@ export default function ProjectOverviewPage() {
         )}
       </section>
 
-      <StartupCard projectId={project.id} />
+      {employee ? null : <StartupCard projectId={project.id} />}
 
       <section aria-label="三阶段进度" className="grid gap-4 lg:grid-cols-3">
         {stages.map((stage) => (
@@ -168,16 +159,11 @@ export default function ProjectOverviewPage() {
             <CardHeader className="gap-2">
               <div className="flex items-baseline gap-2">
                 <CardTitle className="text-lg text-brand">{STAGES.find((s) => s.key === stage.stage)?.flow}</CardTitle>
-                <span className="text-xs text-muted-foreground">{stage.name} · {stage.goal}</span>
                 <span className="ml-auto text-xs font-semibold text-muted-foreground">
                   {stage.complete ? "已完成" : stage.open ? "进行中" : "待解锁"}
                 </span>
               </div>
-              <Progress value={(stage.locked / stage.gateTotal) * 100} aria-label={`${stage.name}定版进度`} />
-              <p className="text-xs text-muted-foreground">
-                必做表已定版 {stage.locked} / {stage.gateTotal}
-                {stage.open ? "" : " · 上一步全部定版后开启"}
-              </p>
+              <Progress value={(stage.locked / stage.gateTotal) * 100} aria-label={`${stage.name}定版进度 ${stage.locked} / ${stage.gateTotal}`} />
             </CardHeader>
             <CardContent>
               <ul className="flex flex-col gap-1">
@@ -213,9 +199,6 @@ export default function ProjectOverviewPage() {
         ))}
       </section>
 
-      <p className="text-sm text-muted-foreground">
-        遇到方法流程解决不了的关键分歧？<Link to={`/projects/${project.id}/expert`} className="text-primary hover:underline">申请专家咨询 →</Link>
-      </p>
     </div>
   );
 }
@@ -241,7 +224,7 @@ function StartupCard({ projectId }: { projectId: number }) {
   if (done === items.length) {
     return (
       <p className="flex items-center gap-2 rounded-xl border bg-card px-4 py-2.5 text-sm text-muted-foreground">
-        <CircleCheck className="size-4 text-status-done-foreground" /> 项目启动已就绪：{items.map((i) => `${i.title}（${i.detail}）`).join("；")}
+        <CircleCheck className="size-4 text-status-done-foreground" /> 项目启动已就绪：{items.map((i) => i.title).join("、")}
       </p>
     );
   }
@@ -270,7 +253,6 @@ function StartupCard({ projectId }: { projectId: number }) {
                 )}
                 {item.title}
               </div>
-              <div className="text-xs text-muted-foreground">{item.detail}</div>
               {item.problems.length ? (
                 <ul className="flex list-disc flex-col gap-0.5 pl-4 text-xs">
                   {item.problems.map((p) => (
@@ -278,11 +260,6 @@ function StartupCard({ projectId }: { projectId: number }) {
                   ))}
                 </ul>
               ) : null}
-              {item.notes.map((n) => (
-                <p key={n} className="text-xs text-muted-foreground">
-                  {n}
-                </p>
-              ))}
               {link && item.state !== "done" ? (
                 <Link to={link.href(projectId)} className="mt-auto text-xs font-medium text-primary hover:underline">
                   {link.label} →
@@ -335,8 +312,6 @@ function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: 
               {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
               {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
             </span>
-            <span className="text-xs text-muted-foreground">{step.hint}</span>
-            <span className="mt-auto text-xs">{step.detail}</span>
           </Link>
         </li>
       ))}
