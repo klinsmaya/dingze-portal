@@ -159,7 +159,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
 
   return (
     <section aria-label="年度战略解码地图" className="flex flex-col gap-4">
-      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。完成后在 S2-03 子步骤 5 一键导入路径系统表。思维导图和表格是同一份数据。">
+      <EditorToolbar hint="自上而下找差距、定主张、选流程、补资产；每个下层主题都要说明支撑哪个上层主题。">
         {upstream["S1-02"] ? (
           <ImportButton label="从战略地图带入目标" count={themesFromStrategyMap(upstream["S1-02"], value).length} readOnly={readOnly} onClick={() => setThemes([...themes, ...themesFromStrategyMap(upstream["S1-02"], value)])} />
         ) : null}
@@ -217,7 +217,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
           addLabel="战略主题"
           addHint={sub === 1 ? "按图 3-7 两组想" : undefined}
           emptyHint="还没有主题"
-          side={sub === 1 && !readOnly ? <Figure37Card defaultOpen={!financial.length} used={figureUsed} onPick={pickFigure} readOnly={readOnly} hint="点一项 = 在财务层面加一个主题（类别已选好）" /> : undefined}
+          side={sub === 1 && !readOnly ? <Figure37Card defaultOpen={!financial.length} used={figureUsed} onPick={pickFigure} readOnly={readOnly} /> : undefined}
         />
       ) : (
         <>
@@ -276,7 +276,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
                             </NativeSelectOption>
                           ))}
                         </NativeSelect>
-                        <TextCell label={`${p.label}主题`} placeholder="战略主题，如“拓展物流车队客户”" value={t.title} onChange={(title) => setTheme(t.id, { title })} readOnly={readOnly} />
+                        <TextCell label={`${p.label}主题`} placeholder="战略主题" value={t.title} onChange={(title) => setTheme(t.id, { title })} readOnly={readOnly} />
                         <TextCell label={`${t.title || p.label + "主题"} 衡量指标`} placeholder="衡量指标" value={t.metric} onChange={(metric) => setTheme(t.id, { metric })} readOnly={readOnly} />
                         <TextCell label={`${t.title || p.label + "主题"} 指标值`} placeholder="指标值" value={t.value} onChange={(v) => setTheme(t.id, { value: v })} readOnly={readOnly} />
                       </div>
@@ -285,7 +285,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       {p.key === "financial" ? (
                         <>
-                          <span className="text-muted-foreground">弥补哪个年度目标的差距</span>
+                          <span className="text-muted-foreground">弥补差距</span>
                           <NativeSelect
                             size="sm"
                             aria-label={`${t.title || "财务主题"} 对应年度目标`}
@@ -293,7 +293,7 @@ export function DecodeMapEditor({ value, onChange, readOnly, issues, upstream }:
                             disabled={readOnly}
                             onChange={(e) => setTheme(t.id, { goalId: e.target.value || null })}
                           >
-                            <NativeSelectOption value="">选择年度目标…</NativeSelectOption>
+                            <NativeSelectOption value="">年度目标</NativeSelectOption>
                             {goals.map((g) => (
                               <NativeSelectOption key={g.id} value={g.id}>
                                 {g.task || g.metric} {g.value}

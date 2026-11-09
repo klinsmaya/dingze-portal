@@ -3,7 +3,6 @@ import { useId, useState } from "react";
 
 import {
   SIXFOLD_FIELDS,
-  houseStarted,
   type Battlefield,
   type Issue,
   type StrategyContent,
@@ -79,7 +78,7 @@ function Cell({
       <Textarea
         id={id}
         value={value}
-        placeholder={readOnly ? "" : hint ?? "填写，或写“待补”"}
+        placeholder={readOnly ? "" : (hint ?? "")}
         readOnly={readOnly}
         aria-invalid={invalid || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -121,8 +120,7 @@ function HouseView({ value, onChange, readOnly, issues }: EditorProps) {
         <div className="grid min-w-[640px] grid-cols-[108px_1fr]">
           <div className="border-b bg-muted px-3 py-3">
             <div className="text-sm font-bold text-brand">经营目标</div>
-            <div className="text-[11px] text-muted-foreground">财务＋非财务</div>
-          </div>
+                      </div>
           <div className="grid grid-cols-3 gap-3 border-b p-3">
             {(["y1", "y3", "y5"] as const).map((k, i) => (
               <Cell
@@ -138,19 +136,18 @@ function HouseView({ value, onChange, readOnly, issues }: EditorProps) {
 
           {(
             [
-              ["name", "主要战场", "业务组合 · 增长曲线"],
-              ["advantage", "如何致胜", "按战场写可持续核心优势"],
-              ["mustWin", "必赢之战", "年度落地抓手"],
+              ["name", "主要战场"],
+              ["advantage", "如何致胜"],
+              ["mustWin", "必赢之战"],
             ] as const
-          ).map(([key, label, hint]) => (
+          ).map(([key, label]) => (
             <div key={key} className="contents">
               <div className="border-b bg-muted px-3 py-3">
                 <div className="text-sm font-bold text-brand">{label}</div>
-                <div className="text-[11px] text-muted-foreground">{hint}</div>
               </div>
               <div className="grid gap-3 border-b p-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                 {value.battlefields.length === 0 ? (
-                  <p className="self-center text-sm text-muted-foreground">还没有主要战场{readOnly ? "" : "，点下方“添加战场”开始"}</p>
+                  <p className="self-center text-sm text-muted-foreground">还没有主要战场</p>
                 ) : (
                   value.battlefields.map((b, i) => (
                     <Cell
@@ -189,7 +186,6 @@ function HouseView({ value, onChange, readOnly, issues }: EditorProps) {
       <div className="grid gap-3 rounded-b-xl border border-t-[3px] border-t-brand bg-muted p-3 sm:grid-cols-[96px_repeat(3,minmax(0,1fr))]">
         <div className="self-center">
           <div className="text-sm font-bold text-brand">落地保障</div>
-          <div className="text-[11px] text-muted-foreground">地基</div>
         </div>
         {(["organization", "mechanism", "talent"] as const).map((k, i) => (
           <Cell
@@ -210,9 +206,7 @@ function SixfoldView({ value, onChange, readOnly, issues }: EditorProps) {
   return (
     <div className="overflow-x-auto rounded-xl border">
       <table className="w-full min-w-[640px] border-collapse text-sm">
-        <caption className="px-3 py-2 text-left text-xs text-muted-foreground">
-          战略简约六分法（表 2-1）。目的、方向与战略屋的使命、愿景是同一份数据。
-        </caption>
+        <caption className="sr-only">战略简约六分法</caption>
         <thead>
           <tr className="bg-muted text-left text-muted-foreground">
             <th scope="col" className="w-36 px-3 py-2">要素</th>
@@ -231,7 +225,7 @@ function SixfoldView({ value, onChange, readOnly, issues }: EditorProps) {
                   aria-label={f.label}
                   value={String(value[f.key] ?? "")}
                   readOnly={readOnly}
-                  placeholder={readOnly ? "" : "填写，或写“待补”"}
+                  placeholder=""
                   data-anchor={String(f.key)}
                   aria-invalid={!!issueFor(issues, String(f.key)) || undefined}
                   onChange={(e) => onChange({ ...value, [f.key]: e.target.value })}
@@ -247,7 +241,6 @@ function SixfoldView({ value, onChange, readOnly, issues }: EditorProps) {
 }
 
 export function StrategyContentEditor(props: EditorProps) {
-  const { value } = props;
   // 六分法 is the P0 table; the strategy house is an optional (P1) expression of the same data.
   const [view, setView] = useState<StrategyExpression>("sixfold");
   useEditorChrome({
@@ -263,7 +256,7 @@ export function StrategyContentEditor(props: EditorProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <EditorToolbar hint={`六个方面全部填齐（写“待补”不算）才能“本步完成”；战略屋是可选的另一种表达，使命、愿景两处共用。${houseStarted(value) ? "" : "战略屋尚未填写。"}`} />
+      <EditorToolbar hint="六个方面全部填齐（写“待补”不算）才能“本步完成”。" />
 
       {view === "house" ? <HouseView {...props} /> : <SixfoldView {...props} />}
 

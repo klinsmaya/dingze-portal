@@ -27,10 +27,10 @@ type Props = {
 };
 
 const COLUMNS: { key: "purpose" | "task" | "metric" | "value" | "unit"; label: string; placeholder: string; width: string }[] = [
-  { key: "purpose", label: "目的", placeholder: "为什么做：对战略的贡献", width: "min-w-48" },
-  { key: "task", label: "任务", placeholder: "动词＋宾语，如“提升车用气销量”", width: "min-w-44" },
-  { key: "metric", label: "衡量指标", placeholder: "用什么衡量", width: "min-w-32" },
-  { key: "value", label: "指标值", placeholder: "做到什么程度", width: "min-w-28" },
+  { key: "purpose", label: "目的", placeholder: "", width: "min-w-48" },
+  { key: "task", label: "任务", placeholder: "动词＋宾语", width: "min-w-44" },
+  { key: "metric", label: "衡量指标", placeholder: "", width: "min-w-32" },
+  { key: "value", label: "指标值", placeholder: "", width: "min-w-28" },
   { key: "unit", label: "单位", placeholder: "", width: "min-w-16" },
 ];
 
@@ -46,22 +46,22 @@ export function GoalTargetsEditor({ value, onChange, readOnly, issues, upstream,
     <section aria-label="公司级年度目标" className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-1">
-          <div className="text-xs font-semibold text-muted-foreground">往上看 · 回顾公司战略（表 3-4）</div>
+          <div className="text-xs font-semibold text-muted-foreground">回顾公司战略</div>
           <TextCell
             label="回顾公司战略"
             multiline
-            placeholder="使命、愿景、战略目标与 S1-07 本年度要求"
+            placeholder=""
             value={value.strategyReview}
             onChange={(strategyReview) => onChange({ ...value, year, strategyReview })}
             readOnly={readOnly}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <div className="text-xs font-semibold text-muted-foreground">往回看 · 上一经营周期的问题及解决方案</div>
+          <div className="text-xs font-semibold text-muted-foreground">上一周期的问题与解决方案</div>
           <TextCell
             label="上一经营周期的问题"
             multiline
-            placeholder="来自年中 / 年终经营分析会"
+            placeholder=""
             value={value.lastPeriodIssues}
             onChange={(lastPeriodIssues) => onChange({ ...value, year, lastPeriodIssues })}
             readOnly={readOnly}
@@ -69,7 +69,7 @@ export function GoalTargetsEditor({ value, onChange, readOnly, issues, upstream,
         </div>
       </div>
 
-      <EditorToolbar hint={`${year} 年度公司级目标。指标值只取企业给定的数（S1-07 本年度目标或经营预算），数字咨询师不会代填。`}>
+      <EditorToolbar hint={`${year} 年度公司级目标。指标值只取企业给定的数，数字咨询师不会代填。`}>
         <ImportButton label={`带入 S1-07 ${year} 年目标`} count={fromBreakdown.length} readOnly={readOnly} onClick={() => setGoals([...goals, ...fromBreakdown])} />
         {!readOnly ? <AddButton label="添加目标" onClick={() => setGoals([...goals, emptyGoal()])} /> : null}
       </EditorToolbar>
@@ -157,7 +157,7 @@ export function BudgetWorksheetEditor({
   const setRows = (next: BudgetWorksheet["rows"]) => onChange({ ...value, rows: next });
   return (
     <section aria-label="年度经营预算" className="flex flex-col gap-4">
-      <EditorToolbar hint="表 3-6：先写预算编制说明（战略回顾与假设），再填收入、成本费用、人员、投资研发和现金流预算，最后综合汇总。预算作为方法底稿保存。">
+      <EditorToolbar hint="先写预算编制说明，再填收入、成本费用、人员、投资研发和现金流预算，最后综合汇总。">
         <div className="flex items-center gap-2 text-sm">
           单位
           <TextCell label="预算单位" value={value.unit} onChange={(unit) => onChange({ ...value, unit })} readOnly={readOnly} className="w-24" />
@@ -169,7 +169,7 @@ export function BudgetWorksheetEditor({
       <TextCell
         label="预算编制说明"
         multiline
-        placeholder="预算编制说明：依据哪些战略回顾与经营假设（如价格、销量、人员编制）编制"
+        placeholder="依据的经营假设：价格、销量、人员编制…"
         value={value.basis ?? ""}
         onChange={(basis) => onChange({ ...value, basis })}
         readOnly={readOnly}

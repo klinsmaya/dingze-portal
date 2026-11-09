@@ -484,7 +484,6 @@ export function PathSystemEditor({
             size="sm"
             variant="ghost"
             onClick={() => setPasting(true)}
-            title="把 Excel 里的路径表整块粘贴进来"
           >
             <ClipboardPaste /> 从 Excel 粘贴
           </Button>
@@ -552,7 +551,7 @@ export function PathSystemEditor({
   return (
     <section aria-label="路径系统" className="flex flex-col gap-4">
       <EditorToolbar
-        hint={`先 How 后 Who：每个${goalWord}拆出一级路径，再逐级分解到二、三级（标准图到四级）；每条路径都要有衡量指标和指标值，下级合计要推得回本级。思维导图和表格是同一份数据。`}
+        hint={`每个${goalWord}拆出一级路径，再逐级分解到二、三级；每条路径都要有衡量指标和指标值，下级合计要推得回本级。`}
       >
         {importFromMap ? (
           <ImportButton
@@ -566,7 +565,7 @@ export function PathSystemEditor({
 
       {goals.length === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-          还没有{goalWord}：请先完成上游表格。
+          还没有{goalWord}
         </p>
       ) : view === "mind" ? (
         <TreeMindMap
@@ -676,10 +675,6 @@ export function PathSystemEditor({
         />
       ) : view === "t39" ? (
         <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">
-            表 3-9 横排表：只读预览，与“导出
-            Excel”里的布局一致；在“表格”“按层面”或“思维导图”里修改。
-          </p>
           <SheetTable sheet={t39} />
         </div>
       ) : view === "t310" && t310 ? (
@@ -1000,10 +995,7 @@ function PasteDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>从 Excel 粘贴路径</DialogTitle>
-          <DialogDescription>
-            在 Excel 里选中“一级路径 · 衡量指标 · 指标值 · 二级路径
-            …”这些列（不含表头）复制，粘贴到下面。合并单元格留空的行，会接在上一行下面。
-          </DialogDescription>
+          <DialogDescription>列依次是：一级路径、衡量指标、指标值、二级路径…，不含表头。</DialogDescription>
         </DialogHeader>
         <ImportSource template={PATH_TEMPLATE} onText={setText} />
         <Textarea
@@ -1047,7 +1039,7 @@ function PasteDialog({
         </div>
         <p className="text-xs text-muted-foreground" role="status">
           {parsed.length
-            ? `将新增 ${parsed.length} 条：${byLevel.map((c, i) => `${LEVEL_LABELS[i + 1]} ${c} 条`).join("、")}（可以撤销）`
+            ? `新增 ${parsed.length} 条：${byLevel.map((c, i) => `${LEVEL_LABELS[i + 1]} ${c} 条`).join("、")}`
             : "还没有识别到路径"}
         </p>
         <DialogFooter>
@@ -1477,7 +1469,6 @@ function PathWideTable({
                                       setDrag(null);
                                       setOver(null);
                                     }}
-                                    title="拖动整行：调整顺序或换上级"
                                     aria-hidden
                                     className="absolute top-2 left-0 cursor-grab text-muted-foreground opacity-0 group-hover/row:opacity-100"
                                   >

@@ -26,12 +26,12 @@ const PERIOD_OPTIONS = ["月考", "季考", "半年考", "年考"];
 
 // 指标值和单位在 S1-07 逐年目标里填（2026-11 会议纪要：数值自带单位，去掉单位列）。
 const COLUMNS: { key: keyof StrategyKpi; label: string; placeholder: string; width: string; multiline?: boolean; options?: string[] }[] = [
-  { key: "theme", label: "战略主题 / 要点", placeholder: "对应的战略或策略", width: "min-w-28" },
-  { key: "name", label: "战略 KPI", placeholder: "指标名称", width: "min-w-28" },
-  { key: "definition", label: "口径 / 计算公式", placeholder: "统计口径或计算公式", width: "min-w-44", multiline: true },
-  { key: "source", label: "数据来源", placeholder: "系统或报表", width: "min-w-24" },
+  { key: "theme", label: "战略主题 / 要点", placeholder: "", width: "min-w-28" },
+  { key: "name", label: "战略 KPI", placeholder: "", width: "min-w-28" },
+  { key: "definition", label: "口径 / 计算公式", placeholder: "", width: "min-w-44", multiline: true },
+  { key: "source", label: "数据来源", placeholder: "", width: "min-w-24" },
   { key: "period", label: "考核周期", placeholder: "选择", width: "min-w-20", options: PERIOD_OPTIONS },
-  { key: "owner", label: "责任部门", placeholder: "责任部门", width: "min-w-24" },
+  { key: "owner", label: "责任部门", placeholder: "", width: "min-w-24" },
 ];
 
 /** S1-06: the screened strategy KPIs with their definition, data source and period. */
@@ -43,7 +43,7 @@ export function StrategyKpiEditor({ value, onChange, readOnly, issues, upstream 
 
   return (
     <section aria-label="战略 KPI 表" className="flex flex-col gap-4">
-      <EditorToolbar hint="每个战略 KPI 都要写清口径、数据来源和考核周期，书中建议不超过 6 个。未做筛选表时可直接按逻辑表录入。">
+      <EditorToolbar hint="每个战略 KPI 都要写清口径、数据来源和考核周期，建议不超过 6 个。">
         <ImportButton label="带入筛选保留的指标" count={fromScreening.length} readOnly={readOnly} onClick={() => set([...kpis, ...fromScreening])} />
         {!readOnly ? <AddButton label="添加战略 KPI" onClick={() => set([...kpis, emptyKpi()])} /> : null}
       </EditorToolbar>

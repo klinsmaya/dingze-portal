@@ -42,7 +42,7 @@ export function KpiBreakdownEditor({ value, onChange, readOnly, issues, upstream
 
   return (
     <section aria-label="战略 KPI 3—5 年年度分解表" className="flex flex-col gap-4">
-      <EditorToolbar hint={`设值三步：基准值 → 标杆值 → 挑战值；按近详远略分解（前三后一）。第一列 ${years[0]} 年即本年度目标，定目标责会读取它。`}>
+      <EditorToolbar hint={`基准值 → 标杆值 → 挑战值，再按年分解。${years[0]} 年即本年度目标。`}>
         <ImportButton label="带入战略 KPI" count={fromKpis.length} readOnly={readOnly} onClick={() => setRows([...rows, ...fromKpis])} />
         {!readOnly ? (
           <>

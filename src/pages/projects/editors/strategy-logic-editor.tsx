@@ -46,7 +46,7 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
         </UpstreamNote>
       ) : null}
 
-      <EditorToolbar hint="战略回答“做不做、做什么”，策略回答“怎么做”，写成“动词＋宾语”。路径为可选层，在定目标责展开。">
+      <EditorToolbar hint="战略回答“做不做、做什么”，策略回答“怎么做”，都写成“动词＋宾语”。">
         {upstream["S1-02"] ? <ImportButton label="从战略地图带入目标" count={fromMap.length} readOnly={readOnly} onClick={() => setStrategies([...strategies, ...fromMap])} /> : null}
         {strategies.length === 0 && seed && !fromMap.length ? (
           <ImportButton label="按主要战场带入战略" count={seed.strategies.length} readOnly={readOnly} onClick={() => onChange({ ...seed, levelNote: value.levelNote })} />
@@ -82,7 +82,7 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
                 <TextCell
                   label={`战略 ${index + 1}`}
                   multiline
-                  placeholder="如：聚焦城市燃气，做强车用气"
+                  placeholder="动词＋宾语"
                   value={line.statement}
                   onChange={(statement) => setLine(line.id, { statement })}
                   readOnly={readOnly}
@@ -100,7 +100,7 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
                   <div key={tactic.id} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_auto] items-start gap-2">
                     <TextCell
                       label={`战略 ${index + 1} 的策略 ${t + 1}`}
-                      placeholder="动词＋宾语，如“加密城区加气站网络”"
+                      placeholder="动词＋宾语"
                       value={tactic.text}
                       onChange={(text) => setLine(line.id, { tactics: patchById(line.tactics, tactic.id, { text }) })}
                       readOnly={readOnly}
@@ -139,7 +139,7 @@ export function StrategyLogicEditor({ value, onChange, readOnly, issues, upstrea
         <TextCell
           label="层级相对性说明"
           multiline
-          placeholder="集团的策略到业务单元可能成为单元战略：说明哪些策略需要在下级展开为战略"
+          placeholder="哪些策略要在下级展开为战略"
           value={value.levelNote}
           onChange={(levelNote) => onChange({ ...value, levelNote })}
           readOnly={readOnly}
