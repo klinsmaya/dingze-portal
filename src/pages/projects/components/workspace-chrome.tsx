@@ -217,9 +217,12 @@ export function TitleRow({
   history,
   actions,
   links,
+  locked = false,
 }: {
   title: string;
   chip: string;
+  /** 还没解锁的表：只留标题和流程位，不显示修订、批注、历史、导出。 */
+  locked?: boolean;
   /** 上下游按钮，紧跟表号。 */
   links?: ReactNode;
   chrome: EditorChrome | null;
@@ -271,6 +274,7 @@ export function TitleRow({
           </select>
         ) : null}
         {/* 次要组：修订、批注、导出只在这里有入口（页脚只显示状态）；流程按钮固定在最右（开营前 UX 改版 F6、F10）。 */}
+        {locked ? null : (
         <div role="group" aria-label="修订、批注与导出" className="flex items-center gap-0.5 rounded-lg border p-0.5">
           <label className={cn("flex h-7 items-center gap-1.5 rounded-md px-2 text-sm", revisionOn && "text-[color:var(--dz-changed)]")} title="修订（Ctrl / ⌘ + Shift + E）：和任意一版对比">
             <Switch checked={revisionOn} disabled={!canRevise} onCheckedChange={onRevision} aria-label="修订开关" />
@@ -283,6 +287,7 @@ export function TitleRow({
           {history}
           {exportMenu}
         </div>
+        )}
         {actions}
       </div>
     </div>

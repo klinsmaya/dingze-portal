@@ -132,7 +132,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
           </div>
 
           <div className="flex flex-col gap-2">
-            <EditorToolbar hint="纵向因果自下而上（学习与成长 → 内部流程 → 客户 → 财务）；横向协同只连同一层面。">
+            <EditorToolbar inline hint="纵向因果自下而上（学习与成长 → 内部流程 → 客户 → 财务）；横向协同只连同一层面。">
               {!readOnly ? (
                 <AddButton
                   label="添加关系"

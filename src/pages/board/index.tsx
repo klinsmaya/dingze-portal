@@ -139,7 +139,7 @@ export default function ConsultantBoardPage() {
               <ToggleGroupItem value="all">全部阶段</ToggleGroupItem>
               {STAGES.map((s) => (
                 <ToggleGroupItem key={s.key} value={s.key}>
-                  {s.name}
+                  {s.flow}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -244,7 +244,7 @@ function ProjectProgressCard({ project }: { project: BoardProject }) {
             return (
               <div key={s.key} className="flex flex-col gap-1">
                 <div className="flex justify-between text-xs">
-                  <span>{s.name}</span>
+                  <span>{s.flow}</span>
                   <span className="text-muted-foreground tabular-nums">
                     {locked}/{gate.length} 定版
                   </span>

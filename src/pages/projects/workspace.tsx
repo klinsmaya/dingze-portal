@@ -14,6 +14,10 @@ import {
   isArtifactCode,
   validateArtifact,
   ARTIFACTS,
+  type ArtifactDef,
+  isStageOpen,
+  previousStage,
+  stageGateCodes,
   profileBrief,
   canPerform,
   staleAdvice,
@@ -31,6 +35,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { nextStep, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import type { ArtifactOverview } from "@/lib/dingze/api";
 import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
@@ -89,6 +94,16 @@ const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: []
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
 const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
+
+/** 挡住这张表的表：同阶段看 unlockAfter；阶段还没开时看上一阶段没定版的必做表，都给“去做”链接。 */
+function blockingCodes(def: ArtifactDef, artifacts: ArtifactOverview[]): string[] {
+  const states = Object.fromEntries(artifacts.map((a) => [a.code, { status: a.status, exception: a.exception }]));
+  if (!isStageOpen(def.stage, states)) {
+    const prev = previousStage(def.stage);
+    return prev ? stageGateCodes(prev).filter((c) => !["locked", "archived"].includes(states[c]?.status ?? "")) : [];
+  }
+  return def.unlockAfter.filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(states[c]?.status ?? ""));
+}
 
 export default function WorkspacePage() {
   const { project, overview } = useProjectContext();
@@ -878,6 +893,7 @@ function Workspace({ code }: { code: string }) {
               <TitleRow
                 title={chrome?.title ?? def.name}
                 chip={chrome?.chip ?? `${def.specId} · ${def.bookRef}`}
+                locked={!detail.isLoading && !unlocked}
                 chrome={chrome}
                 revisionOn={revision.on}
                 canRevise={versions.length > 0}
@@ -1113,8 +1129,7 @@ function Workspace({ code }: { code: string }) {
                 <AlertDescription className="flex flex-col gap-1">
                   <span>{detail.data?.unlock.waitingFor}</span>
                   <span className="flex flex-wrap gap-x-3">
-                    {def.unlockAfter
-                      .filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(overview.artifacts.find((a) => a.code === c)?.status ?? ""))
+                    {blockingCodes(def, overview.artifacts)
                       .map((c) => (
                         <Link key={c} to={workspacePath(project.id, c)} className="inline-flex items-center gap-1 font-medium text-brand underline">
                           去做 {getArtifactDef(c).specId} 《{getArtifactDef(c).name}》 <ArrowRight className="size-3.5" />

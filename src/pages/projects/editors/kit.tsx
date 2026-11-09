@@ -68,9 +68,14 @@ export function TextCell({
 /** 工具栏里给“怎么填”留的位置（2026-10-16 页头规整）：有位置时提示放进工具栏，不再占编辑区一行。 */
 export const HowToSlotContext = createContext<HTMLElement | null>(null);
 
-/** The editor's own small row: a 怎么填 tip and table-specific buttons; the tip goes into the toolbar when it can. */
-export function EditorToolbar({ children, hint }: { children?: ReactNode; hint?: ReactNode }) {
-  const slot = useContext(HowToSlotContext);
+/**
+ * The editor's own small row: a 怎么填 tip and table-specific buttons; the tip goes into the toolbar when it can.
+ * A second toolbar inside the same editor (a sub-list such as the map's relations) passes `inline` so the toolbar
+ * shows one 怎么填, not two.
+ */
+export function EditorToolbar({ children, hint, inline = false }: { children?: ReactNode; hint?: ReactNode; inline?: boolean }) {
+  const contextSlot = useContext(HowToSlotContext);
+  const slot = inline ? null : contextSlot;
   const tip = hint ? (
     <Popover>
       <PopoverTrigger

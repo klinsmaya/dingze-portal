@@ -36,6 +36,7 @@ import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
 import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
 import { cn } from "@/lib/utils";
+import { ConfirmAction } from "@/pages/ops/components/confirm-action";
 
 import { OrgUnitsEditor } from "../ops/components/org-units-tab";
 import { CoachPanel, askCoach } from "./components/coach-panel";
@@ -150,7 +151,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
                 <span className="font-medium">{m.title}</span>
                 <span className="block text-xs text-muted-foreground">
                   {m.kind === "note" ? "粘贴的文字" : m.fileName}
-                  {m.hasFile ? ` · 原件 ${formatSize(m.size)}` : ""} · {m.chars ? `可检索 ${m.chars} 字` : "无可检索文字"} · {m.by} · {formatTime(m.at)}
+                  {[m.hasFile ? `原件 ${formatSize(m.size)}` : "", m.chars ? `可检索 ${m.chars} 字` : "无可检索文字", m.by, formatTime(m.at)].filter(Boolean).join(" · ")}
                 </span>
               </span>
               {m.hasFile ? (
@@ -162,15 +163,23 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
                 <Eye /> 文字
               </Button>
               {canEdit && (canDeleteAny || m.byId === currentUserId) ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (window.confirm(`删除资料《${m.title}》？`)) remove.mutate(m.id, { onError: (e) => toast.error(errorMessage(e)) });
-                  }}
-                >
-                  <Trash2 />
-                </Button>
+                <ConfirmAction
+                  trigger={
+                    <Button variant="ghost" size="sm" aria-label={`删除资料《${m.title}》`}>
+                      <Trash2 />
+                    </Button>
+                  }
+                  title={`删除资料《${m.title}》？`}
+                  description="原件和提取的文字一起删除，数字咨询师不再能检索到它。"
+                  confirmLabel="删除"
+                  destructive
+                  onConfirm={() =>
+                    remove.mutateAsync(m.id).catch((e) => {
+                      toast.error(errorMessage(e));
+                      throw e;
+                    })
+                  }
+                />
               ) : null}
             </li>
           ))}
