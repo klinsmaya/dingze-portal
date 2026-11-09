@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { diffPayloads, summarizeDiff } from "@dingze/shared";
 
 import { useConfirm } from "@/components/dingze/confirm";
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
@@ -119,7 +120,7 @@ export function ChangesPanel({ project, code, commentNo }: { project: ProjectSum
         </Button>
       </div>
       {shown.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">这一版还没有修改。改动会按“谁、什么时候、从哪里改”记在这里，每条都能定位和撤销。</p>
+        <EmptyState text="这一版还没有修改。改动会按“谁、什么时候、从哪里改”记在这里，每条都能定位和撤销。" />
       ) : (
         <ol className="flex flex-col" aria-label="修改记录">
           {shown.map((row, i) => {

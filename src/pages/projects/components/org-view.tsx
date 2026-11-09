@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { PROJECT_ROLE_LABELS } from "@dingze/shared";
 
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Badge } from "@/components/ui/badge";
 import type { ProjectOrgUnit, ProjectTeamMember } from "@/lib/dingze/api";
 import { flattenOrgUnits } from "@/lib/dingze/org-units";
@@ -33,9 +34,7 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
         </span>
       </div>
       {nodes.length === 0 ? (
-        <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-          还没有组织部门。定目标责的责任分工和部门承接要先有部门，请企业项目负责人或企业管理员建好。
-        </p>
+        <EmptyState text="还没有组织部门。定目标责的责任分工和部门承接要先有部门，请企业项目负责人或企业管理员建好。" />
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">
           {nodes.map((node) => {

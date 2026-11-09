@@ -1,4 +1,4 @@
-import { MessagesSquare, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -134,15 +134,7 @@ export default function ProjectExpertPage() {
       ) : requests.isLoading ? (
         <Skeleton className="h-40 rounded-xl" />
       ) : !requests.data?.length ? (
-        <Empty className="border bg-card">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MessagesSquare />
-            </EmptyMedia>
-            <EmptyTitle>还没有咨询申请</EmptyTitle>
-            <EmptyDescription>遇到方法流程解决不了的关键分歧时，申请专家咨询。</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState className="bg-card" text="还没有咨询申请。遇到方法流程解决不了的关键分歧时，申请专家咨询。" />
       ) : (
         <ExpertRequestTable rows={requests.data} showProject={false} />
       )}

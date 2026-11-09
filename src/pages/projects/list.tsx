@@ -1,11 +1,12 @@
-import { ArrowRight, FolderKanban } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link, Navigate } from "react-router";
 
 import { PROJECT_ROLE_LABELS, STAGES } from "@dingze/shared";
 
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import { nextActionPath } from "@/lib/dingze/progress";
 import { useMyProjects } from "@/lib/dingze/queries";
@@ -39,17 +40,15 @@ export default function ProjectsPage() {
           ))}
         </div>
       ) : !projects?.length ? (
-        <Empty className="border bg-card">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FolderKanban />
-            </EmptyMedia>
-            <EmptyTitle>还没有加入任何项目</EmptyTitle>
-            <EmptyDescription>
-              项目开通后会出现在这里。可以先看看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState
+          className="bg-card"
+          text="还没有加入任何项目，项目开通后会出现在这里。"
+          action={
+            <Button variant="outline" nativeButton={false} render={<Link to={samplePath()} />}>
+              看看示例项目
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (

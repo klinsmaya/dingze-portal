@@ -2,6 +2,7 @@ import { Bot, Check, ChevronRight, CircleCheck, Ellipsis, LassoSelect, Link2, Lo
 import { type CSSProperties, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -329,7 +330,7 @@ export function CommentsPanel({
       {comments.isLoading ? (
         <Skeleton className="h-24" />
       ) : open.length === 0 && !resolved.length ? (
-        <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{filter === "mine" ? "没有提到你的批注" : filter === "open" ? "没有未解决的批注" : "还没有批注"}</p>
+        <EmptyState text={filter === "mine" ? "没有提到你的批注" : filter === "open" ? "没有未解决的批注" : "还没有批注"} />
       ) : (
         <>
           {open.length ? (
