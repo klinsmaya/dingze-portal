@@ -79,7 +79,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
       </EditorToolbar>
 
       {view === "diagram" ? (
-        <MapDiagram map={value} />
+        <MapDiagram map={value} shape="ellipse" />
       ) : (
         <>
           <div className="overflow-hidden rounded-xl border bg-card">
@@ -89,7 +89,6 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
                 <div key={p.key} className="grid border-b last:border-b-0 md:grid-cols-[140px_1fr]">
                   <div className="bg-muted px-3 py-3">
                     <div className="text-sm font-bold text-brand">{p.label}</div>
-                    <div className="text-[11px] text-muted-foreground">{p.hint}</div>
                   </div>
                   <div className="flex flex-col gap-2 p-3">
                     {items.map((o) => (
@@ -133,7 +132,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
           </div>
 
           <div className="flex flex-col gap-2">
-            <EditorToolbar hint="纵向因果自下而上（学习与成长 → 内部流程 → 客户 → 财务）；横向协同只连同一层面。">
+            <EditorToolbar inline hint="纵向因果自下而上（学习与成长 → 内部流程 → 客户 → 财务）；横向协同只连同一层面。">
               {!readOnly ? (
                 <AddButton
                   label="添加关系"

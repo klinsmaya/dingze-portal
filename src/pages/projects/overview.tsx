@@ -2,12 +2,11 @@ import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock }
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { STAGES, collaborationStatus, getArtifactDef, nextAction } from "@dingze/shared";
+import { STAGES, nextAction, isEmployee } from "@dingze/shared";
 
-import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
+import { LockedStepBadge, StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
 import { type FlowStep, flowSteps } from "@/lib/dingze/flow";
 import type { ArtifactOverview } from "@/lib/dingze/api";
@@ -18,16 +17,6 @@ import { cn } from "@/lib/utils";
 import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
 import { ImportDialog } from "./components/import-dialog";
 import { useProjectContext } from "./project-context";
-
-const TONE_STYLES = {
-  act: "bg-status-confirm text-status-confirm-foreground",
-  wait: "bg-status-review text-status-review-foreground",
-  warn: "bg-status-stale text-status-stale-foreground",
-  done: "bg-status-done text-status-done-foreground",
-  neutral: "bg-muted text-muted-foreground",
-} as const;
-
-const TONE_LABELS = { act: "要你处理", wait: "在等别人", warn: "需核对", done: "已定版", neutral: "" } as const;
 
 export default function ProjectOverviewPage() {
   const { project, overview } = useProjectContext();
@@ -44,16 +33,24 @@ export default function ProjectOverviewPage() {
   const flow = flowSteps({
     stages,
     materialsReady: startup.find((i) => i.key === "materials")?.state === "done",
-    materialCount: materials.data?.length ?? 0,
     started: artifacts.some((a) => a.status !== "not_started"),
   });
-  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role !== "readonly";
+  // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
+  const employee = isEmployee(role) && !overview.isConsultAdmin;
+  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
+  // 企业管理员（定稿方案三）：成员还没到位时第一张卡是“邀请成员”，然后才是“上传资料”；两张卡到位后自动退后。
+  const inviteFirst = role === "ent_lead" && !materials.isLoading && startup.find((i) => i.key === "team")?.state !== "done";
+  // 一页只有一个实心主按钮：第一张卡实心，其余灰底。
+  const primaryIndex = inviteFirst ? 0 : materialsFirst ? 1 : 2;
+  const cardClass = (index: number, quiet = false) =>
+    cn("flex flex-wrap items-center gap-3 rounded-xl px-5 py-4", index === primaryIndex && !quiet ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-foreground hover:bg-muted/80");
   // 首次进项目弹操作指引（本机记住）。只给企业侧的新项目：还没开始填表、不是咨询方。
   const [guideSeen, setGuideSeen] = useFirstRunGuide();
   const [guideOpen, setGuideOpen] = useState(false);
   const freshProject = !artifacts.some((a) => a.status !== "not_started");
   useEffect(() => {
-    if (!guideSeen && !consulting && freshProject && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    // 普通员工多半是中途加入的，项目不新也给看一次三步指引。
+    if (!guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
     // 只在首次加载完判断一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [materials.isLoading, profile.isLoading]);
@@ -63,11 +60,6 @@ export default function ProjectOverviewPage() {
   };
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
   const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
-  // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
-  const moving = steps
-    .filter((a) => a.code !== next.code && getArtifactDef(a.code).priority !== "method")
-    .map((a) => ({ a, status: collaborationStatus(a, role, service) }))
-    .filter((x): x is { a: (typeof steps)[number]; status: NonNullable<ReturnType<typeof collaborationStatus>> } => !!x.status && x.status.tone !== "done");
 
   // 从已有项目带入：企业项目负责人手动触发（咨询管理员可代为操作）；新建项目后带 ?import=1 直接打开。
   const canImport = role === "ent_lead" || overview.isConsultAdmin;
@@ -81,21 +73,12 @@ export default function ProjectOverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
-      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={`/projects/${project.id}/materials`} />
+      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-muted-foreground">
-          {project.year} 年度{consulting ? ` · ${project.scene === "camp" ? "训练营" : "企业内训"}` : ""}
-          {service === "self" ? " · 自助（数字咨询师陪你做，复核由企业项目负责人对照书中门禁自查）" : ""} · 往哪打 · 怎么走 · 谁负责
-        </p>
-        <h1 className="font-heading text-3xl font-bold text-brand">总览</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          按 1 → 5 往下走。先做蓝色按钮上的那件事。
-          <button type="button" onClick={() => setGuideOpen(true)} className="ml-2 text-primary hover:underline">
-            看操作指引
-          </button>
-        </p>
-      </div>
+        <h1 className="min-w-0 flex-1 font-heading text-2xl font-bold text-brand">总览</h1>
+        <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
+          看操作指引
+        </Button>
         {canImport ? (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
             <Import /> 从已有项目带入
@@ -106,78 +89,46 @@ export default function ProjectOverviewPage() {
       <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} />
 
       <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
-        {materialsFirst ? (
-          <Link
-            to={`/projects/${project.id}/materials`}
-            className="flex flex-wrap items-center gap-3 rounded-xl bg-primary px-5 py-4 text-primary-foreground hover:bg-primary/90"
-          >
+        {inviteFirst ? (
+          <Link to="/enterprise?tab=invites" className={cardClass(0)}>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs opacity-80">第 1 步</span>
-              <span className="block text-lg font-bold">上传资料</span>
-              <span className="block text-sm opacity-85">传企业简介、组织架构、上年经营复盘，数字咨询师据此整理企业画像。也可以先跳过，直接去战略解码。</span>
+              <span className="block text-xs opacity-80">先做</span>
+              <span className="block text-lg font-bold">邀请成员</span>
             </span>
             <ArrowRight className="size-5 shrink-0" />
           </Link>
         ) : null}
-        <Link
-          to={nextActionPath(project.id, next)}
-          className={cn(
-            "flex flex-wrap items-center gap-3 rounded-xl px-5 py-4",
-            next.kind === "waiting" || next.kind === "view" || materialsFirst ? "bg-muted text-foreground hover:bg-muted/80" : "bg-primary text-primary-foreground hover:bg-primary/90"
-          )}
-        >
+        {materialsFirst ? (
+          <Link to={`/projects/${project.id}/materials`} className={cardClass(1)}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs opacity-80">{inviteFirst ? "然后" : "先做"}</span>
+              <span className="block text-lg font-bold">上传资料</span>
+            </span>
+            <ArrowRight className="size-5 shrink-0" />
+          </Link>
+        ) : null}
+        <Link to={nextActionPath(project.id, next)} className={cardClass(2, next.kind === "waiting" || next.kind === "view")}>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : materialsFirst ? "或者直接开始" : "下一步"}</span>
+            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : inviteFirst || materialsFirst ? "或者直接开始" : "下一步"}</span>
             <span className="block text-lg font-bold">{next.label}</span>
-            <span className="block text-sm opacity-85">{next.hint}</span>
           </span>
           <ArrowRight className="size-5 shrink-0" />
         </Link>
-        {moving.length ? (
-          <ul className="flex flex-col gap-1.5" aria-label="其他在流转的表">
-            {moving.map(({ a, status }) => {
-              const def = getArtifactDef(a.code);
-              return (
-                <li key={a.code}>
-                  <Link to={workspacePath(project.id, a.code)} className="flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 hover:border-primary">
-                    <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-xs font-bold", TONE_STYLES[status.tone])}>{TONE_LABELS[status.tone]}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">
-                        {def.plain} <span className="text-xs font-normal text-muted-foreground">{def.specId}</span>
-                      </span>
-                      <span className="block text-xs text-muted-foreground">{status.text}</span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-primary" />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-            <CircleCheck className="size-4 text-status-done-foreground" /> 除了上面这一步，没有别的事在等你或在等别人。
-          </p>
-        )}
       </section>
 
-      <StartupCard projectId={project.id} />
+      {employee ? null : <StartupCard projectId={project.id} />}
 
       <section aria-label="三阶段进度" className="grid gap-4 lg:grid-cols-3">
         {stages.map((stage) => (
           <Card key={stage.stage} className={cn(stage.open && !stage.complete && "border-primary ring-3 ring-accent")}>
             <CardHeader className="gap-2">
+              {/* 走查第二批：阶段进度只留一种表达（已定版 n / 总数），不再并排进度条和状态词。 */}
               <div className="flex items-baseline gap-2">
                 <CardTitle className="text-lg text-brand">{STAGES.find((s) => s.key === stage.stage)?.flow}</CardTitle>
-                <span className="text-xs text-muted-foreground">{stage.name} · {stage.goal}</span>
-                <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                  {stage.complete ? "已完成" : stage.open ? "进行中" : "待解锁"}
+                <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">
+                  已定版 {stage.locked} / {stage.gateTotal}
                 </span>
               </div>
-              <Progress value={(stage.locked / stage.gateTotal) * 100} aria-label={`${stage.name}定版进度`} />
-              <p className="text-xs text-muted-foreground">
-                必做表已定版 {stage.locked} / {stage.gateTotal}
-                {stage.open ? "" : " · 上一步全部定版后开启"}
-              </p>
             </CardHeader>
             <CardContent>
               <ul className="flex flex-col gap-1">
@@ -198,11 +149,7 @@ export default function ProjectOverviewPage() {
                             {def.priority === "P1" ? " · 可选" : ""}
                           </span>
                         </span>
-                        {a?.unlock.unlocked ? (
-                          <StatusBadge status={status} stale={a.stale} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">待解锁</span>
-                        )}
+                        {a?.unlock.unlocked ? <StatusBadge status={status} stale={a.stale} /> : <LockedStepBadge />}
                       </Link>
                     </li>
                   );
@@ -213,9 +160,6 @@ export default function ProjectOverviewPage() {
         ))}
       </section>
 
-      <p className="text-sm text-muted-foreground">
-        遇到方法流程解决不了的关键分歧？<Link to={`/projects/${project.id}/expert`} className="text-primary hover:underline">申请专家咨询 →</Link>
-      </p>
     </div>
   );
 }
@@ -241,7 +185,7 @@ function StartupCard({ projectId }: { projectId: number }) {
   if (done === items.length) {
     return (
       <p className="flex items-center gap-2 rounded-xl border bg-card px-4 py-2.5 text-sm text-muted-foreground">
-        <CircleCheck className="size-4 text-status-done-foreground" /> 项目启动已就绪：{items.map((i) => `${i.title}（${i.detail}）`).join("；")}
+        <CircleCheck className="size-4 text-status-done-foreground" /> 项目启动已就绪：{items.map((i) => i.title).join("、")}
       </p>
     );
   }
@@ -270,7 +214,6 @@ function StartupCard({ projectId }: { projectId: number }) {
                 )}
                 {item.title}
               </div>
-              <div className="text-xs text-muted-foreground">{item.detail}</div>
               {item.problems.length ? (
                 <ul className="flex list-disc flex-col gap-0.5 pl-4 text-xs">
                   {item.problems.map((p) => (
@@ -278,11 +221,6 @@ function StartupCard({ projectId }: { projectId: number }) {
                   ))}
                 </ul>
               ) : null}
-              {item.notes.map((n) => (
-                <p key={n} className="text-xs text-muted-foreground">
-                  {n}
-                </p>
-              ))}
               {link && item.state !== "done" ? (
                 <Link to={link.href(projectId)} className="mt-auto text-xs font-medium text-primary hover:underline">
                   {link.label} →
@@ -335,8 +273,6 @@ function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: 
               {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
               {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
             </span>
-            <span className="text-xs text-muted-foreground">{step.hint}</span>
-            <span className="mt-auto text-xs">{step.detail}</span>
           </Link>
         </li>
       ))}

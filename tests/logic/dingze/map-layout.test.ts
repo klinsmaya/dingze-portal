@@ -51,4 +51,29 @@ describe("map link lines", () => {
     expect(lines.find((l) => l.id === "l3")).toMatchObject({ x1: 100, x2: 120 });
     expect(lines.some((l) => l.id === "l4")).toBe(false);
   });
+
+  it("puts arrow ends on the ellipse when objectives are drawn as ellipses", () => {
+    const byId = new Map([
+      ["top", { x: 100, y: 0, w: 200, h: 60 }],
+      ["a", { x: 0, y: 120, w: 100, h: 60 }],
+      ["b", { x: 300, y: 120, w: 100, h: 60 }],
+    ]);
+    const lines = linkLines(
+      [
+        { id: "l1", from: "a", to: "top", kind: "cause" },
+        { id: "l2", from: "b", to: "top", kind: "cause" },
+        { id: "l3", from: "a", to: "b", kind: "synergy" },
+      ],
+      byId,
+      "ellipse"
+    );
+    const l1 = lines.find((l) => l.id === "l1")!;
+    // Leaves the top of "a" at its centre, so exactly on the ellipse apex.
+    expect(l1).toMatchObject({ x1: 50, y1: 120 });
+    // Arrives a third of the way along "top": inside its bounding box, on the ellipse.
+    expect(l1.x2).toBeCloseTo(100 + 200 / 3);
+    expect(l1.y2).toBeCloseTo(30 + 30 * Math.sqrt(1 - 1 / 9));
+    expect(l1.y2).toBeLessThan(60);
+    expect(lines.find((l) => l.id === "l3")).toMatchObject({ x1: 100, y1: 150, x2: 300, y2: 150 });
+  });
 });

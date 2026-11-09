@@ -69,5 +69,6 @@ describe("strategy diagrams", () => {
     for (const text of ["财务", "客户", "内部流程", "学习与成长", "营收 10 亿", "居民客户", "横向协同"]) expect(d.svg).toContain(text);
     expect(d.svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(2); // one link + the legend
     expect(d.svg).toContain('stroke-dasharray="6 4"');
+    expect(d.svg.match(/<ellipse /g)).toHaveLength(3); // objectives are ovals (图 2-8)
   });
 });

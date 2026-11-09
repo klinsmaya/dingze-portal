@@ -8,6 +8,7 @@ import { ARTIFACTS, STAGES, STATUS_LABELS, type ScorecardSet, cardWeight, getArt
 import { StatusBadge } from "@/components/dingze/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -82,14 +83,19 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
 
   return (
     <div className={embedded ? "flex flex-col gap-6" : "mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6"}>
-      {embedded ? null : (
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>
-          <Link to={`/projects/${project.id}/results`} className="ml-auto text-sm text-primary hover:underline">
-            全部表的版本与修改记录 →
-          </Link>
+      {part && part !== "deliver" ? null : <div className="flex flex-wrap items-end gap-3">
+        <div>
+          {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>}
+          <p className="mt-1 text-sm text-muted-foreground">
+            最终交付是年度经营计划书（Word）。没定版的内容导出时会标“草稿”，避免被当作定版件流转。
+          </p>
         </div>
-      )}
+        {embedded ? null : (
+          <Link to={`/projects/${project.id}/results`} className="ml-auto text-sm text-primary hover:underline">
+            查看全部表的版本与修改记录 →
+          </Link>
+        )}
+      </div>}
 
       {bundle.error ? (
         <Alert variant="destructive">
@@ -110,7 +116,10 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                   <FileText className={cn("size-9 shrink-0", code === "S3-07" ? "text-primary" : "text-muted-foreground")} />
                   <div className="min-w-56 flex-1">
                     <div className={cn("font-heading font-bold text-brand", code === "S3-07" ? "text-xl" : "text-base")}>{def.plain}</div>
-                    <div className="text-xs text-muted-foreground">{a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}`) : "还没有开始写"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {def.specId} · {def.name} ·{" "}
+                      {a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}（未定版）`) : "还没有开始写"}
+                    </div>
                     {a?.payload && a.stale ? (
                       <div className="mt-1 text-xs font-medium text-[color:var(--dz-warn)]">
                         上游已变更（{a.staleReason || "引用的表有新版本"}）。{a.locked ? `下载的仍是定版 v${a.rev} 批准时的内容；新方案要重开计划书、重新定版后再出新版本。` : "导出前请先核对并保存。"}
@@ -140,13 +149,10 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
             })}
           </section> : null}
 
-          {show("tables") ? <details className="group rounded-xl border bg-card" open={part === "tables" ? true : undefined}>
-            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-              其他表格与图片
-            </summary>
-          <section aria-labelledby="deliverables" className="flex flex-col gap-3 border-t p-4">
-            <h2 id="deliverables" className="sr-only">
-              其他表格
+          {/* 走查第二批：这个页签本身就是单表导出，不再套一个收不起来的折叠区。 */}
+          {show("tables") ? <section aria-labelledby="deliverables" className="flex flex-col gap-3">
+            <h2 id="deliverables" className="text-sm font-semibold">
+              单表与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG，按需导出；整套方案书在「交付成果」</span>
             </h2>
             {STAGES.map((stage) => {
               const items = deliverables.filter((d) => d.stage === stage.key);
@@ -215,16 +221,15 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                 </div>
               );
             })}
-            {deliverables.length === 0 ? <p className="text-sm text-muted-foreground">还没有可以导出的成果。</p> : null}
-          </section>
-          </details> : null}
+            {deliverables.length === 0 ? <EmptyState text="还没有可以导出的成果：表定版或保存过草稿后出现在这里。" /> : null}
+          </section> : null}
 
           {show("deliver") ? <section aria-labelledby="scorecards" className="flex flex-col gap-3">
             <h2 id="scorecards" className="font-heading text-lg font-bold text-brand">
               各部门绩效计分卡
             </h2>
             {cards.length === 0 ? (
-              <p className="text-sm text-muted-foreground">《绩效计分卡》还没有内容。</p>
+              <EmptyState text="《绩效计分卡》还没有内容。" />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {cards.map((card) => (
@@ -237,7 +242,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                           {scorecards?.locked ? ` · 定版 v${scorecards.rev}` : " · 草稿"}
                         </CardDescription>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => exportCard(card.deptId)}>
+                      <Button variant="ghost" size="sm" onClick={() => exportCard(card.deptId)}>
                         <FileSpreadsheet /> Excel
                       </Button>
                     </CardHeader>
@@ -274,7 +279,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
               导出记录
             </h2>
             {(bundle.data?.exports ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">还没有导出过。</p>
+              <EmptyState text="还没有导出过。每次下载计划书、Excel 或图片都会记在这里。" />
             ) : (
               <div className="overflow-x-auto rounded-xl border bg-card">
                 <table className="w-full min-w-[720px] text-sm">

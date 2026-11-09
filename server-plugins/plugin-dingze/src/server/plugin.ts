@@ -27,7 +27,7 @@ import { campAccounts, campAttach, campClose, campDetail, campEnroll, campInvite
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
-import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listMaterials, saveProfile, searchMaterials } from './services/materials';
+import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listAttachments, listMaterials, saveProfile, searchMaterials, setMaterialLibrary } from './services/materials';
 import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
 import { planBookSources } from './services/plan-book-sources';
@@ -204,6 +204,14 @@ export class PluginDingzeServer extends Plugin {
           return resolveComment(ctx, pc, v);
         }),
         listMaterials: action(async (ctx) => listMaterials(ctx, await loadProjectContext(ctx, ctx.action.params.projectId))),
+        listAttachments: action(async (ctx) => {
+          const p = ctx.action.params;
+          return listAttachments(ctx, await loadProjectContext(ctx, p.projectId), p.code);
+        }),
+        setMaterialLibrary: action(async (ctx) => {
+          const v = values(ctx);
+          return setMaterialLibrary(ctx, await loadProjectContext(ctx, v.projectId), v.id, v.inLibrary);
+        }),
         getMaterial: action(async (ctx) => {
           const p = ctx.action.params;
           return getMaterial(ctx, await loadProjectContext(ctx, p.projectId), p.id, p.offset);

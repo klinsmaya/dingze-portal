@@ -5,12 +5,28 @@ import type { ProfileItem } from "@dingze/shared";
 
 import { type ProjectSummary, spaceHeaders } from "./api";
 
-export type MaterialSummary = { id: number; title: string; kind: "file" | "note"; fileName: string; size: number; chars: number; hasFile: boolean; at: string; by: string; byId: number };
+export type MaterialSummary = {
+  id: number;
+  title: string;
+  kind: "file" | "note" | "attachment";
+  /** 表下附件挂的那张表。 */
+  artifactCode?: string | null;
+  /** 附件是否已加入资料库（资料库的资料恒为 true）。 */
+  inLibrary?: boolean;
+  fileName: string;
+  size: number;
+  chars: number;
+  hasFile: boolean;
+  at: string;
+  by: string;
+  byId: number;
+};
 export type MaterialDetail = { id: number; title: string; fileName: string; hasFile: boolean; chars: number; offset: number; text: string };
 export type ProfileRecord = { items: ProfileItem[]; rev: number; updatedAt: string | null; updatedBy: string };
 
 const keys = {
   materials: (projectId: number) => ["dingze", "materials", projectId] as const,
+  attachments: (projectId: number, code = "") => ["dingze", "attachments", projectId, code] as const,
   material: (projectId: number, id: number) => ["dingze", "material", projectId, id] as const,
   profile: (projectId: number) => ["dingze", "profile", projectId] as const,
 };
@@ -55,12 +71,21 @@ export function useMaterial(project: ProjectSummary, id: number | null) {
   return useQuery({ queryKey: keys.material(project.id, id ?? 0), queryFn: () => readMaterial(project, id!), enabled: !!id });
 }
 
+/** 某张表下的附件（填表时上传的，不在资料库里）。 */
+/** 一张表的附件；不传表号就是整个项目的附件（资料页“成员上传的材料”）。 */
+export function useAttachments(project: ProjectSummary, code?: string) {
+  return useQuery({ queryKey: keys.attachments(project.id, code ?? ""), queryFn: () => get<MaterialSummary[]>(project, "listAttachments", code ? { code } : {}) });
+}
+
 export function useAddMaterial(project: ProjectSummary) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (values: { title: string; kind: "file" | "note"; fileName?: string; size?: number; text: string; fileId?: number }) =>
+    mutationFn: (values: { title: string; kind: "file" | "note" | "attachment"; artifactCode?: string; fileName?: string; size?: number; text: string; fileId?: number }) =>
       post<{ id: number; truncated: boolean; searchable: boolean }>(project, "addMaterial", values),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.materials(project.id) }),
+    onSuccess: (_, values) => {
+      client.invalidateQueries({ queryKey: keys.materials(project.id) });
+      if (values.artifactCode) client.invalidateQueries({ queryKey: keys.attachments(project.id, values.artifactCode) });
+    },
   });
 }
 
@@ -68,7 +93,22 @@ export function useDeleteMaterial(project: ProjectSummary) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => post(project, "deleteMaterial", { id }),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.materials(project.id) }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: keys.materials(project.id) });
+      client.invalidateQueries({ queryKey: ["dingze", "attachments", project.id] });
+    },
+  });
+}
+
+/** 企业管理员把表下附件加入（或移出）资料库。 */
+export function useSetMaterialLibrary(project: ProjectSummary) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: number; inLibrary: boolean }) => post<MaterialSummary>(project, "setMaterialLibrary", input),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: keys.materials(project.id) });
+      client.invalidateQueries({ queryKey: ["dingze", "attachments", project.id] });
+    },
   });
 }
 

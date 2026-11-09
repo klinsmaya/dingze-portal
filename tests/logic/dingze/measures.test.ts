@@ -135,7 +135,7 @@ describe("KPI screening (S1-05) and strategy KPIs (S1-06)", () => {
   });
 
   it("requires definition, source and period for each strategy KPI", () => {
-    expect(errors(validateStrategyKpis({ kpis: [emptyKpi("售气量")] }))).toEqual([expect.stringContaining("口径、数据来源、统计周期")]);
+    expect(errors(validateStrategyKpis({ kpis: [emptyKpi("售气量")] }))).toEqual([expect.stringContaining("口径、数据来源、考核周期")]);
   });
 });
 

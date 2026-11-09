@@ -2,6 +2,12 @@
 
 This repository is a starter for building a NocoBase-powered application. Keep changes focused on the application being built and follow these guidelines before introducing new abstractions.
 
+## Design principles
+
+1. I want this to be as perfect as Linear's website or Apple Notes: simple purpose, simple architecture, simple design, simple implementation
+2. Cut taglines, helper text and secondary labels. Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining. If a screen needs them to make sense, fix the layout
+3. Every decision should elevate the user experience (UX), developer experience (DX) and agent experience (AX) at once, without breaking anything
+
 ## Reuse existing extensions
 
 When the active milestone requires application source changes, search `registry` in the Registry source repository or `src/extensions` in a published template for similar pages, hooks, components, and integration patterns before writing that source. Inspect the closest matching implementation and only the direct dependencies needed to understand its contract. Expand the search when a specific unanswered question blocks implementation; do not recursively read Registry or extension directories to build a complete inventory. Reuse an existing implementation directly when it already fits the requirement, and extend or compose it when only a small adaptation is needed.

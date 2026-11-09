@@ -1,7 +1,9 @@
-import { ArrowRight, Eye, History, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, History, Lock, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
+
+import { useConfirm } from "@/components/dingze/confirm";
 import { useGetIdentity } from "@refinedev/core";
 import { toast } from "sonner";
 
@@ -14,6 +16,11 @@ import {
   isArtifactCode,
   validateArtifact,
   ARTIFACTS,
+  type ArtifactDef,
+  isEmployee,
+  isStageOpen,
+  previousStage,
+  stageGateCodes,
   profileBrief,
   canPerform,
   staleAdvice,
@@ -31,6 +38,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { nextStep, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import type { ArtifactOverview } from "@/lib/dingze/api";
 import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
@@ -53,8 +61,10 @@ import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { samePayload } from "@/lib/dingze/stable-json";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
+import { importantToast } from "@/lib/dingze/toasts";
 
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
+import { Attachments } from "./components/attachments";
 import { CoachPanel, askCoach } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
 import { CharterDocxButton } from "./components/charter-export";
@@ -62,7 +72,7 @@ import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { RouteRail } from "./components/route-rail";
 import { HowToSlotContext } from "./editors/kit";
-import { ExportMenu, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
+import { ExportDialog, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, hasToolbar, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
 import { ImpactDialog } from "./components/impact-list";
@@ -89,6 +99,18 @@ const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: []
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
 const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
+/** 停笔多久后自动保存。 */
+const AUTOSAVE_MS = 2500;
+
+/** 挡住这张表的表：同阶段看 unlockAfter；阶段还没开时看上一阶段没定版的必做表，都给“去做”链接。 */
+function blockingCodes(def: ArtifactDef, artifacts: ArtifactOverview[]): string[] {
+  const states = Object.fromEntries(artifacts.map((a) => [a.code, { status: a.status, exception: a.exception }]));
+  if (!isStageOpen(def.stage, states)) {
+    const prev = previousStage(def.stage);
+    return prev ? stageGateCodes(prev).filter((c) => !["locked", "archived"].includes(states[c]?.status ?? "")) : [];
+  }
+  return def.unlockAfter.filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(states[c]?.status ?? ""));
+}
 
 export default function WorkspacePage() {
   const { project, overview } = useProjectContext();
@@ -221,9 +243,11 @@ function Workspace({ code }: { code: string }) {
   const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
   const [upstreamOpen, setUpstreamOpen] = useState(false);
   const [impactOpen, setImpactOpen] = useState(false);
-  // 编辑器的“怎么填”放进工具栏右侧（2026-10-16）。
+  // 编辑器的“怎么填”放进右栏“书中方法”顶部，页面上只留一个入口。
   const [howToSlot, setHowToSlot] = useState<HTMLElement | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const { confirm, prompt } = useConfirm();
   // Opens the right panel on a tab; set once the panel preference is known (below).
   const openAside = useRef<(tab: AsideTab) => void>(setAsideTab);
   const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
@@ -241,7 +265,9 @@ function Workspace({ code }: { code: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverRev, detail.dataUpdatedAt]);
 
-  // Unsaved edits: warn on reload and on in-app links (step bar, project tabs, notifications).
+  // Unsaved edits: warn on reload and on in-app links (step bar, project tabs, notifications). The in-app
+  // question is our own dialog; once answered, the same link is clicked again and let through.
+  const leaveAllowed = useRef(false);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -250,10 +276,17 @@ function Workspace({ code }: { code: string }) {
       if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
       const to = new URL(link.href, window.location.href);
       if (to.origin !== window.location.origin || to.pathname === window.location.pathname) return;
-      if (!window.confirm("这张表有未保存的修改，离开后会丢失。确定离开？")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+      if (leaveAllowed.current) {
+        leaveAllowed.current = false;
+        return;
       }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      confirm({ title: "离开这张表？", description: "有未保存的修改，离开后会丢失。", confirmLabel: "不保存，离开", destructive: true }).then((ok) => {
+        if (!ok || !link.isConnected) return;
+        leaveAllowed.current = true;
+        link.click();
+      });
     };
     window.addEventListener("beforeunload", warn);
     document.addEventListener("click", guard, true);
@@ -261,7 +294,7 @@ function Workspace({ code }: { code: string }) {
       window.removeEventListener("beforeunload", warn);
       document.removeEventListener("click", guard, true);
     };
-  }, [dirty]);
+  }, [dirty, confirm]);
 
   const issues = useMemo(
     () => (draft ? validateArtifact(code, draft, upstream) : []),
@@ -294,14 +327,16 @@ function Workspace({ code }: { code: string }) {
     (status === "in_review" && !consultantInReview);
 
   const addComment = useAddComment(project, code);
-  const onSave = () => {
+  // 保存方式（产品走查拍板 1）：自动保存，停笔 2.5 秒后写一版；Ctrl / ⌘ + S 立刻保存。
+  // 自动保存不弹提示，只改标题旁的状态字；手动保存才弹。
+  const onSave = (manual = true) => {
     const log = edit.log;
     savingLog.current = log;
     save.mutate(
       { payload: draft, baseRev, changes: log.map(toSaved), aiSuggested: log.some((c) => c.via === "chat") || undefined },
       {
         onSuccess: (result) => {
-          toast.success(`已保存 v${result.rev}`);
+          if (manual) toast.success(`已保存 v${result.rev}`);
           // Edits made 按批注 answer their comment thread.
           const byComment = new Map<number, string[]>();
           for (const c of log) if (c.commentId) byComment.set(c.commentId, [...(byComment.get(c.commentId) ?? []), c.label]);
@@ -317,6 +352,7 @@ function Workspace({ code }: { code: string }) {
   const canSave = !readOnly && EDITABLE_CODES.has(code);
   const saveShortcut = useRef(onSave);
   saveShortcut.current = onSave;
+
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const lastAnchor = useRef<string | null>(null);
   const materialsQuery = useMaterials(project);
@@ -383,6 +419,13 @@ function Workspace({ code }: { code: string }) {
   const [revision, setRevision] = useState<RevisionState>({ on: false, baseRev: null, basePayload: undefined, baseLabel: "" });
   const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
   const [previewDraft, setPreviewDraft] = useState<EditSession["previewDraft"]>(null);
+  // 自动保存：有未保存的改动、没有在保存、没有在预览修改建议或看旧版本、本地基于的就是服务端最新版。
+  const autosaveOk = canSave && dirty && !save.isPending && !previewDraft && !viewRev && serverRev === baseRev;
+  useEffect(() => {
+    if (!autosaveOk) return;
+    const timer = window.setTimeout(() => saveShortcut.current(false), AUTOSAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [autosaveOk, draft]);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   // 就地批注 (design 10 画面 5): the composer at the cell / node, its draft listed in the 批注 tab.
@@ -532,9 +575,9 @@ function Workspace({ code }: { code: string }) {
     if (!removed.length) return;
     toasted.current = last.id;
     const no = last.commentId ? numberOf(last.commentId) : null;
-    toast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+    importantToast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+      icon: <Trash2 className="size-4" />,
       description: no ? `按批注 ${circled(no)} · 8 秒内可撤销，之后在“修改”里撤销` : "8 秒内可撤销，之后在“修改”里撤销",
-      duration: 8000,
       action: { label: "撤销 Ctrl+Z", onClick: () => undoCommand(last) },
     });
   }, [edit.log, undoCommand, numberOf]);
@@ -708,6 +751,8 @@ function Workspace({ code }: { code: string }) {
   }, [highlightComment, narrowPanel]);
   const chrome = chromeRef.current;
   const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
+  // 普通员工（含这一轮的部门负责人）：只填表和保存，流转按钮不渲染；右栏不放“修改”记录。
+  const employee = isEmployee(role) && !overview.isConsultAdmin;
   const base = `/projects/${project.id}`;
   // 三阶段条与本阶段进度（参考稿左栏）：入口取每阶段第一张表，进度与待办页同口径（必做表定版数）。
   const stageLinks = stageProgress(overview.artifacts).map((st) => {
@@ -742,8 +787,8 @@ function Workspace({ code }: { code: string }) {
           size="sm"
           variant="outline"
           disabled={dismissOrg.isPending}
-          onClick={() => {
-            const note = window.prompt("说明一下为什么不需要重开（会记在审计里，可留空）：", "组织变更不影响这张表已定版的内容");
+          onClick={async () => {
+            const note = await prompt({ title: "不需要重开", description: "说明一下原因，会记在审计里，可留空。", defaultValue: "组织变更不影响这张表已定版的内容", confirmLabel: "确认不需要重开" });
             if (note === null) return;
             dismissOrg.mutate(note, { onSuccess: () => toast.success("已确认不需要重开"), onError: (e) => toast.error(errorMessage(e)) });
           }}
@@ -792,29 +837,17 @@ function Workspace({ code }: { code: string }) {
     />
   );
   const bookOpen = panelOpen && asideTab === "book";
-  // 看示例：新标签页打开虚构企业瀚川燃气的同一张表，对照着填（只读）。
-  const sampleLink = hasSample(code) ? (
-    <Link
-      to={samplePath(code)}
-      target="_blank"
-      rel="noopener"
-      title="新窗口打开示例企业（瀚川燃气，虚构）的同一张表，对照着填"
-      className="mx-1 flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-    >
-      <Eye className="size-3.5" /> <span className="font-semibold">看示例</span>
-    </Link>
-  ) : null;
-  const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
+  const methodButton = <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} />;
   // 交出去以后的下一张：一个小链接放在状态行，不再占编辑区一整行（2026-10-16）。
   const handedOff = ["step_done", "in_review", "pending_confirm", "locked"].includes(status);
   const allP0Locked = ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked");
   const nextLink = !handedOff ? null : next ? (
     <Link
       to={workspacePath(project.id, next.code)}
-      className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted"
+      className="flex min-w-0 max-w-[16rem] items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted"
       title={`这一步${status === "locked" ? "已定版" : status === "step_done" ? "本步已完成" : "已交出去"}，可以接着做《${next.name}》`}
     >
-      下一张《{next.name}》 <ArrowRight className="size-3.5" />
+      <span className="truncate">下一张《{next.name}》</span> <ArrowRight className="size-3.5 shrink-0" />
     </Link>
   ) : allP0Locked ? (
     <Link to={`${base}/results`} className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted" title="全部 P0 成果都已定版">
@@ -824,14 +857,16 @@ function Workspace({ code }: { code: string }) {
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
-    : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Ctrl+Alt+M", "批注"]];
+    : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Alt+Shift+↑↓", "移动行"], ["Ctrl+Alt+M", "批注"]];
 
-  const tabs: [AsideTab, string, number][] = [
-    ["coach", "对话", 0],
-    ["comments", "批注", openThreads.length],
-    ["changes", "修改", edit.log.length],
-    ["book", "书中方法", 0],
-  ];
+  const tabs: [AsideTab, string, number][] = (
+    [
+      ["coach", "对话", 0],
+      ["comments", "批注", openThreads.length],
+      ["changes", "修改", edit.log.length],
+      ["book", "书中方法", 0],
+    ] as [AsideTab, string, number][]
+  ).filter(([key]) => !(employee && key === "changes"));
   // 右栏四个页签各管一件事（开营前 UX 改版 F12）。
   const TAB_DUTY: Record<AsideTab, string> = {
     coach: "有不懂的、要起草的都可以问；要改表时会给修改卡，你确认后才写入",
@@ -871,114 +906,46 @@ function Workspace({ code }: { code: string }) {
               rev={artifact?.currentRev ?? 0}
               unsaved={unsaved}
               saving={save.isPending}
-              canSave={canSave}
-              onSave={onSave}
             />
             <div className="py-1.5">
               <TitleRow
                 title={chrome?.title ?? def.name}
                 chip={chrome?.chip ?? `${def.specId} · ${def.bookRef}`}
+                locked={!detail.isLoading && !unlocked}
                 chrome={chrome}
-                revisionOn={revision.on}
-                canRevise={versions.length > 0}
-                onRevision={() => revisionToggle.current()}
-                openComments={openThreads.length}
-                onComments={() => {
-                  setPanelPref(true);
-                  setAsideTab("comments");
+                edit={canSave ? { canUndo: edit.log.length > 0 || edit.saved.length > 0, canRedo: edit.redo.length > 0, onUndo: undo, onRedo: redo } : null}
+                method={methodButton}
+                more={{
+                  revision: { on: revision.on, can: versions.length > 0, toggle: () => revisionToggle.current() },
+                  comments: {
+                    open: openThreads.length,
+                    onOpen: () => {
+                      setPanelPref(true);
+                      session.commentOn(chrome?.tools?.selected ?? focusAnchor ?? "");
+                    },
+                  },
+                  selecting,
+                  onLasso: () => {
+                    setPanelPref(true);
+                    session.setSelecting(!selecting);
+                  },
+                  onHistory: () => setHistoryOpen(true),
+                  onExport: () => setExportOpen(true),
+                  sample: hasSample(code) ? samplePath(code) : null,
+                  onShortcuts: () => setShortcutsOpen(true),
                 }}
-                history={
-                  <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} title="版本、定版轮次，查看任意一版">
-                    <History /> 历史
-                  </Button>
-                }
-                exportMenu={
-                  <ExportMenu>
-                    <ExportButton
-                      code={code}
-                      name={def.name}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.shortName ?? "企业"}
-                      projectName={project.name}
-                      upstream={upstream}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <CharterDocxButton
-                      code={code}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.name ?? "企业"}
-                      projectName={project.name}
-                      year={project.year}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <DiagramExportButton
-                      code={code}
-                      name={def.name}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.shortName ?? "企业"}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <PlanBookExportButton
-                      code={code}
-                      project={project}
-                      rev={artifact?.currentRev ?? 0}
-                      enterprise={project.enterprise?.name ?? "企业"}
-                      year={project.year}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                  </ExportMenu>
-                }
                 actions={
-                  detail.data ? (
+                  detail.data && !employee ? (
                     <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} openComments={openThreads.length} />
                   ) : null
                 }
               />
             </div>
-            {EDITABLE_CODES.has(code) && unlocked ? (
+            {EDITABLE_CODES.has(code) && unlocked && hasToolbar(chrome) ? (
               <div className="-mx-4 border-t px-3 md:-mx-5">
-                <StructureToolbar
-                  chrome={chrome}
-                  readOnly={!canSave}
-                  canUndo={edit.log.length > 0 || edit.saved.length > 0}
-                  canRedo={edit.redo.length > 0}
-                  onUndo={undo}
-                  onRedo={redo}
-                  onComment={() => {
-                    setPanelPref(true);
-                    session.commentOn(chrome?.tools?.selected ?? focusAnchor ?? "");
-                  }}
-                  selecting={selecting}
-                  onLasso={() => {
-                    setPanelPref(true);
-                    session.setSelecting(!selecting);
-                  }}
-                  onShortcuts={() => setShortcutsOpen(true)}
-                  method={<>{sampleLink}{methodButton}</>}
-                  setHowToSlot={setHowToSlot}
-                />
+                <StructureToolbar chrome={chrome} readOnly={!canSave} />
               </div>
-            ) : (
-              <div className="-mx-4 flex min-h-10 items-center justify-end gap-1 border-t px-3 md:-mx-5">
-                {sampleLink}
-                {methodButton}
-                <span ref={setHowToSlot} className="contents" />
-              </div>
-            )}
+            ) : null}
           </div>
 
           <main
@@ -1113,8 +1080,7 @@ function Workspace({ code }: { code: string }) {
                 <AlertDescription className="flex flex-col gap-1">
                   <span>{detail.data?.unlock.waitingFor}</span>
                   <span className="flex flex-wrap gap-x-3">
-                    {def.unlockAfter
-                      .filter((c) => !["step_done", "in_review", "pending_confirm", "locked"].includes(overview.artifacts.find((a) => a.code === c)?.status ?? ""))
+                    {blockingCodes(def, overview.artifacts)
                       .map((c) => (
                         <Link key={c} to={workspacePath(project.id, c)} className="inline-flex items-center gap-1 font-medium text-brand underline">
                           去做 {getArtifactDef(c).specId} 《{getArtifactDef(c).name}》 <ArrowRight className="size-3.5" />
@@ -1217,6 +1183,7 @@ function Workspace({ code }: { code: string }) {
                     }
                   />
                 ) : null}
+                {EDITABLE_CODES.has(code) ? <Attachments code={code} canUpload={canSave && !previewDraft && !viewRev} /> : null}
                 {detail.data && (status === "pending_confirm" || status === "locked" || detail.data.dissents.length > 0) ? (
                   <DissentList detail={detail.data} project={project} code={code} />
                 ) : null}
@@ -1243,11 +1210,57 @@ function Workspace({ code }: { code: string }) {
               selected={chrome?.tools?.selectedLabel ?? (focusAnchor ? nameOf(focusAnchor) : null)}
               hints={hints}
               onIssues={() => document.querySelector("[data-dingze-validation]")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              onShortcuts={() => setShortcutsOpen(true)}
-              onBook={() => openAside.current("book")}
             />
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)}>
+            <ExportButton
+              code={code}
+              name={def.name}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.shortName ?? "企业"}
+              projectName={project.name}
+              upstream={upstream}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <CharterDocxButton
+              code={code}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.name ?? "企业"}
+              projectName={project.name}
+              year={project.year}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <DiagramExportButton
+              code={code}
+              name={def.name}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.shortName ?? "企业"}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <PlanBookExportButton
+              code={code}
+              project={project}
+              rev={artifact?.currentRev ?? 0}
+              enterprise={project.enterprise?.name ?? "企业"}
+              year={project.year}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+          </ExportDialog>
           <MaterialViewer id={viewingMaterial} onClose={() => setViewingMaterial(null)} />
           <ArtifactHistorySheet project={project} code={historyOpen ? code : null} onClose={() => setHistoryOpen(false)} />
           <ImpactDialog
@@ -1300,7 +1313,6 @@ function Workspace({ code }: { code: string }) {
               </button>
             ))}
           </div>
-          <p className="shrink-0 border-b px-3 py-1 text-[11px] text-muted-foreground">{TAB_DUTY[asideTab]}</p>
           <div className={cn("flex min-h-0 flex-1 flex-col", asideTab !== "coach" && "hidden")}>
             <CoachPanel stage={def.stage} chatId={`dingze-${project.id}-${code}`} />
           </div>
@@ -1323,6 +1335,8 @@ function Workspace({ code }: { code: string }) {
             <ChangesPanel project={project} code={code} commentNo={numberOf} />
           </div>
           <div className={cn("min-h-0 flex-1 overflow-y-auto bg-book p-4 text-sm text-book-foreground", asideTab !== "book" && "hidden")}>
+            {methodLine ? <p className="font-semibold">{methodLine}</p> : null}
+            <div ref={setHowToSlot} className="mt-3 empty:hidden" />
             <BookMethod def={def} sub={Number(searchParams.get("sub")) || null} zone={searchParams.get("zone")} />
             {overview.isConsultAdmin || (!!role && CONSULTANT_ROLES.includes(role)) ? (
               <div className="mt-4 border-t border-book-border pt-3">

@@ -25,8 +25,14 @@ describe("表头流程按钮（开营前 UX 改版 F1–F5、F11）", () => {
     expect(flowLabel("returnToEdit", "pending_confirm", as("ent_lead"))).toBe("退回修改");
   });
 
-  it("greys out 确认定版 for everyone but the enterprise lead", () => {
-    expect(flowPlan("pending_confirm", as("lead_consultant"))).toMatchObject({ primary: null, blocked: "confirm" });
+  it("greys out 确认定版 for enterprise members who may not press it", () => {
     expect(flowPlan("pending_confirm", as("member"))).toMatchObject({ primary: null, blocked: "confirm", others: [] });
+  });
+
+  it("shows consultants a waiting note instead of a grey button, and nothing on a locked table", () => {
+    expect(flowPlan("pending_confirm", as("lead_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业项目负责人定版", others: ["returnToEdit"] });
+    expect(flowPlan("in_progress", as("co_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业填写并点“本步完成”" });
+    expect(flowPlan("locked", as("lead_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: null, others: [] });
+    expect(flowPlan("locked", as("ent_lead")).primary).toBe("reopen");
   });
 });

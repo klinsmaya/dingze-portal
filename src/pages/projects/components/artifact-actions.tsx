@@ -1,4 +1,6 @@
+import { Lock, LockOpen, Undo2 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ArtifactDetail, ProjectSummary } from "@/lib/dingze/api";
 import { errorMessage } from "@/lib/dingze/errors";
+import { importantToast } from "@/lib/dingze/toasts";
 import { useRecordDissent, useTransitionArtifact } from "@/lib/dingze/queries";
 
 import { confirmSummary } from "@/lib/dingze/confirm-summary";
@@ -85,6 +88,7 @@ type Props = {
 
 export function ArtifactActions({ project, code, title, detail, actor, dirty, blocking, warnings = [], openComments = 0 }: Props) {
   const { overview } = useProjectContext();
+  const navigate = useNavigate();
   const [selfReviewing, setSelfReviewing] = useState(false);
   const status = detail.artifact?.status ?? "not_started";
   const transition = useTransitionArtifact(project, code);
@@ -109,8 +113,27 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
       { action: spec.action, reason, answers },
       {
         onSuccess: (result) => {
-          toast.success(`${spec.label}：已完成`);
-          if (result.stale.length) toast.info(`已提示下游成果：${result.stale.join("、")}`);
+          // 定版、退回、解锁重开是要紧的动作：带图标和动作的长提示；其余一句话。
+          if (spec.action === "confirm") {
+            importantToast(`《${title}》已定版`, {
+              icon: <Lock className="size-4" />,
+              description: "已锁定，作为后面各表的依据；要改需企业项目负责人解锁重开。",
+              action: { label: "查看成果", onClick: () => navigate(`/projects/${project.id}/results?tab=list`) },
+            });
+          } else if (spec.action === "returnToEdit") {
+            importantToast(`《${title}》${spec.label}`, {
+              icon: <Undo2 className="size-4" />,
+              description: reason ? `原因：${reason}` : "这张表回到“进行中”，填表的人会收到通知。",
+            });
+          } else if (spec.action === "reopen") {
+            importantToast(`《${title}》已解锁重开`, {
+              icon: <LockOpen className="size-4" />,
+              description: result.stale.length ? `引用它的下游成果已标“上游已变更”：${result.stale.join("、")}` : "原定版版本保留；改完要重新复核、确认才能定版。",
+            });
+          } else {
+            toast.success(`${spec.label}：已完成`);
+            if (result.stale.length) toast.info(`已提示下游成果：${result.stale.join("、")}`);
+          }
           setReasonFor(null);
           setConfirming(false);
           setSelfReviewing(false);
@@ -144,7 +167,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         const reason = disabledReasonOf(spec);
         return (
           <span key={spec.action} title={reason ?? whoCan(spec.action, actor)}>
-            <Button variant="outline" size="sm" disabled={transition.isPending || !!reason} onClick={() => trigger(spec)}>
+            <Button variant="ghost" size="sm" disabled={transition.isPending || !!reason} onClick={() => trigger(spec)}>
               {spec.label}
             </Button>
           </span>
@@ -167,7 +190,6 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
           </Button>
         </span>
       ) : null}
-      {main === "confirm" ? <span className="hidden text-[11px] text-muted-foreground xl:inline">仅企业项目负责人可定版</span> : null}
 
       <FlowIntroDialog
         open={!!introFor}
