@@ -152,7 +152,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
           {/* 走查第二批：这个页签本身就是单表导出，不再套一个收不起来的折叠区。 */}
           {show("tables") ? <section aria-labelledby="deliverables" className="flex flex-col gap-3">
             <h2 id="deliverables" className="text-sm font-semibold">
-              单表与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG，按需导出；整套方案书在「交付成果」</span>
+              单表与图片
             </h2>
             {STAGES.map((stage) => {
               const items = deliverables.filter((d) => d.stage === stage.key);
