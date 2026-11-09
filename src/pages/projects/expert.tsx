@@ -134,7 +134,7 @@ export default function ProjectExpertPage() {
       ) : requests.isLoading ? (
         <Skeleton className="h-40 rounded-xl" />
       ) : !requests.data?.length ? (
-        <EmptyState className="bg-card" text="还没有咨询申请。" />
+        <EmptyState className="bg-card" text="还没有咨询申请" />
       ) : (
         <ExpertRequestTable rows={requests.data} showProject={false} />
       )}
