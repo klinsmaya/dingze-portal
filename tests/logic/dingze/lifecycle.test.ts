@@ -53,8 +53,11 @@ describe("artifact lifecycle", () => {
 
   it("refuses edits to a locked artifact until it is reopened with a reason", () => {
     expect(() => nextStatus("save", "locked", lead)).toThrow(/已定版/);
-    expect(() => nextStatus("reopen", "locked", consultant)).toThrow(/原因/);
-    expect(nextStatus("reopen", "locked", consultant, "质询后调整目标")).toBe("in_progress");
+    expect(() => nextStatus("reopen", "locked", lead)).toThrow(/原因/);
+    expect(nextStatus("reopen", "locked", lead, "质询后调整目标")).toBe("in_progress");
+    // 咨询师不定版也不重开（会议纪要 2026-11）；咨询管理员可以代为处理。
+    expect(() => nextStatus("reopen", "locked", consultant, "质询后调整目标")).toThrow(/当前角色/);
+    expect(nextStatus("reopen", "locked", admin, "现场统一重开")).toBe("in_progress");
   });
 
   it("invalidates earlier confirmation when the enterprise edits again", () => {

@@ -11,8 +11,10 @@ import {
   PROFILE_STATUS_LABELS,
   type ProfileCategory,
   type ProfileItem,
+  canManageLibrary,
   canSetProfileStatus,
   getArtifactDef,
+  isArtifactCode,
   profileItem,
 } from "@dingze/shared";
 
@@ -31,7 +33,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { type MaterialSummary, downloadOriginal, useAddMaterial, useDeleteMaterial, useMaterials, useProfile, useSaveProfile } from "@/lib/dingze/materials-api";
+import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useMaterials, useProfile, useSaveProfile, useSetMaterialLibrary } from "@/lib/dingze/materials-api";
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
 import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
@@ -202,6 +204,50 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
           )
         }
       />
+      <MaterialViewer id={viewing} onClose={() => setViewing(null)} />
+    </section>
+  );
+}
+
+/**
+ * 成员上传的材料（定稿方案三-2）：成员在填表时传的附件，默认不在资料库里；企业管理员 / 咨询师在这里
+ * 挑有用的「加入资料库」，加入后数字咨询师才检索得到。已加入的在上面的资料库列表里。
+ */
+function MemberUploads() {
+  const { project } = useProjectContext();
+  const list = useAttachments(project);
+  const setLibrary = useSetMaterialLibrary(project);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const items = (list.data ?? []).filter((m) => !m.inLibrary);
+  if (!items.length) return null;
+  return (
+    <section aria-labelledby="member-uploads" className="flex flex-col gap-2">
+      <h3 id="member-uploads" className="font-heading font-bold text-brand">
+        成员上传的材料 · {items.length}
+      </h3>
+      <ul className="overflow-hidden rounded-xl border bg-card">
+        {items.map((m) => (
+          <li key={m.id} className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm last:border-b-0">
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{m.title}</span>
+              <span className="block text-xs text-muted-foreground">
+                {[m.artifactCode && isArtifactCode(m.artifactCode) ? `《${getArtifactDef(m.artifactCode).plain}》` : "", m.by, formatTime(m.at)].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+            {m.hasFile ? (
+              <Button variant="ghost" size="sm" onClick={() => downloadOriginal(project, m).catch((e) => toast.error(errorMessage(e)))}>
+                <Download /> 原件
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" disabled={!m.chars} onClick={() => setViewing(m.id)}>
+              <Eye /> 文字
+            </Button>
+            <Button variant="outline" size="sm" disabled={setLibrary.isPending} onClick={() => setLibrary.mutate({ id: m.id, inLibrary: true }, { onError: (e) => toast.error(errorMessage(e)) })}>
+              加入资料库
+            </Button>
+          </li>
+        ))}
+      </ul>
       <MaterialViewer id={viewing} onClose={() => setViewing(null)} />
     </section>
   );
@@ -543,15 +589,19 @@ export default function MaterialsPage() {
           {tab === "org" ? <OrgSection canEditOrg={canEditOrg} onAI={() => askAI("org")} /> : null}
 
           {tab === "library" ? (
-            materials.isLoading ? <Skeleton className="h-32" /> : <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+            materials.isLoading ? (
+              <Skeleton className="h-32" />
+            ) : (
+              <>
+                <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+                {canManageLibrary(role, isAdmin) ? <MemberUploads /> : null}
+              </>
+            )
           ) : null}
           </div>
         </main>
         {/* 和填写页一样：对话内容滚动，输入框固定在底部。 */}
         <aside aria-label="数字咨询师" data-dingze-coach className="flex h-[80svh] w-full flex-col border-t bg-card lg:h-auto lg:min-h-0 lg:w-[400px] lg:shrink-0 lg:border-t-0 lg:border-l">
-          <p className="shrink-0 border-b px-3 py-2 text-[11px] text-muted-foreground">
-            先把资料传进资料库，再让数字咨询师整理画像和组织架构；它会给修改卡，你确认后才写入。
-          </p>
           <div className="flex min-h-0 flex-1 flex-col">
             <CoachPanel
               stage="strategy"

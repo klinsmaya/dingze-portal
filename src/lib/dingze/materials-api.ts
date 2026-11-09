@@ -26,7 +26,7 @@ export type ProfileRecord = { items: ProfileItem[]; rev: number; updatedAt: stri
 
 const keys = {
   materials: (projectId: number) => ["dingze", "materials", projectId] as const,
-  attachments: (projectId: number, code: string) => ["dingze", "attachments", projectId, code] as const,
+  attachments: (projectId: number, code = "") => ["dingze", "attachments", projectId, code] as const,
   material: (projectId: number, id: number) => ["dingze", "material", projectId, id] as const,
   profile: (projectId: number) => ["dingze", "profile", projectId] as const,
 };
@@ -72,8 +72,9 @@ export function useMaterial(project: ProjectSummary, id: number | null) {
 }
 
 /** 某张表下的附件（填表时上传的，不在资料库里）。 */
-export function useAttachments(project: ProjectSummary, code: string) {
-  return useQuery({ queryKey: keys.attachments(project.id, code), queryFn: () => get<MaterialSummary[]>(project, "listAttachments", { code }) });
+/** 一张表的附件；不传表号就是整个项目的附件（资料页“成员上传的材料”）。 */
+export function useAttachments(project: ProjectSummary, code?: string) {
+  return useQuery({ queryKey: keys.attachments(project.id, code ?? ""), queryFn: () => get<MaterialSummary[]>(project, "listAttachments", code ? { code } : {}) });
 }
 
 export function useAddMaterial(project: ProjectSummary) {

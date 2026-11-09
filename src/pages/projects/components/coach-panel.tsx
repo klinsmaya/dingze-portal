@@ -1,4 +1,5 @@
-import { Check, ChevronDown, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert, UserRound } from "lucide-react";
+import { Link } from "react-router";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +17,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { INCOMPLETE_ROW_MESSAGE, STATUS_LABELS, type StageKey, canManageLibrary, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, STATUS_LABELS, type StageKey, canManageLibrary, canRequestExpert, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { cn } from "@/lib/utils";
 import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { getAt, preview } from "@/lib/dingze/edit-log";
+import { locateAnchor } from "@/lib/dingze/locate";
 
 import { useProjectContext } from "../project-context";
 import { type EditSession, useEditSession } from "./edit-session";
@@ -293,9 +295,19 @@ function PendingCard({
     }
   }, [session, built]);
   const comment = session?.activeComment ? session.commentInfo(session.activeComment) : null;
+  // 中栏 ↔ 右栏联动（产品走查第一批）：点卡片的一条滚到表里那一行；光标在表里的某一行时，
+  // 碰到这一行的卡片加一圈高亮、那一条标“当前行”。
+  const focus = session?.focusAnchor ?? null;
+  const anchorOf = (no: number | null) => (no ? built?.items.find((i) => i.no === no)?.anchor ?? null : null);
+  const touches = (anchor: string | null) => !!focus && !!anchor && (anchor === focus || anchor.startsWith(`${focus}.`) || focus.startsWith(`${anchor}.`));
+  const related = !!built && !built.invalid && built.items.some((i) => touches(i.anchor));
+  const goTo = (no: number | null) => {
+    const anchor = anchorOf(no);
+    if (anchor) locateAnchor(anchor);
+  };
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border-2 border-dashed p-3 text-sm" style={{ borderColor: "var(--dz-ai)", background: "var(--dz-ai-soft)" }}>
+    <div className={cn("flex flex-col gap-2 rounded-xl border-2 border-dashed p-3 text-sm", related && "ring-2 ring-offset-1 ring-[color:var(--dz-ai)]")} style={{ borderColor: "var(--dz-ai)", background: "var(--dz-ai-soft)" }}>
       <div className="flex items-center justify-between gap-2 text-xs font-bold" style={{ color: "var(--dz-ai)" }}>
         <span className="flex items-center gap-1">
           <Sparkles className="size-3.5" /> 修改建议{args.summary ? ` · ${args.summary}` : ""}
@@ -305,7 +317,12 @@ function PendingCard({
       {built?.invalid ? <p className="text-xs text-destructive">这条建议对不上表里的位置（{built.invalid}），请让数字咨询师重出。</p> : null}
       <ul className="flex flex-col divide-y rounded-lg border bg-card">
         {built?.rows.map((row, i) => (
-          <li key={i} className="flex flex-col gap-1 px-2.5 py-2">
+          <li
+            key={i}
+            className={cn("flex flex-col gap-1 px-2.5 py-2", anchorOf(row.no) && "cursor-pointer hover:bg-muted/40", touches(anchorOf(row.no)) && "bg-muted/60")}
+            onClick={anchorOf(row.no) ? () => goTo(row.no) : undefined}
+            title={anchorOf(row.no) ? "点一下，滚到表里这一行" : undefined}
+          >
             <div className="flex items-start gap-1.5">
               {row.op !== "set" ? (
                 <span className="shrink-0 rounded border px-1 text-[10px] font-semibold" style={{ color: "var(--dz-ai)", borderColor: "var(--dz-ai)" }}>
@@ -316,6 +333,7 @@ function PendingCard({
               <span className={cn("min-w-0 flex-1 text-xs", row.op === "split" || row.op === "remove" ? "text-destructive line-through" : "text-muted-foreground")}>
                 {row.op === "split" || row.op === "remove" ? row.before || row.name : row.name}
               </span>
+              {touches(anchorOf(row.no)) ? <span className="shrink-0 rounded px-1 text-[10px] font-semibold text-white" style={{ background: "var(--dz-ai)" }}>当前行</span> : null}
             </div>
             {row.op === "set" || row.op === "move" ? (
               <div className="ml-6">
@@ -324,7 +342,7 @@ function PendingCard({
               </div>
             ) : null}
             {row.parts?.map((p) => (
-              <div key={p.no} className="flex items-start gap-1.5">
+              <div key={p.no} className={cn("flex items-start gap-1.5 rounded", anchorOf(p.no) && "cursor-pointer hover:bg-muted/40", touches(anchorOf(p.no)) && "bg-muted/60")} onClick={anchorOf(p.no) ? (e) => { e.stopPropagation(); goTo(p.no); } : undefined}>
                 <NoBadge no={p.no} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
@@ -679,7 +697,7 @@ export function CoachPanel({
   const controller = useAIChatController();
   const host = useRef<HTMLDivElement>(null);
   const attach = useAttachMaterials();
-  const { overview } = useProjectContext();
+  const { project, overview } = useProjectContext();
   const session = useEditSession();
   // 资料库只有企业管理员和咨询师能传；在填表页，📎 变成“上传附件填这张表”（任何能填表的人都可以）。
   const library = canManageLibrary(overview.projectRole, overview.isConsultAdmin);
@@ -744,6 +762,12 @@ export function CoachPanel({
           />
           <StarterPrompts host={host} starters={starters} />
         </div>
+        {/* 专家咨询只有这一个入口（产品走查拍板 2）：方法流程解决不了的关键分歧，找真人咨询师。 */}
+        {canRequestExpert(overview.projectRole, overview.isConsultAdmin) ? (
+          <Link to={`/projects/${project.id}/expert`} className="flex shrink-0 items-center gap-1.5 border-t px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+            <UserRound className="size-3.5" /> 找真人咨询师
+          </Link>
+        ) : null}
       </AIChatProvider>
     </AIToolRendererProvider>
   );

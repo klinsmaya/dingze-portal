@@ -98,6 +98,8 @@ const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: []
 
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
 const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
+/** 停笔多久后自动保存。 */
+const AUTOSAVE_MS = 2500;
 
 /** 挡住这张表的表：同阶段看 unlockAfter；阶段还没开时看上一阶段没定版的必做表，都给“去做”链接。 */
 function blockingCodes(def: ArtifactDef, artifacts: ArtifactOverview[]): string[] {
@@ -324,14 +326,16 @@ function Workspace({ code }: { code: string }) {
     (status === "in_review" && !consultantInReview);
 
   const addComment = useAddComment(project, code);
-  const onSave = () => {
+  // 保存方式（产品走查拍板 1）：自动保存，停笔 2.5 秒后写一版；Ctrl / ⌘ + S 立刻保存。
+  // 自动保存不弹提示，只改标题旁的状态字；手动保存才弹。
+  const onSave = (manual = true) => {
     const log = edit.log;
     savingLog.current = log;
     save.mutate(
       { payload: draft, baseRev, changes: log.map(toSaved), aiSuggested: log.some((c) => c.via === "chat") || undefined },
       {
         onSuccess: (result) => {
-          toast.success(`已保存 v${result.rev}`);
+          if (manual) toast.success(`已保存 v${result.rev}`);
           // Edits made 按批注 answer their comment thread.
           const byComment = new Map<number, string[]>();
           for (const c of log) if (c.commentId) byComment.set(c.commentId, [...(byComment.get(c.commentId) ?? []), c.label]);
@@ -347,6 +351,7 @@ function Workspace({ code }: { code: string }) {
   const canSave = !readOnly && EDITABLE_CODES.has(code);
   const saveShortcut = useRef(onSave);
   saveShortcut.current = onSave;
+
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const lastAnchor = useRef<string | null>(null);
   const materialsQuery = useMaterials(project);
@@ -413,6 +418,13 @@ function Workspace({ code }: { code: string }) {
   const [revision, setRevision] = useState<RevisionState>({ on: false, baseRev: null, basePayload: undefined, baseLabel: "" });
   const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
   const [previewDraft, setPreviewDraft] = useState<EditSession["previewDraft"]>(null);
+  // 自动保存：有未保存的改动、没有在保存、没有在预览修改建议或看旧版本、本地基于的就是服务端最新版。
+  const autosaveOk = canSave && dirty && !save.isPending && !previewDraft && !viewRev && serverRev === baseRev;
+  useEffect(() => {
+    if (!autosaveOk) return;
+    const timer = window.setTimeout(() => saveShortcut.current(false), AUTOSAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [autosaveOk, draft]);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   // 就地批注 (design 10 画面 5): the composer at the cell / node, its draft listed in the 批注 tab.
@@ -893,8 +905,6 @@ function Workspace({ code }: { code: string }) {
               rev={artifact?.currentRev ?? 0}
               unsaved={unsaved}
               saving={save.isPending}
-              canSave={canSave}
-              onSave={onSave}
             />
             <div className="py-1.5">
               <TitleRow
