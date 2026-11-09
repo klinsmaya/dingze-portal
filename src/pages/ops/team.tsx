@@ -47,7 +47,6 @@ export default function TeamPage() {
     <div className="flex flex-col gap-6">
       <OpsPageHeader
         title="咨询团队"
-        description="咨询师、咨询管理员和运营管理员。咨询师需要加入企业空间、再加入项目，才能看到企业数据。"
         actions={
           <Button onClick={() => setCreating(true)}>
             <UserPlus /> 开通账号

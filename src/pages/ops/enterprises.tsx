@@ -43,7 +43,6 @@ export default function EnterprisesPage() {
     <div className="flex flex-col gap-6">
       <OpsPageHeader
         title="企业与开通"
-        description="一家企业对应一个独立空间，企业之间的数据互不可见。"
         actions={
           <Button onClick={() => setProvisioning(true)}>
             <Plus /> 开通企业

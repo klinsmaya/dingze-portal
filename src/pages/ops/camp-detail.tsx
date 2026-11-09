@@ -66,14 +66,18 @@ export default function CampDetailPage() {
     <div className="flex flex-col gap-5">
       {back}
       <OpsPageHeader
-        title={camp.name}
-        eyebrow={
-          <span className="flex flex-wrap items-center gap-2">
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {camp.name}
             <Badge variant={camp.status === "running" ? "default" : camp.status === "closed" ? "secondary" : "outline"}>{CAMP_STATUS_LABELS[camp.status]}</Badge>
-            {[camp.startDate && `${camp.startDate}${camp.endDate ? ` ～ ${camp.endDate}` : ""}`, camp.location].filter(Boolean).join(" · ")}
+            <span className="text-sm font-normal text-muted-foreground">
+              {[camp.startDate && `${camp.startDate}${camp.endDate ? ` ～ ${camp.endDate}` : ""}`, camp.location].filter(Boolean).join(" · ")}
+            </span>
+            <Badge variant="outline" className="font-normal tabular-nums">
+              {projects.length} 家企业 · 营前就绪 {projects.filter(ready).length} 家
+            </Badge>
           </span>
         }
-        description={`${projects.length} 家企业项目 · 营前就绪 ${projects.filter(ready).length} 家`}
         actions={
           <>
             <Button variant="outline" onClick={() => setEditing(true)}>
@@ -407,8 +411,7 @@ function TeamCodes({ codes, onClose }: { codes: { projectId: number; enterprise:
   return (
     <section aria-label="团队码" className="flex flex-col gap-2 rounded-xl border bg-card p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">团队码已生成（{codes.length} 家）</span>
-        <span className="text-xs text-muted-foreground">每个码 20 人、60 天内有效，凭码注册直接进项目（项目成员）。把下面的链接发给各企业对接人。</span>
+        <span className="font-semibold">团队码（{codes.length} 家）</span>
         <span className="ml-auto flex gap-1">
           <Button size="sm" variant="outline" onClick={() => copy(codes.map(line).join("\n"), "全部团队码")}>
             <Copy /> 复制全部

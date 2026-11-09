@@ -7,7 +7,7 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { InputPassword } from "@/components/auth/input-password";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type InviteScope, inviteApi, passwordProblem } from "@/lib/dingze/invite-api";
@@ -89,7 +89,7 @@ export function InviteRegister() {
 
   if (done) {
     return (
-      <AuthLayout title="申请已提交" description="等待审核通过后就能登录。" footer={toLogin}>
+      <AuthLayout title="申请已提交" footer={toLogin}>
         <Alert>
           <CheckCircle2 />
           <AlertTitle>已提交给 {done.enterprise} 审核</AlertTitle>
@@ -102,7 +102,7 @@ export function InviteRegister() {
   }
 
   return (
-    <AuthLayout title="凭邀请码加入" description={scope?.autoApprove ? "填好就能进，不用等审核。" : "邀请码由本企业管理员或平台运营发放。"} footer={toLogin}>
+    <AuthLayout title="凭邀请码加入" footer={toLogin}>
       <div className="flex flex-col gap-5">
         <form
           className="flex items-end gap-2"
@@ -152,13 +152,12 @@ export function InviteRegister() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="reg-username">登录名</FieldLabel>
-                  <Input id="reg-username" value={form.username} onChange={set("username")} autoComplete="username" pattern="[A-Za-z0-9_.@\-]{3,50}" required />
-                  <FieldDescription>字母、数字和 _ . @ -，至少 3 位，以后用它登录。</FieldDescription>
+                  <Input id="reg-username" value={form.username} onChange={set("username")} autoComplete="username" pattern="[A-Za-z0-9_.@\-]{3,50}" placeholder="字母或数字，至少 3 位" required />
                 </Field>
                 <Field data-invalid={!!pwProblem || undefined}>
                   <FieldLabel htmlFor="reg-password">密码</FieldLabel>
-                  <InputPassword id="reg-password" value={form.password} onChange={set("password")} autoComplete="new-password" required />
-                  {pwProblem ? <FieldError>密码{pwProblem}</FieldError> : <FieldDescription>至少 8 位，同时包含字母和数字。</FieldDescription>}
+                  <InputPassword id="reg-password" value={form.password} onChange={set("password")} autoComplete="new-password" placeholder="至少 8 位，含字母和数字" required />
+                  {pwProblem ? <FieldError>密码{pwProblem}</FieldError> : null}
                 </Field>
                 <Field data-invalid={!!mismatch || undefined}>
                   <FieldLabel htmlFor="reg-confirm">再输一次密码</FieldLabel>
@@ -176,7 +175,7 @@ export function InviteRegister() {
                   </Field>
                 </div>
                 <Field>
-                  <FieldLabel htmlFor="reg-remark">部门 / 岗位（选填，供审核参考）</FieldLabel>
+                  <FieldLabel htmlFor="reg-remark">部门 / 岗位（选填）</FieldLabel>
                   <Input id="reg-remark" value={form.remark} onChange={set("remark")} maxLength={100} />
                 </Field>
               </FieldGroup>

@@ -135,10 +135,7 @@ export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
 
       <section className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="font-heading text-base font-semibold">邀请码</h2>
-            <p className="text-xs text-muted-foreground">把链接发给要加入的人；对方自己设密码提交申请，审核通过才开通账号。被拒的申请不占名额。</p>
-          </div>
+          <h2 className="font-heading text-base font-semibold">邀请码</h2>
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus /> 新建邀请码
           </Button>
@@ -306,7 +303,6 @@ function InviteDialog({
             <DialogTitle className="flex items-center gap-2">
               <Ticket className="size-4" /> 新建邀请码
             </DialogTitle>
-            <DialogDescription>凭码注册的人成为「{detail.enterprise.shortName}」的企业成员，并按下面的设置加入项目。建好后会自动复制邀请链接。</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -356,10 +352,7 @@ function InviteDialog({
             </div>
             <label className="flex items-start gap-2 text-sm">
               <Checkbox checked={autoApprove} onCheckedChange={(v) => setAutoApprove(v === true)} className="mt-0.5" />
-              <span>
-                免审核
-                <span className="block text-xs text-muted-foreground">勾上：凭码注册马上开通、直接进项目。不勾：先申请，由管理员审核后开通。</span>
-              </span>
+              <span>免审核</span>
             </label>
             <Field>
               <FieldLabel htmlFor="inv-note">备注</FieldLabel>

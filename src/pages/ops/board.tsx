@@ -77,7 +77,7 @@ export default function OpsBoardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <OpsPageHeader title="运营看板" description="各企业项目的阶段进度、待办积压与数字咨询师用量。用量只做记录，不计费。" />
+      <OpsPageHeader title="运营看板" />
 
       {board.error ? (
         <Alert variant="destructive">
@@ -96,7 +96,7 @@ export default function OpsBoardPage() {
               hint={`停用 ${board.data?.enterprises.filter((e) => e.status !== "active").length ?? 0} 家`}
             />
             <Stat icon={<FolderKanban />} label="项目" value={number.format(all.length)} hint={`已完成三阶段 ${all.filter((p) => p.stages.every((s) => s.total && s.locked === s.total)).length} 个`} />
-            <Stat icon={<MessageSquareText />} label="待办积压" value={number.format(backlogTotal)} hint="待复核、待确认、待更新与未解决批注" />
+            <Stat icon={<MessageSquareText />} label="待办积压" value={number.format(backlogTotal)} />
             <Stat icon={<Bot />} label="数字咨询师 · 近 30 天" value={`${number.format(turns30)} 轮`} hint={`约 ${tokens(tokens30)} Token`} />
           </div>
 

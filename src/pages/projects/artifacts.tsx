@@ -100,14 +100,11 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
 
   return (
     <div className={embedded ? "flex flex-col gap-5" : "mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6"}>
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">成果与定版</h1>}
-          <p className="mt-1 text-sm text-muted-foreground">
-            附录 B 共 24 项成果：{tableCount} 张表独立填写和定版，4 项是图形视图或内嵌表（随所属表定版），S3-09 移出 V1。已定版 {locked} / {tableCount}。
-            使命、愿景、经营预算是方法底稿，不单独编号、不计入成果。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">成果与定版</h1>}
+        <span className="text-sm text-muted-foreground tabular-nums">
+          已定版 {locked} / {tableCount}
+        </span>
         <Button variant="outline" className="ml-auto" onClick={exportList} disabled={rows.length === 0}>
           <FileSpreadsheet /> 导出清单
         </Button>
@@ -216,7 +213,7 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
       {methods.length ? (
         <details className="rounded-xl border bg-card">
           <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold">
-            方法底稿 <span className="font-normal text-muted-foreground">· {methods.length} 份，不单独编号，结论写回所属成果</span>
+            方法底稿 <span className="font-normal text-muted-foreground tabular-nums">{methods.length}</span>
           </summary>
           <div className="overflow-x-auto border-t">
             <table className="w-full min-w-[980px] border-collapse text-sm">

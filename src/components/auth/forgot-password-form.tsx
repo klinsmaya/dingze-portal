@@ -27,7 +27,6 @@ export const ForgotPasswordForm = () => {
   return (
     <AuthLayout
       title="找回密码"
-      description="输入账号绑定的邮箱，我们会发送重置链接。"
       footer={
         <Link
           to="/login"

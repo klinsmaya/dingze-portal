@@ -60,17 +60,11 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
             }
             aria-label="允许企业管理员自建项目"
           />
-          <span className="min-w-0 flex-1">
-            <span className="font-medium">允许企业管理员自建项目</span>
-            <span className="block text-xs text-muted-foreground">打开后，企业管理员可以在“本企业 › 项目”里自己建项目（企业内训 · 自助），只能分派本企业账号。需要陪跑时由运营改服务方式并分派咨询师。</span>
-          </span>
+          <span className="min-w-0 flex-1 font-medium">允许企业管理员自建项目</span>
         </label>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          一个项目对应一轮定三责；同一企业可以按年度或专题开多个项目。
-          {asOps ? "" : allowSelf ? "新项目是企业内训 · 自助；建好后可以“从已有项目带入”往年的表。" : "自建项目还没开通，需要新项目请联系运营。"}
-        </p>
+        <p className="text-sm text-muted-foreground">{asOps || allowSelf ? null : "需要新项目请联系运营。"}</p>
         {asOps ? (
           <Button onClick={() => setEditing("new")}>
             <Plus /> 新建项目
@@ -376,7 +370,6 @@ function MembersDialog({
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>项目成员 · {project?.name}</DialogTitle>
-          <DialogDescription>项目角色决定在这个项目里能做什么；只有企业项目负责人可以确认定版。</DialogDescription>
         </DialogHeader>
 
         <div className="overflow-x-auto rounded-lg border">
@@ -460,7 +453,6 @@ function MembersDialog({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-          <span className="text-xs text-muted-foreground">不在列表里的人，先到“成员”里开通账号或加入企业。</span>
         </div>
 
         {warnings.length ? (
@@ -609,7 +601,6 @@ function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: En
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-            <span className="text-xs text-muted-foreground">没有账号的人先到“成员”里开通。咨询师由运营分派。</span>
           </div>
           {!hasLead ? (
             <Alert>

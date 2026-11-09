@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -198,7 +197,6 @@ function AddExistingDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>加入已有账号</DialogTitle>
-          <DialogDescription>常用于把咨询师、运营管理员加入这家企业的空间。</DialogDescription>
         </DialogHeader>
         <UserChecklist users={candidates} selected={selected} onChange={setSelected} />
         <DialogFooter>

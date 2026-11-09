@@ -34,7 +34,6 @@ export const Login = () => {
   return (
     <AuthLayout
       title="登录"
-      description={side === "enterprise" ? "用手机号或开通的账号登录。" : "用运营开通的账号登录。"}
       footer={
         side === "enterprise" ? (
           <div className="flex flex-wrap gap-x-5 gap-y-2">
