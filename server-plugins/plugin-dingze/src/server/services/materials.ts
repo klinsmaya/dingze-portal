@@ -52,9 +52,11 @@ export async function listMaterials(ctx: Context, pc: ProjectContext) {
 
 /** Files attached to one table while filling it (not in the library unless added). */
 export async function listAttachments(ctx: Context, pc: ProjectContext, code: unknown) {
-  if (!isArtifactCode(String(code ?? ''))) throw new HttpError(400, '没有这张表');
+  // 不带表号：整个项目的附件（资料页“成员上传的材料”，企业管理员挑着加入资料库）。
+  const all = code === undefined || code === null || code === '';
+  if (!all && !isArtifactCode(String(code))) throw new HttpError(400, '没有这张表');
   const rows = await ctx.db.getRepository('dz_materials').find({
-    filter: { projectId: pc.project.get('id'), kind: 'attachment', artifactCode: String(code) },
+    filter: { projectId: pc.project.get('id'), kind: 'attachment', ...(all ? {} : { artifactCode: String(code) }) },
     fields: SUMMARY_FIELDS,
     appends: ['createdBy'],
     sort: ['-createdAt'],

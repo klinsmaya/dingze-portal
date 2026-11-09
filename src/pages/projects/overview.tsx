@@ -49,6 +49,12 @@ export default function ProjectOverviewPage() {
   // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
   const employee = isEmployee(role) && !overview.isConsultAdmin;
   const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
+  // 企业管理员（定稿方案三）：成员还没到位时第一张卡是“邀请成员”，然后才是“上传资料”；两张卡到位后自动退后。
+  const inviteFirst = role === "ent_lead" && !materials.isLoading && startup.find((i) => i.key === "team")?.state !== "done";
+  // 一页只有一个实心主按钮：第一张卡实心，其余灰底。
+  const primaryIndex = inviteFirst ? 0 : materialsFirst ? 1 : 2;
+  const cardClass = (index: number, quiet = false) =>
+    cn("flex flex-wrap items-center gap-3 rounded-xl px-5 py-4", index === primaryIndex && !quiet ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-foreground hover:bg-muted/80");
   // 首次进项目弹操作指引（本机记住）。只给企业侧的新项目：还没开始填表、不是咨询方。
   const [guideSeen, setGuideSeen] = useFirstRunGuide();
   const [guideOpen, setGuideOpen] = useState(false);
@@ -99,27 +105,27 @@ export default function ProjectOverviewPage() {
       <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} />
 
       <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
-        {materialsFirst ? (
-          <Link
-            to={`/projects/${project.id}/materials`}
-            className="flex flex-wrap items-center gap-3 rounded-xl bg-primary px-5 py-4 text-primary-foreground hover:bg-primary/90"
-          >
+        {inviteFirst ? (
+          <Link to="/enterprise?tab=invites" className={cardClass(0)}>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs opacity-80">第 1 步</span>
+              <span className="block text-xs opacity-80">先做</span>
+              <span className="block text-lg font-bold">邀请成员</span>
+            </span>
+            <ArrowRight className="size-5 shrink-0" />
+          </Link>
+        ) : null}
+        {materialsFirst ? (
+          <Link to={`/projects/${project.id}/materials`} className={cardClass(1)}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs opacity-80">{inviteFirst ? "然后" : "先做"}</span>
               <span className="block text-lg font-bold">上传资料</span>
             </span>
             <ArrowRight className="size-5 shrink-0" />
           </Link>
         ) : null}
-        <Link
-          to={nextActionPath(project.id, next)}
-          className={cn(
-            "flex flex-wrap items-center gap-3 rounded-xl px-5 py-4",
-            next.kind === "waiting" || next.kind === "view" || materialsFirst ? "bg-muted text-foreground hover:bg-muted/80" : "bg-primary text-primary-foreground hover:bg-primary/90"
-          )}
-        >
+        <Link to={nextActionPath(project.id, next)} className={cardClass(2, next.kind === "waiting" || next.kind === "view")}>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : materialsFirst ? "或者直接开始" : "下一步"}</span>
+            <span className="block text-xs opacity-80">{next.kind === "waiting" ? "现在在等" : inviteFirst || materialsFirst ? "或者直接开始" : "下一步"}</span>
             <span className="block text-lg font-bold">{next.label}</span>
           </span>
           <ArrowRight className="size-5 shrink-0" />

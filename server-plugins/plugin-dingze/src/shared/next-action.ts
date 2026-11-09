@@ -118,7 +118,8 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
     if (a) return { kind: 'returned', code: a.code, label: `改退回的表：${title(a.code)}`, hint: a.lastEvent?.reason ? `退回原因：${a.lastEvent.reason}` : '顾问退回了这张表，改好后再提交' };
   }
   // A draft is checked and saved by whoever edits it; a locked table only by whoever may reopen it.
-  const mayReopen = service === 'self' ? role === 'ent_lead' : role === 'lead_consultant' || role === 'ent_lead';
+  // 解锁重开只有企业项目负责人（咨询师不定版也不重开）。
+  const mayReopen = role === 'ent_lead';
   const stale = first((x) => x.stale && x.status !== 'not_started' && (x.status === 'locked' ? mayReopen : isEnterprise || role === 'lead_consultant'));
   if (stale) {
     return stale.status === 'locked'

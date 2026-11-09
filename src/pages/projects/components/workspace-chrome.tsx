@@ -189,7 +189,7 @@ const TONE: Record<HeaderState["tone"], string> = {
   neutral: "text-muted-foreground",
 };
 
-/** Row 1: where you are, and the table's state and save state (保存方式 甲: still a button). */
+/** Row 1: where you are, and the table's state and save state (自动保存：只有状态字，没有按钮；Ctrl+S 仍可用). */
 export function WhereRow({
   crumbs,
   subs,
@@ -200,8 +200,6 @@ export function WhereRow({
   rev,
   unsaved,
   saving,
-  canSave,
-  onSave,
 }: {
   crumbs: string[];
   /** 左栏收起时的“本表小节”下拉。 */
@@ -215,8 +213,6 @@ export function WhereRow({
   rev: number;
   unsaved: number;
   saving: boolean;
-  canSave: boolean;
-  onSave: () => void;
 }) {
   return (
     <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -252,15 +248,10 @@ export function WhereRow({
         ))}
         {links}
         {next}
-        <span className="text-muted-foreground">
-          {saving ? "保存中…" : unsaved ? null : savedAt ? `已保存 ${formatTime(savedAt).slice(-5)}` : "还没保存过"}
-          {rev ? ` · v${rev}` : ""}
+        <span className="text-muted-foreground" title={unsaved ? "停笔后自动保存；Ctrl / ⌘ + S 立刻保存" : undefined}>
+          {saving ? "保存中…" : unsaved ? `${unsaved} 处未保存 · 稍后自动保存` : savedAt ? `已保存 ${formatTime(savedAt).slice(-5)}` : "还没保存过"}
+          {rev && !unsaved && !saving ? ` · v${rev}` : ""}
         </span>
-        {canSave && unsaved ? (
-          <Button size="xs" onClick={onSave} disabled={saving} title="Ctrl / ⌘ + S">
-            有 {unsaved} 处未保存 · 保存
-          </Button>
-        ) : null}
       </div>
     </div>
   );

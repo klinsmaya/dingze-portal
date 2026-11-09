@@ -24,10 +24,10 @@ import { cn } from "@/lib/utils";
 import type { ProjectContextValue } from "./project-context";
 
 // 项目导航按客户流程排（2026-11 甲方反馈）：总览 · ① 资料 · ② 战略解码 · ③ 目标分解 · ④ 计划制定 · ⑤ 成果；
-// 咨询方另有专家咨询。三个阶段各自跳到本阶段第一张还没定版的表。
+// 专家咨询只在数字咨询师面板底部有一个入口。三个阶段各自跳到本阶段第一张还没定版的表。
 type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean };
 
-function flowNav(artifacts: ArtifactOverview[], consulting: boolean, library: boolean): NavItem[] {
+function flowNav(artifacts: ArtifactOverview[], library: boolean): NavItem[] {
   const stages = stageProgress(artifacts);
   return [
     { key: "overview", to: "overview", label: "总览", title: "总览：现在在第几步、下一步做什么" },
@@ -46,7 +46,6 @@ function flowNav(artifacts: ArtifactOverview[], consulting: boolean, library: bo
       };
     }),
     { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
-    ...(consulting ? [{ key: "expert", to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }] : []),
   ];
 }
 const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];
@@ -111,7 +110,7 @@ function ProjectTopbar({
   const parts = useLocation().pathname.split("/");
   const section = parts[3] || "overview";
   const consulting = !(projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin);
-  const nav = flowNav(artifacts, consulting, consulting || projectRole === "ent_lead");
+  const nav = flowNav(artifacts, consulting || projectRole === "ent_lead");
   // 在填写页时，亮起当前这张表所在的阶段。
   const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
   const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;

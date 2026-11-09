@@ -144,7 +144,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         const reason = disabledReasonOf(spec);
         return (
           <span key={spec.action} title={reason ?? whoCan(spec.action, actor)}>
-            <Button variant="outline" size="sm" disabled={transition.isPending || !!reason} onClick={() => trigger(spec)}>
+            <Button variant="ghost" size="sm" disabled={transition.isPending || !!reason} onClick={() => trigger(spec)}>
               {spec.label}
             </Button>
           </span>
