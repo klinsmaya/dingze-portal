@@ -234,16 +234,19 @@ export function unlockInfo(def: ArtifactDef, states: StateMap): UnlockInfo {
     return { unlocked: false, waitingFor: '上一阶段全部 P0 成果定版后开启' };
   }
   if (def.attachedTo) {
-    // A method worksheet opens with the table it belongs to, then follows its own order.
-    const parent = unlockInfo(getArtifactDef(def.attachedTo), states);
+    // A method worksheet opens once the table it belongs to has content to check against.
+    const parentDef = getArtifactDef(def.attachedTo);
+    const parent = unlockInfo(parentDef, states);
     if (!parent.unlocked) return parent;
+    const state = states[def.attachedTo];
+    if (!state || state.status === 'not_started') {
+      return { unlocked: false, waitingFor: `先填「${parentDef.plain}」并保存，再用这张底稿校准` };
+    }
+    return { unlocked: true };
   }
   const pending = def.unlockAfter.filter((code) => !hasReachedStepDone(states[code]));
   if (pending.length > 0) {
-    const names = pending.map((code) => {
-      const d = getArtifactDef(code);
-      return d.priority === 'method' ? d.name : `${d.specId} ${d.name}`;
-    });
+    const names = pending.map((code) => `${getArtifactDef(code).specId} ${getArtifactDef(code).name}`);
     return { unlocked: false, waitingFor: `${names.join('、')}“本步完成”后解锁` };
   }
   return { unlocked: true };

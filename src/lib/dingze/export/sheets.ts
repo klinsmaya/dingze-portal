@@ -188,12 +188,11 @@ function strategyKpiSheets(table: StrategyKpiTable): SheetModel[] {
     ["战略主题 / 要点", 22],
     ["战略 KPI", 20],
     ["口径 / 计算公式", 36],
-    ["单位", 8],
     ["数据来源", 16],
     ["考核周期", 10],
     ["责任部门", 14],
   ]);
-  for (const k of table.kpis ?? []) s.rows.push([k.theme, k.name, k.definition, k.unit, k.source, k.period, k.owner]);
+  for (const k of table.kpis ?? []) s.rows.push([k.theme, k.name, k.definition, k.source, k.period, k.owner]);
   return [s];
 }
 

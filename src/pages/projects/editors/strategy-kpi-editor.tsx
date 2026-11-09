@@ -7,6 +7,7 @@ import {
   kpisFromScreening,
 } from "@dingze/shared";
 
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
@@ -20,13 +21,16 @@ type Props = {
   upstream: { "S1-05"?: KpiScreening };
 };
 
-const COLUMNS: { key: keyof StrategyKpi; label: string; placeholder: string; width: string; multiline?: boolean }[] = [
+/** 考核周期的常用选法；已有数据里别的写法照样显示。 */
+const PERIOD_OPTIONS = ["月考", "季考", "半年考", "年考"];
+
+// 指标值和单位在 S1-07 逐年目标里填（2026-11 会议纪要：数值自带单位，去掉单位列）。
+const COLUMNS: { key: keyof StrategyKpi; label: string; placeholder: string; width: string; multiline?: boolean; options?: string[] }[] = [
   { key: "theme", label: "战略主题 / 要点", placeholder: "对应的战略或策略", width: "min-w-36" },
   { key: "name", label: "战略 KPI", placeholder: "指标名称", width: "min-w-36" },
   { key: "definition", label: "口径 / 计算公式", placeholder: "统计口径或计算公式", width: "min-w-52", multiline: true },
-  { key: "unit", label: "单位", placeholder: "如 亿元、%", width: "min-w-20" },
   { key: "source", label: "数据来源", placeholder: "系统或报表", width: "min-w-32" },
-  { key: "period", label: "考核周期", placeholder: "月 / 季 / 年", width: "min-w-24" },
+  { key: "period", label: "考核周期", placeholder: "选择", width: "min-w-24", options: PERIOD_OPTIONS },
   { key: "owner", label: "责任部门", placeholder: "责任部门", width: "min-w-28" },
 ];
 
@@ -66,18 +70,38 @@ export function StrategyKpiEditor({ value, onChange, readOnly, issues, upstream 
             ) : (
               kpis.map((kpi) => (
                 <tr data-anchor={kpi.id} key={kpi.id} className={cn("border-t align-top", invalid.has(kpi.id) && "bg-destructive/5")}>
-                  {COLUMNS.map((c) => (
-                    <td key={c.key} className="px-1 py-1">
-                      <TextCell
-                        label={`${kpi.name || "战略 KPI"} ${c.label}`}
-                        placeholder={c.placeholder}
-                        multiline={c.multiline}
-                        value={String(kpi[c.key] ?? "")}
-                        onChange={(v) => set(patchById(kpis, kpi.id, { [c.key]: v }))}
-                        readOnly={readOnly}
-                      />
-                    </td>
-                  ))}
+                  {COLUMNS.map((c) => {
+                    const current = String(kpi[c.key] ?? "");
+                    return (
+                      <td key={c.key} className="px-1 py-1">
+                        {c.options ? (
+                          <NativeSelect
+                            aria-label={`${kpi.name || "战略 KPI"} ${c.label}`}
+                            className="w-full"
+                            value={current}
+                            disabled={readOnly}
+                            onChange={(e) => set(patchById(kpis, kpi.id, { [c.key]: e.target.value }))}
+                          >
+                            <NativeSelectOption value="">{c.placeholder}</NativeSelectOption>
+                            {(current && !c.options.includes(current) ? [current, ...c.options] : c.options).map((o) => (
+                              <NativeSelectOption key={o} value={o}>
+                                {o}
+                              </NativeSelectOption>
+                            ))}
+                          </NativeSelect>
+                        ) : (
+                          <TextCell
+                            label={`${kpi.name || "战略 KPI"} ${c.label}`}
+                            placeholder={c.placeholder}
+                            multiline={c.multiline}
+                            value={current}
+                            onChange={(v) => set(patchById(kpis, kpi.id, { [c.key]: v }))}
+                            readOnly={readOnly}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="px-1 py-1">
                     <RowActions
                       label={kpi.name || "战略 KPI"}

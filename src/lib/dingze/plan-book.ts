@@ -316,8 +316,8 @@ export function buildCompanyPlanBook(params: {
     { kind: "heading", text: "8.3 指标字典" },
     {
       kind: "table",
-      headers: ["战略 KPI", "口径", "单位", "数据来源", "周期", "责任部门"],
-      rows: (u["S1-06"]?.kpis ?? []).map((k) => [k.name, k.definition, k.unit, k.source, k.period, k.owner]),
+      headers: ["战略 KPI", "口径", "数据来源", "考核周期", "责任部门"],
+      rows: (u["S1-06"]?.kpis ?? []).map((k) => [k.name, k.definition, k.source, k.period, k.owner]),
     },
     ...(t.dictionaryNote?.trim() ? [text(t.dictionaryNote)] : []),
   ];

@@ -416,8 +416,10 @@ export interface StrategyKpi {
   candidateId?: string | null;
   /** 口径 / 计算公式。 */
   definition: string;
+  /** 不再在 S1-06 填写，单位随 S1-07 的指标值走；旧数据保留。 */
   unit: string;
   source: string;
+  /** 考核周期：月考 / 季考 / 半年考 / 年考。 */
   period: string;
   owner: string;
 }

@@ -36,14 +36,14 @@ export interface ArtifactDef {
   bookRef: string;
   priority: Priority;
   editor: EditorKind;
-  /**
-   * Artifacts that must reach "本步完成" (or later) before this one unlocks. P1 and method items never
-   * block a P0 table; a method worksheet may still wait for the step before it (使命共识 → 愿景共识).
-   */
+  /** Artifacts that must reach "本步完成" (or later) before this one unlocks. P1 and method items never block. */
   unlockAfter: string[];
   /** Upstream artifacts whose content this one reads. Used for "上游已变更" propagation. */
   dependsOn: string[];
-  /** Method worksheet attached to another artifact. */
+  /**
+   * Method worksheet attached to another artifact. It opens once that table has been saved at least once
+   * (2026-11 会议纪要: 使命 / 愿景工具在六分法之后、逻辑共识之前，六分法填了就能调出来校准，不等定稿).
+   */
   attachedTo?: string;
   /**
    * Artifacts whose current draft this one shows while editing, without “上游已变更”: S2-01 reads
@@ -78,13 +78,13 @@ export const ARTIFACTS: ArtifactDef[] = [
   },
   {
     code: 'M-MISSION', specId: 'S1-01', name: '使命五要素萃取', plain: '提炼使命', stage: 'strategy',
-    task: '逻辑共识：简约战略逻辑化', step: '使命共识', bookRef: '表 2-3',
-    priority: 'method', editor: 'worksheet', unlockAfter: ['S1-01'], dependsOn: [], attachedTo: 'S1-01',
+    task: '内容共识：纷繁战略简约化', step: '使命共识', bookRef: '表 2-3',
+    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
   },
   {
     code: 'M-VISION', specId: 'S1-01', name: '愿景三法', plain: '提炼愿景', stage: 'strategy',
-    task: '逻辑共识：简约战略逻辑化', step: '愿景共识', bookRef: '战略推导法、对标一流法、引以为傲法',
-    priority: 'method', editor: 'worksheet', unlockAfter: ['M-MISSION'], dependsOn: [], attachedTo: 'S1-01',
+    task: '内容共识：纷繁战略简约化', step: '愿景共识', bookRef: '战略推导法、对标一流法、引以为傲法',
+    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
   },
   {
     code: 'S1-02', specId: 'S1-02', name: '战略地图', plain: '战略地图', stage: 'strategy',

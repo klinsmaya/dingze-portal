@@ -83,17 +83,16 @@ describe("unlocking", () => {
     expect(unlockInfo(getArtifactDef("S1-02"), states).unlocked).toBe(true);
   });
 
-  it("opens 使命共识 after the strategy page and 愿景共识 after 使命共识", () => {
-    expect(unlockInfo(getArtifactDef("M-MISSION"), {}).unlocked).toBe(false);
-    expect(unlockInfo(getArtifactDef("M-MISSION"), {}).waitingFor).toContain("S1-01");
-    const afterContent: StateMap = { "S1-01": { status: "step_done" } };
-    expect(unlockInfo(getArtifactDef("M-MISSION"), afterContent).unlocked).toBe(true);
-    const vision = unlockInfo(getArtifactDef("M-VISION"), afterContent);
-    expect(vision.unlocked).toBe(false);
-    expect(vision.waitingFor).toContain("使命五要素萃取");
-    expect(unlockInfo(getArtifactDef("M-VISION"), { ...afterContent, "M-MISSION": { status: "step_done" } }).unlocked).toBe(true);
+  it("opens the 使命 / 愿景 worksheets once the strategy page has been saved, before it is finished", () => {
+    const locked = unlockInfo(getArtifactDef("M-MISSION"), {});
+    expect(locked.unlocked).toBe(false);
+    expect(locked.waitingFor).toContain("战略一页纸");
+    expect(unlockInfo(getArtifactDef("M-VISION"), { "S1-01": { status: "not_started" } }).unlocked).toBe(false);
+    const drafted: StateMap = { "S1-01": { status: "in_progress" } };
+    expect(unlockInfo(getArtifactDef("M-MISSION"), drafted).unlocked).toBe(true);
+    expect(unlockInfo(getArtifactDef("M-VISION"), drafted).unlocked).toBe(true);
     // Worksheets never hold back the next P0 table.
-    expect(unlockInfo(getArtifactDef("S1-02"), afterContent).unlocked).toBe(true);
+    expect(unlockInfo(getArtifactDef("S1-02"), { "S1-01": { status: "step_done" } }).unlocked).toBe(true);
   });
 
   it("does not let optional P1 worksheets block the strategy KPI table", () => {
