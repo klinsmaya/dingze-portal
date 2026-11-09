@@ -148,13 +148,10 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
             })}
           </section> : null}
 
-          {show("tables") ? <details className="group rounded-xl border bg-card" open={part === "tables" ? true : undefined}>
-            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-              其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG（按需导出）</span>
-            </summary>
-          <section aria-labelledby="deliverables" className="flex flex-col gap-3 border-t p-4">
-            <h2 id="deliverables" className="sr-only">
-              其他表格
+          {/* 走查第二批：这个页签本身就是单表导出，不再套一个收不起来的折叠区。 */}
+          {show("tables") ? <section aria-labelledby="deliverables" className="flex flex-col gap-3">
+            <h2 id="deliverables" className="text-sm font-semibold">
+              单表与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG，按需导出；整套方案书在「交付成果」</span>
             </h2>
             {STAGES.map((stage) => {
               const items = deliverables.filter((d) => d.stage === stage.key);
@@ -224,8 +221,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
               );
             })}
             {deliverables.length === 0 ? <p className="text-sm text-muted-foreground">还没有可以导出的成果。</p> : null}
-          </section>
-          </details> : null}
+          </section> : null}
 
           {show("deliver") ? <section aria-labelledby="scorecards" className="flex flex-col gap-3">
             <h2 id="scorecards" className="font-heading text-lg font-bold text-brand">
@@ -245,7 +241,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                           {scorecards?.locked ? ` · 定版 v${scorecards.rev}` : " · 草稿"}
                         </CardDescription>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => exportCard(card.deptId)}>
+                      <Button variant="ghost" size="sm" onClick={() => exportCard(card.deptId)}>
                         <FileSpreadsheet /> Excel
                       </Button>
                     </CardHeader>

@@ -100,7 +100,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
   const [pasting, setPasting] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
 
-  const uploadFiles = useMaterialUpload();
+  const uploadFiles = useMaterialUpload({ offerFill: true });
   const upload = async (files: FileList | null) => {
     setBusy(true);
     await uploadFiles(files);
