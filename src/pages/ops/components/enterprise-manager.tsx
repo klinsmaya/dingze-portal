@@ -24,7 +24,7 @@ import { type Enterprise, opsApi } from "@/lib/dingze/ops-api";
 import { useEnterpriseDetail, useOpsMutation } from "@/lib/dingze/ops-queries";
 
 import { ConfirmAction } from "./confirm-action";
-import { EnterpriseStatusBadge, SIZE_LABELS } from "./labels";
+import { EnterpriseStatusBadge } from "./labels";
 import { InvitesTab, usePendingRegistrations } from "./invites-tab";
 import { MembersTab } from "./members-tab";
 import { OrgUnitsTab } from "./org-units-tab";
@@ -60,14 +60,12 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
   return (
     <div className="flex flex-col gap-6">
       <OpsPageHeader
-        eyebrow={asOps ? "运营管理 › 企业与开通" : "本企业"}
         title={
           <span className="flex flex-wrap items-center gap-3">
             {enterprise.name}
             <EnterpriseStatusBadge status={enterprise.status} />
           </span>
         }
-        description={`${enterprise.shortName} · ${SIZE_LABELS[enterprise.size]} · 开通于 ${new Date(enterprise.createdAt).toLocaleDateString("zh-CN")}`}
         actions={
           asOps ? (
             <>

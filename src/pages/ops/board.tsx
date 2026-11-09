@@ -77,7 +77,7 @@ export default function OpsBoardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <OpsPageHeader title="运营看板" description="各企业项目的阶段进度、待办积压与数字咨询师用量。用量只做记录，不计费。" />
+      <OpsPageHeader title="运营看板" />
 
       {board.error ? (
         <Alert variant="destructive">

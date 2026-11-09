@@ -66,14 +66,18 @@ export default function CampDetailPage() {
     <div className="flex flex-col gap-5">
       {back}
       <OpsPageHeader
-        title={camp.name}
-        eyebrow={
-          <span className="flex flex-wrap items-center gap-2">
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {camp.name}
             <Badge variant={camp.status === "running" ? "default" : camp.status === "closed" ? "secondary" : "outline"}>{CAMP_STATUS_LABELS[camp.status]}</Badge>
-            {[camp.startDate && `${camp.startDate}${camp.endDate ? ` ～ ${camp.endDate}` : ""}`, camp.location].filter(Boolean).join(" · ")}
+            <span className="text-sm font-normal text-muted-foreground">
+              {[camp.startDate && `${camp.startDate}${camp.endDate ? ` ～ ${camp.endDate}` : ""}`, camp.location].filter(Boolean).join(" · ")}
+            </span>
+            <Badge variant="outline" className="font-normal tabular-nums">
+              {projects.length} 家企业 · 营前就绪 {projects.filter(ready).length} 家
+            </Badge>
           </span>
         }
-        description={`${projects.length} 家企业项目 · 营前就绪 ${projects.filter(ready).length} 家`}
         actions={
           <>
             <Button variant="outline" onClick={() => setEditing(true)}>

@@ -23,7 +23,6 @@ export default function CampsPage() {
     <div className="flex flex-col gap-6">
       <OpsPageHeader
         title="训练营批次"
-        description="按期组织训练营：批量加企业、批量发账号，营前看准备情况，现场看各企业进度，结营后转为企业内训继续做。"
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus /> 新建批次

@@ -20,7 +20,6 @@ export const appRoutes = defineAppRoutes([
         label: "我的项目",
         priority: 1,
         icon: <FolderKanban />,
-        description: "进入正在推进的战略咨询项目。",
       },
     },
   },
@@ -50,7 +49,7 @@ export const appRoutes = defineAppRoutes([
     path: "/sample",
     lazy: () => import("@/pages/sample"),
     resource: {
-      meta: { label: "示例项目", priority: 1.5, icon: <Eye />, description: "虚构企业瀚川燃气的完整成果，只读，填表时对照着看。" },
+      meta: { label: "示例项目", priority: 1.5, icon: <Eye /> },
     },
   },
   { name: "sample.table", path: "/sample/:code", lazy: () => import("@/pages/sample") },
@@ -59,7 +58,7 @@ export const appRoutes = defineAppRoutes([
     path: "/help",
     lazy: () => import("@/pages/help"),
     resource: {
-      meta: { label: "使用指南", priority: 6, icon: <LifeBuoy />, description: "五步走完的简明说明。" },
+      meta: { label: "使用指南", priority: 6, icon: <LifeBuoy /> },
     },
   },
   {
@@ -72,7 +71,6 @@ export const appRoutes = defineAppRoutes([
         label: "咨询师工作台",
         priority: 0,
         icon: <ClipboardList />,
-        description: "跨企业汇总待复核、待企业确认和上游已变更的成果。",
       },
     },
   },
@@ -86,7 +84,6 @@ export const appRoutes = defineAppRoutes([
         label: "本企业",
         priority: 2,
         icon: <Building />,
-        description: "维护本企业的成员账号和组织部门。",
       },
     },
   },
@@ -95,7 +92,7 @@ export const appRoutes = defineAppRoutes([
     path: "/expert",
     lazy: () => import("@/pages/expert/list"),
     resource: {
-      meta: { label: "专家咨询", priority: 5, icon: <MessagesSquare />, description: "需要人工判断的关键问题：受理、预约、纪要与专家意见。" },
+      meta: { label: "专家咨询", priority: 5, icon: <MessagesSquare /> },
     },
   },
   { name: "expert.detail", path: "/expert/:requestId", lazy: () => import("@/pages/expert/detail") },
@@ -115,7 +112,7 @@ export const appRoutes = defineAppRoutes([
         path: "board",
         lazy: () => import("@/pages/ops/board"),
         resource: {
-          meta: { label: "运营看板", priority: 0, icon: <Activity />, description: "项目进度、待办积压与数字咨询师用量。" },
+          meta: { label: "运营看板", priority: 0, icon: <Activity /> },
         },
       },
       {
@@ -123,7 +120,7 @@ export const appRoutes = defineAppRoutes([
         path: "enterprises",
         lazy: () => import("@/pages/ops/enterprises"),
         resource: {
-          meta: { label: "企业与开通", priority: 1, icon: <Building2 />, description: "开通企业、停用企业、管理企业成员与项目。" },
+          meta: { label: "企业与开通", priority: 1, icon: <Building2 /> },
         },
       },
       { name: "ops.enterprise", path: "enterprises/:enterpriseId", lazy: () => import("@/pages/ops/enterprise-detail") },
@@ -132,7 +129,7 @@ export const appRoutes = defineAppRoutes([
         path: "camps",
         lazy: () => import("@/pages/ops/camps"),
         resource: {
-          meta: { label: "训练营批次", priority: 1.5, icon: <Tent />, description: "按期组织训练营：批量加企业和发账号、营前准备、现场看板、结营。" },
+          meta: { label: "训练营批次", priority: 1.5, icon: <Tent /> },
         },
       },
       { name: "ops.camp", path: "camps/:campId", lazy: () => import("@/pages/ops/camp-detail") },
@@ -141,7 +138,7 @@ export const appRoutes = defineAppRoutes([
         path: "team",
         lazy: () => import("@/pages/ops/team"),
         resource: {
-          meta: { label: "咨询团队", priority: 2, icon: <UsersRound />, description: "咨询师、咨询管理员与运营管理员账号。" },
+          meta: { label: "咨询团队", priority: 2, icon: <UsersRound /> },
         },
       },
       {
@@ -149,7 +146,7 @@ export const appRoutes = defineAppRoutes([
         path: "methods",
         lazy: () => import("@/pages/ops/methods"),
         resource: {
-          meta: { label: "方法与规则包", priority: 3, icon: <BookOpenCheck />, description: "成果目录与数字咨询师（只读）。" },
+          meta: { label: "方法与规则包", priority: 3, icon: <BookOpenCheck /> },
         },
       },
     ],

@@ -14,7 +14,6 @@ export function DefaultSignInPage({
   return (
     <AuthLayout
       title="登录"
-      description="用手机号或开通的账号登录。"
       footer={
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           <Link to="/trial" className="font-medium text-primary hover:underline hover:underline-offset-4">

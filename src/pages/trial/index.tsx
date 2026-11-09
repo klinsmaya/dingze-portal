@@ -6,7 +6,7 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { InputPassword } from "@/components/auth/input-password";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/dingze/errors";
 import { passwordProblem, trialApi } from "@/lib/dingze/invite-api";
@@ -57,7 +57,7 @@ export function TrialSignUpPage() {
   };
 
   return (
-    <AuthLayout title="免费试用" description="填好下面几项就能开始，不用等审核。" footer={toLogin}>
+    <AuthLayout title="免费试用" footer={toLogin}>
       <form onSubmit={submit} className="flex flex-col gap-5">
         <FieldGroup className="gap-4">
           <Field>
@@ -71,12 +71,12 @@ export function TrialSignUpPage() {
           <Field data-invalid={!!phoneProblem || undefined}>
             <FieldLabel htmlFor="trial-phone">手机号</FieldLabel>
             <Input id="trial-phone" value={form.phone} onChange={set("phone")} inputMode="tel" autoComplete="tel" maxLength={11} required />
-            {phoneProblem ? <FieldError>{phoneProblem}</FieldError> : <FieldDescription>以后用手机号登录。</FieldDescription>}
+            {phoneProblem ? <FieldError>{phoneProblem}</FieldError> : null}
           </Field>
           <Field data-invalid={!!pwProblem || undefined}>
             <FieldLabel htmlFor="trial-password">密码</FieldLabel>
-            <InputPassword id="trial-password" value={form.password} onChange={set("password")} autoComplete="new-password" required />
-            {pwProblem ? <FieldError>密码{pwProblem}</FieldError> : <FieldDescription>至少 8 位，字母和数字都要有。</FieldDescription>}
+            <InputPassword id="trial-password" value={form.password} onChange={set("password")} autoComplete="new-password" placeholder="至少 8 位，含字母和数字" required />
+            {pwProblem ? <FieldError>密码{pwProblem}</FieldError> : null}
           </Field>
           <Field data-invalid={!!mismatch || undefined}>
             <FieldLabel htmlFor="trial-confirm">再输一次密码</FieldLabel>
@@ -88,7 +88,7 @@ export function TrialSignUpPage() {
           <label className="flex items-start gap-2 text-sm leading-relaxed">
             <Checkbox checked={agree} onCheckedChange={(v) => setAgree(v === true)} className="mt-0.5" />
             <span className="text-muted-foreground">
-              我知道这是试用版：请用脱敏资料；资料和对话会发给数字咨询师背后的大模型服务处理。
+              试用版请用脱敏资料，资料和对话会交给大模型处理。
             </span>
           </label>
         </FieldGroup>

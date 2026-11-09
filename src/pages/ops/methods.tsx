@@ -28,7 +28,6 @@ export default function MethodsPage() {
     <div className="flex flex-col gap-6">
       <OpsPageHeader
         title="方法与规则包"
-        description="成果目录和数字咨询师的引导规则随定责插件发布；修改规则即发布新版插件，可回退。"
       />
       <Tabs value={tab} onValueChange={(v) => setParams(v === "gaps" ? { tab: "gaps" } : {}, { replace: true })}>
         <TabsList>

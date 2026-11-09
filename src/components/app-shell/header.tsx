@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NotificationBell } from "@/components/dingze/notification-bell";
-import { DisplayMenu, DisplayRadioGroups } from "@/components/dingze/display-menu";
+import { DisplayRadioGroups } from "@/components/dingze/display-menu";
 import { ShortcutsDialog } from "@/pages/projects/components/status-bar";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +50,6 @@ export const Header = () => {
 };
 
 function DesktopHeader() {
-  const translate = useTranslate();
-
   return (
     <header
       className={cn(
@@ -71,17 +69,10 @@ function DesktopHeader() {
         "z-40"
       )}
     >
-      <div className="flex items-center gap-3">
-        <SidebarTrigger className="size-9 rounded-xl text-muted-foreground hover:text-foreground" />
-        <div className="hidden h-5 w-px bg-border sm:block" />
-        <span className="hidden text-sm font-medium text-muted-foreground sm:block">
-          {translate("shell.workspace", "AI application workspace")}
-        </span>
-      </div>
+      <SidebarTrigger className="size-9 rounded-xl text-muted-foreground hover:text-foreground" />
       <div className="flex items-center gap-2">
         <SettingsLink />
         <NotificationBell />
-        <DisplayMenu tone="surface" />
         <UserDropdown />
       </div>
     </header>
@@ -120,7 +111,6 @@ function MobileHeader() {
       <div className="flex shrink-0 items-center gap-1">
         <SettingsLink className="size-9" />
         <NotificationBell className="size-9" />
-        <DisplayMenu tone="surface" />
         <UserDropdown />
       </div>
     </header>
@@ -190,14 +180,14 @@ export const UserDropdown = () => {
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="min-h-9 gap-2 px-2">
-            <ALargeSmall /> 显示设置（主题与字号）
+            <ALargeSmall /> 显示设置
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             <DisplayRadioGroups />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuItem className="min-h-9 cursor-pointer gap-2 px-2" onClick={() => setShortcuts(true)}>
-          <Keyboard /> 快捷键与帮助
+          <Keyboard /> 快捷键
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
