@@ -21,14 +21,14 @@ import { useProjectContext } from "@/pages/projects/project-context";
 import { EditorToolbar, ImportButton, SourceNote, TextCell } from "./kit";
 
 const ENTERED: Record<string, { key: keyof PlanBookText; hint: string }[]> = {
-  一: [{ key: "summary", hint: "补充说明（选填）：摘要已由定版成果自动汇总；这里只补充背景与表述，不改动任何定版数字" }],
-  二: [{ key: "lastYear", hint: "上年度目标完成情况、主要经验与问题" }],
-  三: [{ key: "environment", hint: "宏观、行业、客户、竞争与内部能力（环境盘点在培训中完成，这里写结论）" }],
+  一: [{ key: "summary", hint: "补充说明（选填）" }],
+  二: [{ key: "lastYear", hint: "上年度完成情况、经验与问题" }],
+  三: [{ key: "environment", hint: "宏观、行业、客户、竞争与内部能力" }],
   七: [
-    { key: "risks", hint: "主要风险、触发条件与应对措施" },
-    { key: "notDo", hint: "“不做什么”的边界 / 部门“三不做”清单" },
+    { key: "risks", hint: "风险、触发条件与应对" },
+    { key: "notDo", hint: "不做什么" },
   ],
-  八: [{ key: "dictionaryNote", hint: "指标字典的补充说明（选填）" }],
+  八: [{ key: "dictionaryNote", hint: "补充说明（选填）" }],
 };
 
 function BlockView({ block }: { block: Block }) {
@@ -122,7 +122,7 @@ function BookBody({
   );
 }
 
-const HINT = "计划书由项目任务书、计划实施推进表、资源匹配表合成。同源章节直接引用定版成果，不重新创造目标、路径、责任和指标值；企业只需填写标“企业录入”的章节；执行摘要也由定版成果自动汇总，可另加补充说明。";
+const HINT = "计划书由定版成果自动合成，只需填写标“企业录入”的章节。";
 
 export function CompanyPlanBookEditor({
   value,

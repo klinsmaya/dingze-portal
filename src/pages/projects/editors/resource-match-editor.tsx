@@ -43,7 +43,7 @@ export function ResourceMatchEditor({ value, onChange, readOnly, issues, upstrea
 
   return (
     <section aria-label="项目资源匹配表" className="flex flex-col gap-4">
-      <EditorToolbar hint="资源分财务、人、信息化、物料四类；外部人员计入人，外部服务费计入财务。某类不需要就勾“无”。重大缺口必须写明补齐方式和责任人。">
+      <EditorToolbar hint="资源分财务、人、信息化、物料四类，不需要的勾“无”；重大缺口写明补齐方式和责任人。">
         <ImportButton label="按任务书带入资源需求" count={seed.length} readOnly={readOnly} onClick={() => set([...rows, ...seed])} />
       </EditorToolbar>
       {groups.map((g) => {

@@ -49,7 +49,7 @@ export function ScorecardEditor({ value, onChange, readOnly, issues, upstream }:
 
   return (
     <section aria-label="绩效计分卡" className="flex flex-col gap-4">
-      <EditorToolbar hint="把部门承接的 A / R 指标挂进计分卡：写清指标定义、保底值 / 力争值、权重和评分方法。完成情况与评分在后续范围。">
+      <EditorToolbar hint="把部门承接的 A / R 指标挂进计分卡，写清定义、保底值 / 力争值、权重和评分方法。">
         <ImportButton label="带入部门承接项" count={newItems} readOnly={readOnly} onClick={() => onChange(seeded)} />
       </EditorToolbar>
 

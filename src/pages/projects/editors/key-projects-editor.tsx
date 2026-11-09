@@ -48,7 +48,7 @@ export function KeyProjectsEditor({ value, onChange, readOnly, issues, upstream,
   return (
     <section aria-label="关键项目列表" className="flex flex-col gap-4">
       <EditorToolbar
-        hint={`抓关键并入立项：本项目按${keyProjectLevel === 1 ? "一" : "二"}级路径立项（运营管理可调整）。经提取、归类、逻辑化、结构化、价值命名五步形成项目。`}
+        hint={`按${keyProjectLevel === 1 ? "一" : "二"}级路径立项，经提取、归类、逻辑化、结构化、价值命名五步形成项目。`}
       >
         <ImportButton label={`按${keyProjectLevel === 1 ? "一" : "二"}级路径生成候选项目`} count={proposals.length} readOnly={readOnly} onClick={() => set([...projects, ...proposals])} />
         {!readOnly ? <AddButton label="添加项目" onClick={() => set([...projects, emptyKeyProject({ code: `KP-${String(projects.length + 1).padStart(2, "0")}` })])} /> : null}
@@ -136,7 +136,7 @@ export function KeyProjectsEditor({ value, onChange, readOnly, issues, upstream,
                     </div>
                   </td>
                   <td className="px-1 py-1">
-                    <TextCell label={`${p.name || "项目"} 关键节点`} multiline placeholder="如：3 月立项；6 月首站投运" value={p.milestones} onChange={(milestones) => set(patchById(projects, p.id, { milestones }))} readOnly={readOnly} />
+                    <TextCell label={`${p.name || "项目"} 关键节点`} multiline placeholder="" value={p.milestones} onChange={(milestones) => set(patchById(projects, p.id, { milestones }))} readOnly={readOnly} />
                   </td>
                   <td className="px-1 py-1">
                     <Input

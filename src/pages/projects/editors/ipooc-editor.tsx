@@ -46,7 +46,7 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
 
   return (
     <section aria-label="IPOOC 指标设计表" className="flex flex-col gap-4">
-      <EditorToolbar hint="选定需要拆解的关键策略，按投入、过程、产出、结果、成本设计指标；本书约定 C = Cost。">
+      <EditorToolbar hint="选定要拆解的关键策略，按投入、过程、产出、结果、成本设计指标。">
         {!readOnly ? (
           <>
             {unused.length ? (
@@ -73,7 +73,7 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
 
       {sheets.length === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-          还没有选择要拆解的关键策略。IPOOC 为选做：策略已足够明确时可以跳过。
+          还没有关键策略
         </p>
       ) : null}
 
@@ -89,8 +89,8 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
                 readOnly={readOnly}
                 invalid={invalid.has(sheet.id) && !sheet.strategy.trim()}
               />
-              <TextCell label="时间周期" placeholder="时间周期，如 2026 年度" value={sheet.period} onChange={(period) => setSheet(sheet.id, { period })} readOnly={readOnly} />
-              <TextCell label="责任部门" placeholder="责任部门" value={sheet.ownerDept} onChange={(ownerDept) => setSheet(sheet.id, { ownerDept })} readOnly={readOnly} />
+              <TextCell label="时间周期" placeholder="如 2026 年度" value={sheet.period} onChange={(period) => setSheet(sheet.id, { period })} readOnly={readOnly} />
+              <TextCell label="责任部门" placeholder="部门" value={sheet.ownerDept} onChange={(ownerDept) => setSheet(sheet.id, { ownerDept })} readOnly={readOnly} />
             </div>
             <RowActions label={sheet.strategy || `主题 ${index + 1}`} readOnly={readOnly} onRemove={() => onChange({ sheets: removeById(sheets, sheet.id) })} onMove={(delta) => onChange({ sheets: moveById(sheets, sheet.id, delta) })} />
           </div>
@@ -138,7 +138,7 @@ export function IpoocEditor({ value, onChange, readOnly, issues, upstream }: Pro
           </div>
 
           <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <legend className="mb-1 text-xs font-semibold text-muted-foreground">SMART 验证（按书稿：A 有挑战性、R 切实可行）</legend>
+            <legend className="mb-1 text-xs font-semibold text-muted-foreground">SMART 验证</legend>
             {SMART_CHECKS.map((check) => (
               <label key={check.key} className="flex items-center gap-2" title={check.hint}>
                 <Checkbox

@@ -44,7 +44,7 @@ export function UndertakingEditor({ value, onChange, readOnly, issues, upstream 
 
   return (
     <section aria-label="部门目标承接表" className="flex flex-col gap-4">
-      <EditorToolbar hint="两级参与、两级分解：部门承接自己担任 A / R 的项目或路径，写清目的、任务、衡量指标和指标值；不只是分摊数字。">
+      <EditorToolbar hint="部门承接自己担任 A / R 的项目或路径，写清目的、任务、衡量指标和指标值。">
         <ImportButton label="按 RACI 生成承接项" count={seed.length} readOnly={readOnly} onClick={() => set([...rows, ...seed])} />
         {!readOnly ? (
           <AddButton
