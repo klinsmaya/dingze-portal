@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, CircleHelp, Import, Plus, Trash2 } from "lucide-react";
-import { type ReactNode, createContext, useContext, useRef, useState } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -65,41 +65,44 @@ export function TextCell({
   );
 }
 
-/** 工具栏里给“怎么填”留的位置（2026-10-16 页头规整）：有位置时提示放进工具栏，不再占编辑区一行。 */
+/** 右栏“书中方法”顶部给“怎么填”留的位置：有位置时编辑器的填写提示放进去，页面上不再另开入口。 */
 export const HowToSlotContext = createContext<HTMLElement | null>(null);
 
 /**
- * The editor's own small row: a 怎么填 tip and table-specific buttons; the tip goes into the toolbar when it can.
- * A second toolbar inside the same editor (a sub-list such as the map's relations) passes `inline` so the toolbar
- * shows one 怎么填, not two.
+ * The editor's own small row: a 怎么填 tip and table-specific buttons. The tip goes into the right panel's 书中方法
+ * when it can; a second toolbar inside the same editor (a sub-list such as the map's relations) passes `inline` and
+ * keeps its tip as a small popover where it is.
  */
 export function EditorToolbar({ children, hint, inline = false }: { children?: ReactNode; hint?: ReactNode; inline?: boolean }) {
   const contextSlot = useContext(HowToSlotContext);
   const slot = inline ? null : contextSlot;
-  const tip = hint ? (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          "flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground",
-          slot && "h-8 shrink-0 rounded-md border px-2 hover:bg-muted",
-        )}
-      >
-        <CircleHelp className="size-3.5" /> 怎么填
-      </PopoverTrigger>
-      <PopoverContent align={slot ? "end" : "start"} className="max-w-md text-sm leading-relaxed">
-        {hint}
-      </PopoverContent>
-    </Popover>
-  ) : null;
   if (slot) {
     return (
       <>
-        {tip ? createPortal(tip, slot) : null}
+        {hint
+          ? createPortal(
+              <section className="rounded-lg border border-book-border bg-background/60 p-3">
+                <h4 className="text-xs font-semibold opacity-80">怎么填</h4>
+                <div className="mt-1 leading-relaxed">{hint}</div>
+              </section>,
+              slot,
+            )
+          : null}
         {children ? <div className="flex flex-wrap justify-end gap-2">{children}</div> : null}
       </>
     );
   }
   if (!children && !hint) return null;
+  const tip = hint ? (
+    <Popover>
+      <PopoverTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <CircleHelp className="size-3.5" /> 怎么填
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-w-md text-sm leading-relaxed">
+        {hint}
+      </PopoverContent>
+    </Popover>
+  ) : null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       {tip ?? <span />}
@@ -137,6 +140,10 @@ export function ImportButton({
   );
 }
 
+/**
+ * 行右侧的上移 / 下移 / 删除。光标在这一行的任何格子里时，Alt+Shift+↑ / ↓ 移动、Alt+Shift+Backspace 删除（可撤销），
+ * 和树形表的快捷键一致。
+ */
 export function RowActions({
   label,
   onRemove,
@@ -148,20 +155,43 @@ export function RowActions({
   onMove?: (delta: -1 | 1) => void;
   readOnly: boolean;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const latest = useRef({ onRemove, onMove });
+  latest.current = { onRemove, onMove };
+  useEffect(() => {
+    if (readOnly) return;
+    const row = ref.current?.closest<HTMLElement>("tr, li, [data-row]") ?? ref.current?.parentElement ?? null;
+    if (!row) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+      const move = latest.current.onMove;
+      const act =
+        event.key === "ArrowUp" && move ? () => move(-1) : event.key === "ArrowDown" && move ? () => move(1) : event.key === "Backspace" || event.key === "Delete" ? latest.current.onRemove : null;
+      if (!act) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const focused = document.activeElement as HTMLElement | null;
+      act();
+      // React moves the row's elements rather than recreating them; put the focus back where it was.
+      requestAnimationFrame(() => focused?.isConnected && focused.focus());
+    };
+    row.addEventListener("keydown", onKey);
+    return () => row.removeEventListener("keydown", onKey);
+  }, [readOnly]);
   if (readOnly) return null;
   return (
-    <div className="flex shrink-0 items-center">
+    <div ref={ref} className="flex shrink-0 items-center">
       {onMove ? (
         <>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={`上移 ${label}`} onClick={() => onMove(-1)}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`上移 ${label}`} title="上移（Alt+Shift+↑）" onClick={() => onMove(-1)}>
             <ArrowUp />
           </Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={`下移 ${label}`} onClick={() => onMove(1)}>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={`下移 ${label}`} title="下移（Alt+Shift+↓）" onClick={() => onMove(1)}>
             <ArrowDown />
           </Button>
         </>
       ) : null}
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除 ${label}`} onClick={onRemove}>
+      <Button type="button" variant="ghost" size="icon-sm" aria-label={`删除 ${label}`} title="删除（Alt+Shift+Backspace，可撤销）" onClick={onRemove}>
         <Trash2 />
       </Button>
     </div>

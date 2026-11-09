@@ -44,7 +44,7 @@ function flowNav(artifacts: ArtifactOverview[], consulting: boolean): NavItem[] 
         done: !!p?.complete,
       };
     }),
-    { key: "results", to: "results", label: "成果", no: 5, title: "成果：每张表的状态与版本，下载计划书和各表" },
+    { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
     ...(consulting ? [{ key: "expert", to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }] : []),
   ];
 }
@@ -125,23 +125,18 @@ function ProjectTopbar({
       <nav aria-label="项目导航" className="ml-2 flex h-full min-w-0 items-stretch overflow-x-auto">
         {nav.map((item) => {
           const active = item.key === activeKey;
-          return (
-            <Link
-              key={item.key}
-              to={item.to}
-              title={item.title}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
-                active ? "border-gold font-bold text-band-foreground" : "border-transparent text-band-muted hover:text-band-foreground",
-              )}
-            >
+          const className = cn(
+            "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
+            active ? "border-gold font-bold text-band-foreground" : item.locked ? "cursor-not-allowed border-transparent text-band-muted/60" : "border-transparent text-band-muted hover:text-band-foreground",
+          );
+          const inner = (
+            <>
               {item.no ? (
                 <span
                   aria-hidden
                   className={cn(
                     "flex size-[18px] items-center justify-center rounded-full border text-[11px] font-bold",
-                    item.done ? "border-gold bg-gold text-[#0c3d52]" : active ? "border-gold text-gold" : "border-white/40",
+                    item.done ? "border-gold bg-gold text-[#0c3d52]" : active ? "border-gold text-gold" : item.locked ? "border-white/25" : "border-white/40",
                   )}
                 >
                   {item.done ? <Check className="size-3" /> : item.no}
@@ -149,6 +144,16 @@ function ProjectTopbar({
               ) : null}
               {item.label}
               {item.locked ? <Lock className="size-3 opacity-70" aria-label="待开启" /> : null}
+            </>
+          );
+          // 还没开启的阶段不可点：点进去也只是一张锁定页。
+          return item.locked && !active ? (
+            <span key={item.key} title={item.title} aria-disabled="true" className={className}>
+              {inner}
+            </span>
+          ) : (
+            <Link key={item.key} to={item.to} title={item.title} aria-current={active ? "page" : undefined} className={className}>
+              {inner}
             </Link>
           );
         })}

@@ -2,6 +2,8 @@ import { ArrowRight, Eye, History, Lock, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
+
+import { useConfirm } from "@/components/dingze/confirm";
 import { useGetIdentity } from "@refinedev/core";
 import { toast } from "sonner";
 
@@ -67,7 +69,7 @@ import { ExportButton } from "./components/export-button";
 import { PlanBookExportButton } from "./components/plan-book-export";
 import { RouteRail } from "./components/route-rail";
 import { HowToSlotContext } from "./editors/kit";
-import { ExportMenu, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, useMediaQuery } from "./components/workspace-chrome";
+import { ExportDialog, type HeaderState, type InputItem, LinksButton, MethodButton, PanelToggle, StructureToolbar, SubsMenu, TitleRow, WhereRow, hasToolbar, useMediaQuery } from "./components/workspace-chrome";
 import { ValidationBar } from "./components/validation-bar";
 import { UpstreamChangesDialog } from "./components/upstream-changes";
 import { ImpactDialog } from "./components/impact-list";
@@ -236,9 +238,11 @@ function Workspace({ code }: { code: string }) {
   const [asideTab, setAsideTab] = useState<AsideTab>(highlightComment ? "comments" : "coach");
   const [upstreamOpen, setUpstreamOpen] = useState(false);
   const [impactOpen, setImpactOpen] = useState(false);
-  // 编辑器的“怎么填”放进工具栏右侧（2026-10-16）。
+  // 编辑器的“怎么填”放进右栏“书中方法”顶部，页面上只留一个入口。
   const [howToSlot, setHowToSlot] = useState<HTMLElement | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const { confirm, prompt } = useConfirm();
   // Opens the right panel on a tab; set once the panel preference is known (below).
   const openAside = useRef<(tab: AsideTab) => void>(setAsideTab);
   const [focusAnchor, setFocusAnchor] = useState<string | null>(null);
@@ -256,7 +260,9 @@ function Workspace({ code }: { code: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverRev, detail.dataUpdatedAt]);
 
-  // Unsaved edits: warn on reload and on in-app links (step bar, project tabs, notifications).
+  // Unsaved edits: warn on reload and on in-app links (step bar, project tabs, notifications). The in-app
+  // question is our own dialog; once answered, the same link is clicked again and let through.
+  const leaveAllowed = useRef(false);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -265,10 +271,17 @@ function Workspace({ code }: { code: string }) {
       if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
       const to = new URL(link.href, window.location.href);
       if (to.origin !== window.location.origin || to.pathname === window.location.pathname) return;
-      if (!window.confirm("这张表有未保存的修改，离开后会丢失。确定离开？")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+      if (leaveAllowed.current) {
+        leaveAllowed.current = false;
+        return;
       }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      confirm({ title: "离开这张表？", description: "有未保存的修改，离开后会丢失。", confirmLabel: "不保存，离开", destructive: true }).then((ok) => {
+        if (!ok || !link.isConnected) return;
+        leaveAllowed.current = true;
+        link.click();
+      });
     };
     window.addEventListener("beforeunload", warn);
     document.addEventListener("click", guard, true);
@@ -276,7 +289,7 @@ function Workspace({ code }: { code: string }) {
       window.removeEventListener("beforeunload", warn);
       document.removeEventListener("click", guard, true);
     };
-  }, [dirty]);
+  }, [dirty, confirm]);
 
   const issues = useMemo(
     () => (draft ? validateArtifact(code, draft, upstream) : []),
@@ -757,8 +770,8 @@ function Workspace({ code }: { code: string }) {
           size="sm"
           variant="outline"
           disabled={dismissOrg.isPending}
-          onClick={() => {
-            const note = window.prompt("说明一下为什么不需要重开（会记在审计里，可留空）：", "组织变更不影响这张表已定版的内容");
+          onClick={async () => {
+            const note = await prompt({ title: "不需要重开", description: "说明一下原因，会记在审计里，可留空。", defaultValue: "组织变更不影响这张表已定版的内容", confirmLabel: "确认不需要重开" });
             if (note === null) return;
             dismissOrg.mutate(note, { onSuccess: () => toast.success("已确认不需要重开"), onError: (e) => toast.error(errorMessage(e)) });
           }}
@@ -807,29 +820,17 @@ function Workspace({ code }: { code: string }) {
     />
   );
   const bookOpen = panelOpen && asideTab === "book";
-  // 看示例：新标签页打开虚构企业瀚川燃气的同一张表，对照着填（只读）。
-  const sampleLink = hasSample(code) ? (
-    <Link
-      to={samplePath(code)}
-      target="_blank"
-      rel="noopener"
-      title="新窗口打开示例企业（瀚川燃气，虚构）的同一张表，对照着填"
-      className="mx-1 flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-    >
-      <Eye className="size-3.5" /> <span className="font-semibold">看示例</span>
-    </Link>
-  ) : null;
-  const methodButton = methodLine ? <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} /> : null;
+  const methodButton = <MethodButton text={methodLine} active={bookOpen} onClick={() => (bookOpen ? setAsideTab("coach") : openAside.current("book"))} />;
   // 交出去以后的下一张：一个小链接放在状态行，不再占编辑区一整行（2026-10-16）。
   const handedOff = ["step_done", "in_review", "pending_confirm", "locked"].includes(status);
   const allP0Locked = ARTIFACTS.filter((a) => a.priority === "P0").every((a) => overview.artifacts.find((x) => x.code === a.code)?.status === "locked");
   const nextLink = !handedOff ? null : next ? (
     <Link
       to={workspacePath(project.id, next.code)}
-      className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted"
+      className="flex min-w-0 max-w-[16rem] items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted"
       title={`这一步${status === "locked" ? "已定版" : status === "step_done" ? "本步已完成" : "已交出去"}，可以接着做《${next.name}》`}
     >
-      下一张《{next.name}》 <ArrowRight className="size-3.5" />
+      <span className="truncate">下一张《{next.name}》</span> <ArrowRight className="size-3.5 shrink-0" />
     </Link>
   ) : allP0Locked ? (
     <Link to={`${base}/results`} className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold text-brand hover:bg-muted" title="全部 P0 成果都已定版">
@@ -839,7 +840,7 @@ function Workspace({ code }: { code: string }) {
   const unsaved = dirty ? Math.max(1, edit.log.length) : 0;
   const hints: [string, string][] = chrome?.tools
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
-    : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Ctrl+Alt+M", "批注"]];
+    : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Alt+Shift+↑↓", "移动行"], ["Ctrl+Alt+M", "批注"]];
 
   const tabs: [AsideTab, string, number][] = [
     ["coach", "对话", 0],
@@ -895,69 +896,27 @@ function Workspace({ code }: { code: string }) {
                 chip={chrome?.chip ?? `${def.specId} · ${def.bookRef}`}
                 locked={!detail.isLoading && !unlocked}
                 chrome={chrome}
-                revisionOn={revision.on}
-                canRevise={versions.length > 0}
-                onRevision={() => revisionToggle.current()}
-                openComments={openThreads.length}
-                onComments={() => {
-                  setPanelPref(true);
-                  setAsideTab("comments");
+                edit={canSave ? { canUndo: edit.log.length > 0 || edit.saved.length > 0, canRedo: edit.redo.length > 0, onUndo: undo, onRedo: redo } : null}
+                method={methodButton}
+                more={{
+                  revision: { on: revision.on, can: versions.length > 0, toggle: () => revisionToggle.current() },
+                  comments: {
+                    open: openThreads.length,
+                    onOpen: () => {
+                      setPanelPref(true);
+                      session.commentOn(chrome?.tools?.selected ?? focusAnchor ?? "");
+                    },
+                  },
+                  selecting,
+                  onLasso: () => {
+                    setPanelPref(true);
+                    session.setSelecting(!selecting);
+                  },
+                  onHistory: () => setHistoryOpen(true),
+                  onExport: () => setExportOpen(true),
+                  sample: hasSample(code) ? samplePath(code) : null,
+                  onShortcuts: () => setShortcutsOpen(true),
                 }}
-                history={
-                  <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} title="版本、定版轮次，查看任意一版">
-                    <History /> 历史
-                  </Button>
-                }
-                exportMenu={
-                  <ExportMenu>
-                    <ExportButton
-                      code={code}
-                      name={def.name}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.shortName ?? "企业"}
-                      projectName={project.name}
-                      upstream={upstream}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <CharterDocxButton
-                      code={code}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.name ?? "企业"}
-                      projectName={project.name}
-                      year={project.year}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <DiagramExportButton
-                      code={code}
-                      name={def.name}
-                      payload={artifact?.currentVersion?.payload}
-                      rev={artifact?.currentRev ?? 0}
-                      status={status}
-                      enterprise={project.enterprise?.shortName ?? "企业"}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                    <PlanBookExportButton
-                      code={code}
-                      project={project}
-                      rev={artifact?.currentRev ?? 0}
-                      enterprise={project.enterprise?.name ?? "企业"}
-                      year={project.year}
-                      dirty={dirty}
-                      onExported={recordExport}
-                      variant="ghost"
-                    />
-                  </ExportMenu>
-                }
                 actions={
                   detail.data ? (
                     <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} openComments={openThreads.length} />
@@ -965,36 +924,11 @@ function Workspace({ code }: { code: string }) {
                 }
               />
             </div>
-            {EDITABLE_CODES.has(code) && unlocked ? (
+            {EDITABLE_CODES.has(code) && unlocked && hasToolbar(chrome) ? (
               <div className="-mx-4 border-t px-3 md:-mx-5">
-                <StructureToolbar
-                  chrome={chrome}
-                  readOnly={!canSave}
-                  canUndo={edit.log.length > 0 || edit.saved.length > 0}
-                  canRedo={edit.redo.length > 0}
-                  onUndo={undo}
-                  onRedo={redo}
-                  onComment={() => {
-                    setPanelPref(true);
-                    session.commentOn(chrome?.tools?.selected ?? focusAnchor ?? "");
-                  }}
-                  selecting={selecting}
-                  onLasso={() => {
-                    setPanelPref(true);
-                    session.setSelecting(!selecting);
-                  }}
-                  onShortcuts={() => setShortcutsOpen(true)}
-                  method={<>{sampleLink}{methodButton}</>}
-                  setHowToSlot={setHowToSlot}
-                />
+                <StructureToolbar chrome={chrome} readOnly={!canSave} />
               </div>
-            ) : (
-              <div className="-mx-4 flex min-h-10 items-center justify-end gap-1 border-t px-3 md:-mx-5">
-                {sampleLink}
-                {methodButton}
-                <span ref={setHowToSlot} className="contents" />
-              </div>
-            )}
+            ) : null}
           </div>
 
           <main
@@ -1258,11 +1192,57 @@ function Workspace({ code }: { code: string }) {
               selected={chrome?.tools?.selectedLabel ?? (focusAnchor ? nameOf(focusAnchor) : null)}
               hints={hints}
               onIssues={() => document.querySelector("[data-dingze-validation]")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              onShortcuts={() => setShortcutsOpen(true)}
-              onBook={() => openAside.current("book")}
             />
           ) : null}
           <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)}>
+            <ExportButton
+              code={code}
+              name={def.name}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.shortName ?? "企业"}
+              projectName={project.name}
+              upstream={upstream}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <CharterDocxButton
+              code={code}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.name ?? "企业"}
+              projectName={project.name}
+              year={project.year}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <DiagramExportButton
+              code={code}
+              name={def.name}
+              payload={artifact?.currentVersion?.payload}
+              rev={artifact?.currentRev ?? 0}
+              status={status}
+              enterprise={project.enterprise?.shortName ?? "企业"}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+            <PlanBookExportButton
+              code={code}
+              project={project}
+              rev={artifact?.currentRev ?? 0}
+              enterprise={project.enterprise?.name ?? "企业"}
+              year={project.year}
+              dirty={dirty}
+              onExported={recordExport}
+              variant="ghost"
+            />
+          </ExportDialog>
           <MaterialViewer id={viewingMaterial} onClose={() => setViewingMaterial(null)} />
           <ArtifactHistorySheet project={project} code={historyOpen ? code : null} onClose={() => setHistoryOpen(false)} />
           <ImpactDialog
@@ -1337,6 +1317,8 @@ function Workspace({ code }: { code: string }) {
             <ChangesPanel project={project} code={code} commentNo={numberOf} />
           </div>
           <div className={cn("min-h-0 flex-1 overflow-y-auto bg-book p-4 text-sm text-book-foreground", asideTab !== "book" && "hidden")}>
+            {methodLine ? <p className="font-semibold">{methodLine}</p> : null}
+            <div ref={setHowToSlot} className="mt-3 empty:hidden" />
             <BookMethod def={def} sub={Number(searchParams.get("sub")) || null} zone={searchParams.get("zone")} />
             {overview.isConsultAdmin || (!!role && CONSULTANT_ROLES.includes(role)) ? (
               <div className="mt-4 border-t border-book-border pt-3">
