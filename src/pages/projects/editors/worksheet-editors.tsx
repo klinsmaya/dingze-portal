@@ -4,13 +4,10 @@ import { errorAnchors } from "@/lib/dingze/rows";
 
 import { TextCell } from "./kit";
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-xs font-semibold text-muted-foreground">
-        {label}
-        {hint ? <span className="ml-2 font-normal">{hint}</span> : null}
-      </div>
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       {children}
     </div>
   );
@@ -78,10 +75,10 @@ export function MissionWorksheetEditor({
           </tbody>
         </table>
       </div>
-      <Field label="事业的哲学意义" hint="五个要素共同指向的意义">
+      <Field label="事业的哲学意义">
         <TextCell label="事业的哲学意义" multiline value={value.philosophy} onChange={(philosophy) => set({ philosophy })} readOnly={readOnly} />
       </Field>
-      <Field label="合成使命句" hint="短、可传播、有辨识度；定稿后写回战略屋的“使命”">
+      <Field label="使命句">
         <TextCell
           label="合成使命句"
           multiline
@@ -112,18 +109,18 @@ export function VisionWorksheetEditor({
   const benchmark = value.benchmark ?? { select: "", compare: "", set: "" };
   return (
     <section aria-label="愿景三法" className="flex flex-col gap-4">
-      <Field label="战略推导法" hint="从使命和战略方向推出未来要成为什么">
+      <Field label="战略推导法">
         <TextCell label="战略推导法" multiline value={value.derivation} onChange={(derivation) => set({ derivation })} readOnly={readOnly} />
       </Field>
       <div className="grid gap-3 md:grid-cols-3">
         {(
           [
-            ["select", "选标", "选谁作为标杆"],
-            ["compare", "对标", "差距在哪里"],
-            ["set", "定标", "要达到什么水平"],
+            ["select", "选标"],
+            ["compare", "对标"],
+            ["set", "定标"],
           ] as const
-        ).map(([key, label, hint]) => (
-          <Field key={key} label={`对标一流 · ${label}`} hint={hint}>
+        ).map(([key, label]) => (
+          <Field key={key} label={`对标一流 · ${label}`}>
             <TextCell
               label={`对标一流 ${label}`}
               multiline
@@ -134,14 +131,14 @@ export function VisionWorksheetEditor({
           </Field>
         ))}
       </div>
-      <Field label="引以为傲法" hint="十年后最想让员工、客户为之骄傲的是什么">
+      <Field label="引以为傲法">
         <TextCell label="引以为傲法" multiline value={value.pride} onChange={(pride) => set({ pride })} readOnly={readOnly} />
       </Field>
       <div className="grid gap-3 md:grid-cols-[10rem_1fr]">
         <Field label="时间跨度">
-          <TextCell label="愿景时间跨度" placeholder="通常 7—10 年" value={value.horizon} onChange={(horizon) => set({ horizon })} readOnly={readOnly} />
+          <TextCell label="愿景时间跨度" placeholder="7—10 年" value={value.horizon} onChange={(horizon) => set({ horizon })} readOnly={readOnly} />
         </Field>
-        <Field label="愿景句" hint="定稿后写回战略屋的“愿景”">
+        <Field label="愿景句">
           <TextCell label="愿景句" multiline value={value.statement} onChange={(statement) => set({ statement })} readOnly={readOnly} anchor={"statement"} invalid={invalid.has("statement")} />
         </Field>
       </div>

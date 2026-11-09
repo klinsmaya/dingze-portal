@@ -79,7 +79,7 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
           ? "组织里还没有部门：责任者列只能手动加。请企业管理员先在「本企业 › 组织部门」建好部门和负责人。"
           : `责任者列取自组织部门（${depts.length} 个）${headless.length ? `；${headless.join("、")} 还没写负责人` : ""}，表头小字是部门职责，定 A、R 时对照着看。组织之外的责任者可以加自定义列；定版后组织再变，这里只提示、不自动改。`}
       </SourceNote>
-      <EditorToolbar hint="R 执行者、A 最终负责者、C 咨询协同、I 知情。每行 A 必须唯一、至少一个 R；点 A 会自动从同行其他部门移走。">
+      <EditorToolbar hint="R 执行、A 负责、C 协同、I 知情。每行 A 唯一、至少一个 R。">
         <ImportButton label="带入组织部门" count={deptSeed.length} readOnly={readOnly} onClick={() => onChange({ ...value, columns: [...columns, ...deptSeed] })} />
         <ImportButton
           label={projects.length ? "带入关键项目" : "带入一、二级路径"}
@@ -102,7 +102,7 @@ export function RaciEditor({ value, onChange, readOnly, issues, upstream, orgUni
             setNewColumn("");
           }}
         >
-          <Input aria-label="新增责任部门或岗位" placeholder="新增部门 / 岗位列" value={newColumn} onChange={(e) => setNewColumn(e.target.value)} className="w-56" />
+          <Input aria-label="新增责任部门或岗位" placeholder="部门 / 岗位" value={newColumn} onChange={(e) => setNewColumn(e.target.value)} className="w-56" />
           <Button type="submit" variant="outline" size="sm" disabled={!newColumn.trim()}>
             添加列
           </Button>

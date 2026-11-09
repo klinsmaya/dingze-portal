@@ -64,7 +64,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
 
   return (
     <section aria-label="战略地图" className="flex flex-col gap-4">
-      <EditorToolbar hint="按四个层面列出战略目标，再用关系说明下层如何支撑上层、同层如何协同。图与表是同一份数据。">
+      <EditorToolbar hint="按四个层面列出战略目标，再用关系说明下层如何支撑上层、同层如何协同。">
         {objectives.length === 0 && seed ? (
           <ImportButton label="从战略屋带入目标" count={seed.objectives.length} readOnly={readOnly} onClick={() => onChange(seed)} />
         ) : null}
@@ -96,7 +96,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
                         <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[1fr_1fr]">
                           <TextCell
                             label={`${p.label}目标`}
-                            placeholder="战略目标，如“车用气客户规模领先”"
+                            placeholder="战略目标"
                             value={o.title}
                             onChange={(title) => setObjectives(patchById(objectives, o.id, { title }))}
                             readOnly={readOnly}
@@ -104,7 +104,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
                           />
                           <TextCell
                             label={`${p.label}目标说明`}
-                            placeholder="说明（选填）"
+                            placeholder="说明"
                             value={o.note}
                             onChange={(note) => setObjectives(patchById(objectives, o.id, { note }))}
                             readOnly={readOnly}
@@ -132,7 +132,7 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
           </div>
 
           <div className="flex flex-col gap-2">
-            <EditorToolbar inline hint="纵向因果自下而上（学习与成长 → 内部流程 → 客户 → 财务）；横向协同只连同一层面。">
+            <EditorToolbar inline hint="纵向因果自下而上，横向协同只连同一层面。">
               {!readOnly ? (
                 <AddButton
                   label="添加关系"

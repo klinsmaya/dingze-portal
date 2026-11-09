@@ -82,14 +82,12 @@ export function Figure37Card({
   used,
   onPick,
   readOnly,
-  hint = "点一项 = 在导图里加一个一级路径，也可以直接拖进去",
   defaultOpen = true,
 }: {
   /** How many existing items started from each figure item, by item key → order numbers. */
   used: Record<string, number[]>;
   onPick: (item: Figure37Item) => void;
   readOnly: boolean;
-  hint?: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -148,7 +146,6 @@ export function Figure37Card({
           )),
         )}
       </div>
-      <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">{hint}</p>
     </aside>
   );
 }

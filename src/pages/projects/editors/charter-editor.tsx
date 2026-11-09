@@ -71,7 +71,7 @@ export function CharterEditor({ value, onChange, readOnly, issues, upstream, pro
   return (
     <section aria-label="项目任务书" className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <EditorToolbar hint="项目化判定：四个问题满足 ≥2 条为项目（P，写任务书），1 条为专项任务（S），0 条为例行（R，转部门日常）。S3-01 关键项目清单只读引用 S2-08 定版。">
+        <EditorToolbar hint="四个问题满足 2 条以上为项目（P，写任务书），1 条为专项任务（S），0 条为例行（R）。">
           <ImportButton label="带入关键项目与部门一级路径" count={seed.length} readOnly={readOnly} onClick={() => setScreening([...screening, ...seed])} />
           {!readOnly ? <AddButton label="添加事项" onClick={() => setScreening([...screening, emptyScreening()])} /> : null}
         </EditorToolbar>
@@ -110,7 +110,7 @@ export function CharterEditor({ value, onChange, readOnly, issues, upstream, pro
                         </div>
                       </td>
                       <td className="px-1 py-1">
-                        <TextCell label="成果导向重命名" placeholder="如“实现物流车队签约 40 家”" value={s.renamed} onChange={(renamed) => setScreening(patchById(screening, s.id, { renamed }))} readOnly={readOnly} />
+                        <TextCell label="成果导向重命名" placeholder="成果导向命名" value={s.renamed} onChange={(renamed) => setScreening(patchById(screening, s.id, { renamed }))} readOnly={readOnly} />
                       </td>
                       {SCREEN_QUESTIONS.map((q) => (
                         <td key={q.key} className="px-1 py-1">
@@ -151,16 +151,16 @@ export function CharterEditor({ value, onChange, readOnly, issues, upstream, pro
         </div>
         {!readOnly ? (
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            新任务书编号的职能英文简称
-            <Input aria-label="职能英文简称" value={func} onChange={(e) => setFunc(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} className="h-7 w-24" />
-            编号规则：年份＋职能英文简称＋P＋3 位序号，如 {nextCharterCode(projectYear, func || "OPS", charters)}（也可写成 2024HR-P001）
+            职能简称
+            <Input aria-label="职能英文简称" value={func} onChange={(e) => setFunc(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} className="h-7 w-24" placeholder="OPS" />
+            <span className="font-mono">{nextCharterCode(projectYear, func || "OPS", charters)}</span>
           </label>
         ) : null}
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="font-heading text-lg font-bold text-brand">项目任务书（{charters.length}）</div>
-        {charters.length === 0 ? <p className="text-sm text-muted-foreground">判定为 P 的事项点“写任务书”。</p> : null}
+        {charters.length === 0 ? <p className="text-sm text-muted-foreground">还没有任务书</p> : null}
         {charters.map((c) => (
           <CharterCard
             key={c.id}
@@ -342,7 +342,7 @@ function CharterCard({
                 <AddButton label="添加风险" disabled={(c.risks ?? []).length >= 3} onClick={() => onChange({ risks: [...(c.risks ?? []), { id: newRowId("rk"), risk: "", trigger: "", response: "" }] })} />
               </div>
             ) : null}
-            <TextCell label={`${c.name} 关键假设`} placeholder="关键假设与前置依赖" multiline value={c.assumptions} onChange={(assumptions) => onChange({ assumptions })} readOnly={readOnly} />
+            <TextCell label={`${c.name} 关键假设`} placeholder="" multiline value={c.assumptions} onChange={(assumptions) => onChange({ assumptions })} readOnly={readOnly} />
           </div>
         </Field>
         <Field label="验收标准">
@@ -408,13 +408,13 @@ function WbsTable({ wbs, onChange, readOnly, invalid, charterName }: { wbs: WbsP
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-semibold text-muted-foreground">WBS（S3-03）：以交付物为中心拆到 2—3 层，写清完成定义、责任人和前后依赖</div>
+        <div className="text-xs font-semibold text-muted-foreground">WBS</div>
         <div className="flex items-center gap-2">
           <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "mind")} variant="outline" size="sm" aria-label="WBS 展示方式">
-            <ToggleGroupItem value="mind" title="思维导图：拆解、调整层级（拖动、下级 / 同级、移动到…）">
+            <ToggleGroupItem value="mind">
               <Network /> 思维导图
             </ToggleGroupItem>
-            <ToggleGroupItem value="table" title="表格：逐格填交付物、完成定义、责任人和依赖">
+            <ToggleGroupItem value="table">
               <Table2 /> 表格
             </ToggleGroupItem>
           </ToggleGroup>

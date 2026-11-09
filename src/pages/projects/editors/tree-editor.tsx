@@ -507,9 +507,7 @@ export function MoveToDialog<T extends TreeItem>({
           <DialogTitle>
             把「{node ? cfg.title(node) || "（未命名）" : ""}」移动到…
           </DialogTitle>
-          <DialogDescription>
-            选一个新的上级，下级一起移动。键盘用 ↑↓ 选、Enter 确定。
-          </DialogDescription>
+          <DialogDescription>下级一起移动。</DialogDescription>
         </DialogHeader>
         <div
           role="listbox"
