@@ -1,11 +1,16 @@
 import { useCallback } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
+
+import { nextAction } from "@dingze/shared";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/lib/dingze/errors";
 import { SPREADSHEET_EXTENSIONS, UnsupportedFileError, extractText } from "@/lib/dingze/extract-text";
 import { uploadOriginal, useAddMaterial, useMaterial } from "@/lib/dingze/materials-api";
+import { askCoachLater } from "@/lib/dingze/coach-later";
+import { nextActionPath, progressOf } from "@/lib/dingze/progress";
 
 import { useProjectContext } from "../project-context";
 
@@ -15,12 +20,19 @@ import { useProjectContext } from "../project-context";
  * Upload files as project materials: the text is read in the browser for the digital
  * consultants and the original is stored as well. Returns the new materials.
  */
-export function useMaterialUpload() {
-  const { project } = useProjectContext();
+export function useMaterialUpload({ offerFill = false }: { offerFill?: boolean } = {}) {
+  const { project, overview } = useProjectContext();
   const add = useAddMaterial(project);
+  const navigate = useNavigate();
+  // 上传成功后 toast 带「去填表」：跳到现在该填的那张表，并把刚传的资料写进数字咨询师的输入框。
+  const fillPath = () => {
+    const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
+    return nextActionPath(project.id, nextAction(progressOf(overview.artifacts), overview.projectRole, service));
+  };
   return useCallback(
     async (files: FileList | File[] | null) => {
       const added: { id: number; title: string }[] = [];
+      const extracted: string[] = [];
       for (const file of Array.from(files ?? [])) {
         try {
           const text = await extractText(file).catch((error) => {
@@ -38,15 +50,34 @@ export function useMaterialUpload() {
                 : `已上传《${file.name}》原件，但没有读到文字（可能是扫描件）：数字咨询师检索不到它，可以再“粘贴文字”补一份`
             );
           } else {
-            toast.success(`已上传《${file.name}》原件并提取文字${result.truncated ? "（文字过长，检索只用前 15 万字）" : ""}`);
+            extracted.push(file.name);
+            if (result.truncated) toast.warning(`《${file.name}》文字过长，检索只用前 15 万字`);
           }
         } catch (error) {
           toast.error(`《${file.name}》：${errorMessage(error)}`);
         }
       }
+      if (extracted.length) {
+        const what = extracted.length === 1 ? `《${extracted[0]}》` : `${extracted.length} 份资料`;
+        toast.success(
+          `已上传${what}，数字咨询师可以检索了`,
+          offerFill
+            ? {
+                action: {
+                  label: "去填表",
+                  onClick: () => {
+                    askCoachLater(`请参考资料${added.map((m) => `《${m.title}》（资料编号 ${m.id}）`).join("、")}，结合这张表，告诉我哪些内容能用上。`);
+                    navigate(fillPath());
+                  },
+                },
+              }
+            : undefined,
+        );
+      }
       return added;
     },
-    [add]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [add, offerFill, navigate, project.id, overview.artifacts, overview.projectRole]
   );
 }
 

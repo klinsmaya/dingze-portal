@@ -2,12 +2,11 @@ import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock }
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { STAGES, collaborationStatus, getArtifactDef, nextAction, isEmployee } from "@dingze/shared";
+import { STAGES, nextAction, isEmployee } from "@dingze/shared";
 
 import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
 import { type FlowStep, flowSteps } from "@/lib/dingze/flow";
 import type { ArtifactOverview } from "@/lib/dingze/api";
@@ -18,16 +17,6 @@ import { cn } from "@/lib/utils";
 import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
 import { ImportDialog } from "./components/import-dialog";
 import { useProjectContext } from "./project-context";
-
-const TONE_STYLES = {
-  act: "bg-status-confirm text-status-confirm-foreground",
-  wait: "bg-status-review text-status-review-foreground",
-  warn: "bg-status-stale text-status-stale-foreground",
-  done: "bg-status-done text-status-done-foreground",
-  neutral: "bg-muted text-muted-foreground",
-} as const;
-
-const TONE_LABELS = { act: "要你处理", wait: "在等别人", warn: "需核对", done: "已定版", neutral: "" } as const;
 
 export default function ProjectOverviewPage() {
   const { project, overview } = useProjectContext();
@@ -71,11 +60,6 @@ export default function ProjectOverviewPage() {
   };
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
   const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
-  // Everything else that is moving: returned, in review, waiting for 定版, upstream changed.
-  const moving = steps
-    .filter((a) => a.code !== next.code && getArtifactDef(a.code).priority !== "method")
-    .map((a) => ({ a, status: collaborationStatus(a, role, service) }))
-    .filter((x): x is { a: (typeof steps)[number]; status: NonNullable<ReturnType<typeof collaborationStatus>> } => !!x.status && x.status.tone !== "done");
 
   // 从已有项目带入：企业项目负责人手动触发（咨询管理员可代为操作）；新建项目后带 ?import=1 直接打开。
   const canImport = role === "ent_lead" || overview.isConsultAdmin;
@@ -130,31 +114,6 @@ export default function ProjectOverviewPage() {
           </span>
           <ArrowRight className="size-5 shrink-0" />
         </Link>
-        {moving.length ? (
-          <ul className="flex flex-col gap-1.5" aria-label="其他在流转的表">
-            {moving.map(({ a, status }) => {
-              const def = getArtifactDef(a.code);
-              return (
-                <li key={a.code}>
-                  <Link to={workspacePath(project.id, a.code)} className="flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 hover:border-primary">
-                    <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-xs font-bold", TONE_STYLES[status.tone])}>{TONE_LABELS[status.tone]}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">
-                        {def.plain} <span className="text-xs font-normal text-muted-foreground">{def.specId}</span>
-                      </span>
-                      <span className="block text-xs text-muted-foreground">{status.text}</span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-primary" />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-            <CircleCheck className="size-4 text-status-done-foreground" /> 除了上面这一步，没有别的事在等你或在等别人。
-          </p>
-        )}
       </section>
 
       {employee ? null : <StartupCard projectId={project.id} />}
@@ -163,13 +122,13 @@ export default function ProjectOverviewPage() {
         {stages.map((stage) => (
           <Card key={stage.stage} className={cn(stage.open && !stage.complete && "border-primary ring-3 ring-accent")}>
             <CardHeader className="gap-2">
+              {/* 走查第二批：阶段进度只留一种表达（已定版 n / 总数），不再并排进度条和状态词。 */}
               <div className="flex items-baseline gap-2">
                 <CardTitle className="text-lg text-brand">{STAGES.find((s) => s.key === stage.stage)?.flow}</CardTitle>
-                <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                  {stage.complete ? "已完成" : stage.open ? "进行中" : "待解锁"}
+                <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">
+                  已定版 {stage.locked} / {stage.gateTotal}
                 </span>
               </div>
-              <Progress value={(stage.locked / stage.gateTotal) * 100} aria-label={`${stage.name}定版进度 ${stage.locked} / ${stage.gateTotal}`} />
             </CardHeader>
             <CardContent>
               <ul className="flex flex-col gap-1">

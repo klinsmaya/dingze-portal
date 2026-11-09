@@ -47,6 +47,7 @@ import { locateAnchor } from "@/lib/dingze/locate";
 import { useProjectContext } from "../project-context";
 import { type EditSession, useEditSession } from "./edit-session";
 import { useAttachmentFill } from "./attachments";
+import { takeLaterSay } from "@/lib/dingze/coach-later";
 import { useMaterialUpload } from "./material-shared";
 
 const SAY = "dz:coach-say";
@@ -481,6 +482,11 @@ function CoachBridge() {
       else focusComposer();
     };
     window.addEventListener(SAY, onSay);
+    const later = takeLaterSay();
+    if (later) {
+      setDraft(later);
+      focusComposer();
+    }
     return () => window.removeEventListener(SAY, onSay);
   }, [setDraft, focusComposer, uploadFiles]);
   useEffect(() => {

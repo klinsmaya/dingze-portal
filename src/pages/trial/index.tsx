@@ -45,9 +45,9 @@ export function TrialSignUpPage() {
         agree,
         website: form.website || undefined,
       });
-      // 注册成功直接登录，进项目的第 1 步。
+      // 注册成功直接登录。试用、邀请、老用户三条路径都落到项目总览，总览第一张卡再带去上传资料。
       login(
-        { account: r.username, password: form.password, redirectTo: `/projects/${r.projectId}/materials` },
+        { account: r.username, password: form.password, redirectTo: `/projects/${r.projectId}/overview` },
         { onError: () => setError("账号已开好，但自动登录没成功。请用手机号和刚设的密码登录。") },
       );
     } catch (e) {
