@@ -27,11 +27,12 @@ import type { ProjectContextValue } from "./project-context";
 // 咨询方另有专家咨询。三个阶段各自跳到本阶段第一张还没定版的表。
 type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean };
 
-function flowNav(artifacts: ArtifactOverview[], consulting: boolean): NavItem[] {
+function flowNav(artifacts: ArtifactOverview[], consulting: boolean, library: boolean): NavItem[] {
   const stages = stageProgress(artifacts);
   return [
     { key: "overview", to: "overview", label: "总览", title: "总览：现在在第几步、下一步做什么" },
-    { key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" },
+    // 资料库和画像由企业管理员、咨询师管；普通员工在填表时传附件，不进这一页。
+    ...(library ? [{ key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" }] : []),
     ...STAGES.map((stage, i): NavItem => {
       const p = stages.find((x) => x.stage === stage.key);
       return {
@@ -110,7 +111,7 @@ function ProjectTopbar({
   const parts = useLocation().pathname.split("/");
   const section = parts[3] || "overview";
   const consulting = !(projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin);
-  const nav = flowNav(artifacts, consulting);
+  const nav = flowNav(artifacts, consulting, consulting || projectRole === "ent_lead");
   // 在填写页时，亮起当前这张表所在的阶段。
   const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
   const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;

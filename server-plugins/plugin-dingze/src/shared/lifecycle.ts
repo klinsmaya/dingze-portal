@@ -35,6 +35,12 @@ export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
 };
 
 export const ENTERPRISE_EDITORS: ProjectRole[] = ['ent_lead', 'dept_head', 'member'];
+/**
+ * 普通员工（会议纪要 2026-11）：填表、保存、批注、问数字咨询师；不点流转（本步完成、提交复核、定版、重开），
+ * 不动项目资料库和画像。部门负责人这一轮按普通员工对待，角色保留。
+ */
+export const EMPLOYEE_ROLES: ProjectRole[] = ['dept_head', 'member'];
+export const isEmployee = (role: ProjectRole | null | undefined): boolean => !!role && EMPLOYEE_ROLES.includes(role);
 export const CONSULTANTS: ProjectRole[] = ['lead_consultant', 'co_consultant'];
 
 export type LifecycleAction =
@@ -109,8 +115,8 @@ const RULES: Record<LifecycleAction, TransitionRule> = {
     to: 'by-actor',
     roles: [...ENTERPRISE_EDITORS, ...CONSULTANTS],
   },
-  stepDone: { from: ['in_progress'], to: 'step_done', roles: ['ent_lead', 'dept_head'], validates: true },
-  submitReview: { from: ['step_done'], to: 'in_review', roles: ['ent_lead', 'dept_head', ...CONSULTANTS], service: 'guided' },
+  stepDone: { from: ['in_progress'], to: 'step_done', roles: ['ent_lead'], validates: true },
+  submitReview: { from: ['step_done'], to: 'in_review', roles: ['ent_lead', ...CONSULTANTS], service: 'guided' },
   approve: { from: ['in_review'], to: 'pending_confirm', roles: ['lead_consultant'], validates: true, service: 'guided' },
   // 自助：企业项目负责人对照书中定版门禁逐条自查（清单见 self-review.ts），再由他定版。
   selfReview: { from: ['step_done'], to: 'pending_confirm', roles: ['ent_lead'], validates: true, service: 'self' },

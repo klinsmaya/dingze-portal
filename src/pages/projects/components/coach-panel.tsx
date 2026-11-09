@@ -1,5 +1,6 @@
 import { Check, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import {
   AIChatWindow,
@@ -15,7 +16,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { INCOMPLETE_ROW_MESSAGE, type StageKey, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, type StageKey, canManageLibrary, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ATTACHMENT_ACCEPT } from "@/lib/dingze/attachments";
 import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
@@ -39,14 +41,15 @@ import { getAt, preview } from "@/lib/dingze/edit-log";
 
 import { useProjectContext } from "../project-context";
 import { type EditSession, useEditSession } from "./edit-session";
+import { useAttachmentFill } from "./attachments";
 import { useMaterialUpload } from "./material-shared";
 
 const SAY = "dz:coach-say";
 
 /** Put a first sentence into the digital consultant's composer and send it. */
-export function askCoach(text: string, send = true) {
+export function askCoach(text: string, send = true, files: File[] = []) {
   if (send) lastSendAt = Date.now();
-  window.dispatchEvent(new CustomEvent(SAY, { detail: { text, send } }));
+  window.dispatchEvent(new CustomEvent(SAY, { detail: { text, send, files } }));
 }
 
 /** When the user last sent something here: a change card arriving after that previews right away. */
@@ -441,24 +444,39 @@ function AttachPageContext() {
 
 /** Receives askCoach() calls: fills the composer and sends once the draft is in place. */
 function CoachBridge() {
-  const { draft, setDraft, send, focusComposer } = useAIChatBase();
+  const { draft, setDraft, send, focusComposer, uploadFiles, attachments, uploadingAttachments } = useAIChatBase();
   const [pending, setPending] = useState<string | null>(null);
+  const [waitingUploads, setWaitingUploads] = useState(false);
   useEffect(() => {
     const onSay = (event: Event) => {
-      const { text, send: now } = (event as CustomEvent<{ text: string; send: boolean }>).detail;
+      const { text, send: now, files = [] } = (event as CustomEvent<{ text: string; send: boolean; files?: File[] }>).detail;
       setDraft(text);
+      // 图片附件先交给对话上传（模型直接识图），传完再发。
+      if (files.length) {
+        setWaitingUploads(true);
+        void uploadFiles(files);
+      }
       if (now) setPending(text);
       else focusComposer();
     };
     window.addEventListener(SAY, onSay);
     return () => window.removeEventListener(SAY, onSay);
-  }, [setDraft, focusComposer]);
+  }, [setDraft, focusComposer, uploadFiles]);
   useEffect(() => {
-    if (pending !== null && draft === pending) {
-      setPending(null);
-      void send();
+    if (pending === null || draft !== pending) return;
+    if (waitingUploads) {
+      const ready = !uploadingAttachments && attachments.length > 0 && attachments.every((a) => a.status !== "uploading");
+      if (!ready) return;
+      setWaitingUploads(false);
+      if (attachments.some((a) => a.status === "error")) {
+        setPending(null);
+        toast.error("图片没有传上去，请重试或换成文字版");
+        return;
+      }
     }
-  }, [pending, draft, send]);
+    setPending(null);
+    void send();
+  }, [pending, draft, send, waitingUploads, uploadingAttachments, attachments]);
   return null;
 }
 
@@ -532,7 +550,36 @@ function useAttachMaterials() {
   return { input, open: () => file.current?.click() };
 }
 
-function ChatMenu({ onUpload }: { onUpload: () => void }) {
+const PICK_ATTACHMENT = "dingze:pick-attachment";
+
+/** 📎 in a filling page: pick a file, run the shared attach-and-extract flow (see attachments.tsx). */
+function AttachmentFillInput() {
+  const { project } = useProjectContext();
+  const session = useEditSession()!;
+  const run = useAttachmentFill(project, session.code);
+  const file = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const open = () => file.current?.click();
+    window.addEventListener(PICK_ATTACHMENT, open);
+    return () => window.removeEventListener(PICK_ATTACHMENT, open);
+  }, []);
+  return (
+    <input
+      ref={file}
+      type="file"
+      multiple
+      accept={ATTACHMENT_ACCEPT}
+      className="hidden"
+      aria-label="上传附件填这张表"
+      onChange={async (e) => {
+        await run(e.target.files);
+        if (file.current) file.current.value = "";
+      }}
+    />
+  );
+}
+
+function ChatMenu({ onUpload }: { onUpload: (() => void) | null }) {
   const { startNewConversation, setConversationListOpen } = useAIChatBase();
   const { project } = useProjectContext();
   const materials = useMaterials(project);
@@ -551,9 +598,11 @@ function ChatMenu({ onUpload }: { onUpload: () => void }) {
           <History /> 历史对话
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onUpload}>
-          <Paperclip /> 上传到资料库…
-        </DropdownMenuItem>
+        {onUpload ? (
+          <DropdownMenuItem onClick={onUpload}>
+            <Paperclip /> 上传到资料库…
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <FolderOpen /> 引用资料库里的资料
@@ -591,6 +640,11 @@ export function CoachPanel({
   const controller = useAIChatController();
   const host = useRef<HTMLDivElement>(null);
   const attach = useAttachMaterials();
+  const { overview } = useProjectContext();
+  const session = useEditSession();
+  // 资料库只有企业管理员和咨询师能传；在填表页，📎 变成“上传附件填这张表”（任何能填表的人都可以）。
+  const library = canManageLibrary(overview.projectRole, overview.isConsultAdmin);
+  const fill = !!session && !session.readOnly;
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(
     () => ai.employees.some((e) => e.username === employee),
@@ -629,15 +683,22 @@ export function CoachPanel({
             if ((e.target as HTMLElement).closest("button[type=submit], button[aria-label*='发送'], button[aria-label*='Send']")) lastSendAt = Date.now();
           }}
         >
-          {attach.input}
-          <ChatMenu onUpload={attach.open} />
+          {library ? attach.input : null}
+          {fill ? <AttachmentFillInput /> : null}
+          <ChatMenu onUpload={library ? attach.open : null} />
           <AIChatWindow
             className="min-h-0 flex-1 bg-card"
             showConversationToggle
             showEmployeeSelector={false}
             showModelSelector={false}
-            composerActions={[{ key: "attach", label: "上传到资料库（写入资料库，供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]}
-            disclaimer="Enter 发送 · Shift+Enter 换行 · 📎 文件存入资料库"
+            composerActions={
+              fill
+                ? [{ key: "fill", label: "上传附件填这张表（Word / PDF / Excel / 图片，抽取后给修改卡）", icon: <Paperclip />, onClick: () => window.dispatchEvent(new CustomEvent(PICK_ATTACHMENT)) }]
+                : library
+                  ? [{ key: "attach", label: "上传到资料库（供数字咨询师引用）", icon: <Paperclip />, onClick: attach.open }]
+                  : []
+            }
+            disclaimer={fill ? "Enter 发送 · Shift+Enter 换行 · 📎 上传附件填表" : "Enter 发送 · Shift+Enter 换行"}
             placeholder="问数字咨询师，或说说你的想法…"
           />
           <StarterPrompts host={host} starters={starters} />

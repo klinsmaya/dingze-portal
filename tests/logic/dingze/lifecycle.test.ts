@@ -10,6 +10,8 @@ import {
   nextStatus,
   staleTargets,
   unlockInfo,
+  canPerform,
+  isEmployee,
 } from "@dingze/shared";
 
 const lead: Actor = { projectRole: "ent_lead", isConsultAdmin: false };
@@ -28,7 +30,8 @@ describe("artifact lifecycle", () => {
   it("walks the normal path from draft to locked", () => {
     let status = nextStatus("save", "not_started", member);
     expect(status).toBe("in_progress");
-    status = nextStatus("stepDone", status, dept);
+    // 2026-11 起只有企业项目负责人能点“这步做完了”，部门负责人和普通员工只保存。
+    status = nextStatus("stepDone", status, lead);
     expect(status).toBe("step_done");
     status = nextStatus("submitReview", status, lead);
     expect(status).toBe("in_review");
@@ -168,5 +171,25 @@ describe("step exceptions", () => {
     expect(validationApplies("confirm", true)).toBe(true);
     expect(validationApplies("forceLock", true)).toBe(true);
     expect(validationApplies("save", false)).toBe(false);
+  });
+});
+
+describe("普通员工不点流转（会议纪要 2026-11）", () => {
+  const member: Actor = { projectRole: "member", isConsultAdmin: false };
+  it("member and dept_head can save but not move the flow", () => {
+    for (const actor of [member, dept]) {
+      expect(canPerform("save", actor)).toBe(true);
+      expect(canPerform("stepDone", actor)).toBe(false);
+      expect(canPerform("submitReview", actor)).toBe(false);
+      expect(canPerform("confirm", actor)).toBe(false);
+      expect(canPerform("reopen", actor)).toBe(false);
+    }
+    expect(isEmployee("member")).toBe(true);
+    expect(isEmployee("dept_head")).toBe(true);
+    expect(isEmployee("ent_lead")).toBe(false);
+    expect(isEmployee(null)).toBe(false);
+  });
+  it("the enterprise lead still completes the step", () => {
+    expect(canPerform("stepDone", { projectRole: "ent_lead", isConsultAdmin: false })).toBe(true);
   });
 });

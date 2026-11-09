@@ -17,6 +17,7 @@ import {
   validateArtifact,
   ARTIFACTS,
   type ArtifactDef,
+  isEmployee,
   isStageOpen,
   previousStage,
   stageGateCodes,
@@ -62,6 +63,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
+import { Attachments } from "./components/attachments";
 import { CoachPanel, askCoach } from "./components/coach-panel";
 import { DiagramExportButton } from "./components/diagram-export";
 import { CharterDocxButton } from "./components/charter-export";
@@ -736,6 +738,8 @@ function Workspace({ code }: { code: string }) {
   }, [highlightComment, narrowPanel]);
   const chrome = chromeRef.current;
   const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
+  // 普通员工（含这一轮的部门负责人）：只填表和保存，流转按钮不渲染；右栏不放“修改”记录。
+  const employee = isEmployee(role) && !overview.isConsultAdmin;
   const base = `/projects/${project.id}`;
   // 三阶段条与本阶段进度（参考稿左栏）：入口取每阶段第一张表，进度与待办页同口径（必做表定版数）。
   const stageLinks = stageProgress(overview.artifacts).map((st) => {
@@ -842,12 +846,14 @@ function Workspace({ code }: { code: string }) {
     ? [["Tab", "下级"], ["Enter", "同级"], ["F2", "编辑"], ["Ctrl+Alt+M", "批注"]]
     : [["Ctrl+S", "保存"], ["Ctrl+Z", "撤销"], ["Alt+Shift+↑↓", "移动行"], ["Ctrl+Alt+M", "批注"]];
 
-  const tabs: [AsideTab, string, number][] = [
-    ["coach", "对话", 0],
-    ["comments", "批注", openThreads.length],
-    ["changes", "修改", edit.log.length],
-    ["book", "书中方法", 0],
-  ];
+  const tabs: [AsideTab, string, number][] = (
+    [
+      ["coach", "对话", 0],
+      ["comments", "批注", openThreads.length],
+      ["changes", "修改", edit.log.length],
+      ["book", "书中方法", 0],
+    ] as [AsideTab, string, number][]
+  ).filter(([key]) => !(employee && key === "changes"));
   // 右栏四个页签各管一件事（开营前 UX 改版 F12）。
   const TAB_DUTY: Record<AsideTab, string> = {
     coach: "有不懂的、要起草的都可以问；要改表时会给修改卡，你确认后才写入",
@@ -918,7 +924,7 @@ function Workspace({ code }: { code: string }) {
                   onShortcuts: () => setShortcutsOpen(true),
                 }}
                 actions={
-                  detail.data ? (
+                  detail.data && !employee ? (
                     <ArtifactActions project={project} code={code} title={def.name} detail={detail.data} actor={actor} dirty={dirty} blocking={blocking} warnings={issues.filter((i) => i.level !== "error").map((i) => i.message)} openComments={openThreads.length} />
                   ) : null
                 }
@@ -1166,6 +1172,7 @@ function Workspace({ code }: { code: string }) {
                     }
                   />
                 ) : null}
+                {EDITABLE_CODES.has(code) ? <Attachments code={code} canUpload={canSave && !previewDraft && !viewRev} /> : null}
                 {detail.data && (status === "pending_confirm" || status === "locked" || detail.data.dissents.length > 0) ? (
                   <DissentList detail={detail.data} project={project} code={code} />
                 ) : null}

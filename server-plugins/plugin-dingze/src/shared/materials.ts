@@ -42,6 +42,31 @@ export function profileItem(patch: Partial<ProfileItem> = {}): ProfileItem {
 
 export const MATERIAL_TEXT_LIMIT = 150_000;
 
+/**
+ * 资料分两种：进资料库的（企业简介、复盘等，数字咨询师检索得到）和填表时挂在某张表下的附件
+ * （员工上传、抽取后填表，默认不进资料库；企业管理员可“加入资料库”）。
+ */
+export type MaterialKind = 'file' | 'note' | 'attachment';
+
+/** 谁能上传、删除项目资料库的资料和改画像：企业项目负责人、咨询师、咨询管理员。普通员工只能传表下附件。 */
+export const LIBRARY_MANAGERS: ProjectRole[] = ['ent_lead', 'lead_consultant', 'co_consultant'];
+export function canManageLibrary(role: ProjectRole | null | undefined, isConsultAdmin: boolean): boolean {
+  return isConsultAdmin || (!!role && LIBRARY_MANAGERS.includes(role));
+}
+
+/** 填表附件给数字咨询师看的那段话：先说目的，再附正文（太长就截）。 */
+export const ATTACHMENT_PROMPT_CHARS = 12_000;
+export function attachmentPrompt(input: { fileName: string; table: string; text: string; pages?: number }): string {
+  const text = input.text.trim();
+  const head = `我上传了附件《${input.fileName}》，请从里面抽取能填进《${input.table}》的内容，用修改卡逐项给我确认；附件里没有的格子不要猜，标【待补】。`;
+  if (!text) return `${head}附件是图片${input.pages && input.pages > 1 ? `（共 ${input.pages} 页）` : ''}，请先把图里的文字和表格读出来，再给修改卡。`;
+  const cut = text.length > ATTACHMENT_PROMPT_CHARS;
+  return `${head}
+附件内容（共 ${text.length} 字${cut ? `，这里只放前 ${ATTACHMENT_PROMPT_CHARS} 字` : ''}）：
+---
+${cut ? text.slice(0, ATTACHMENT_PROMPT_CHARS) : text}`;
+}
+
 /** Who may move an item to a status: consultants review, the enterprise lead confirms. */
 export function canSetProfileStatus(status: ProfileStatus, role: ProjectRole | null, isConsultAdmin: boolean): boolean {
   if (status === 'draft') return true;
