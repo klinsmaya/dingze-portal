@@ -8,6 +8,7 @@ import { ARTIFACTS, STAGES, STATUS_LABELS, type ScorecardSet, cardWeight, getArt
 import { StatusBadge } from "@/components/dingze/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/dingze/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -220,7 +221,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                 </div>
               );
             })}
-            {deliverables.length === 0 ? <p className="text-sm text-muted-foreground">还没有可以导出的成果。</p> : null}
+            {deliverables.length === 0 ? <EmptyState text="还没有可以导出的成果：表定版或保存过草稿后出现在这里。" /> : null}
           </section> : null}
 
           {show("deliver") ? <section aria-labelledby="scorecards" className="flex flex-col gap-3">
@@ -228,7 +229,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
               各部门绩效计分卡
             </h2>
             {cards.length === 0 ? (
-              <p className="text-sm text-muted-foreground">《绩效计分卡》还没有内容。</p>
+              <EmptyState text="《绩效计分卡》还没有内容。" />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {cards.map((card) => (
@@ -278,7 +279,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
               导出记录
             </h2>
             {(bundle.data?.exports ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">还没有导出过。</p>
+              <EmptyState text="还没有导出过。每次下载计划书、Excel 或图片都会记在这里。" />
             ) : (
               <div className="overflow-x-auto rounded-xl border bg-card">
                 <table className="w-full min-w-[720px] text-sm">

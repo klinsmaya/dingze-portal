@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -313,18 +314,13 @@ export function TitleRow({
             </div>
           ) : null}
           {chrome?.variants && chrome.variants.length > 1 ? (
-            <select
-              aria-label="版式"
-              value={chrome.variant}
-              onChange={(e) => chrome.setVariant?.(e.target.value)}
-              className="h-8 rounded-lg border bg-background px-2 text-sm"
-            >
+            <NativeSelect size="sm" aria-label="版式" value={chrome.variant} onChange={(e) => chrome.setVariant?.(e.target.value)} className="w-auto">
               {chrome.variants.map((v) => (
-                <option key={v.key} value={v.key}>
+                <NativeSelectOption key={v.key} value={v.key}>
                   {v.label}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
           ) : null}
           {edit ? (
             <div role="group" aria-label="撤销与重做" className="flex items-center">

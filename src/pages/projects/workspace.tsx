@@ -1,4 +1,4 @@
-import { ArrowRight, Eye, History, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, History, Lock, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
@@ -61,6 +61,7 @@ import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { samePayload } from "@/lib/dingze/stable-json";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
+import { importantToast } from "@/lib/dingze/toasts";
 
 import { ArtifactActions, DissentList } from "./components/artifact-actions";
 import { Attachments } from "./components/attachments";
@@ -574,9 +575,9 @@ function Workspace({ code }: { code: string }) {
     if (!removed.length) return;
     toasted.current = last.id;
     const no = last.commentId ? numberOf(last.commentId) : null;
-    toast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+    importantToast(`已删除「${preview(removed[0].before, 24)}」${removed.length > 1 ? ` 等 ${removed.length} 项` : ""}`, {
+      icon: <Trash2 className="size-4" />,
       description: no ? `按批注 ${circled(no)} · 8 秒内可撤销，之后在“修改”里撤销` : "8 秒内可撤销，之后在“修改”里撤销",
-      duration: 8000,
       action: { label: "撤销 Ctrl+Z", onClick: () => undoCommand(last) },
     });
   }, [edit.log, undoCommand, numberOf]);

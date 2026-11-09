@@ -43,6 +43,7 @@ import { ConfirmAction } from "@/pages/ops/components/confirm-action";
 import { OrgUnitsEditor } from "../ops/components/org-units-tab";
 import { CoachPanel, askCoach } from "./components/coach-panel";
 import { TextCell } from "./editors/kit";
+import { EmptyState } from "@/components/dingze/empty-state";
 import { MaterialViewer, useMaterialUpload } from "./components/material-shared";
 import { OrgView } from "./components/org-view";
 import { useProjectContext } from "./project-context";
@@ -128,22 +129,22 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         ) : null}
       </div>
       {materials.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-4 py-10 text-center">
-          <FileUp className="size-8 text-brand" />
-          <div className="font-heading text-lg font-bold">把企业简介、组织架构、上年经营复盘传上来</div>
-          <p className="max-w-md text-sm text-muted-foreground">Word、PDF、Excel、txt 都可以，单个不超过 20 MB；也可以直接粘贴文字。传好后，数字咨询师会据此整理企业画像。</p>
-          {canEdit ? (
-            <div className="mt-1 flex gap-2">
-              <Button size="lg" disabled={busy} onClick={() => fileRef.current?.click()}>
-                <FileUp /> {busy ? "上传中…" : "选择文件上传"}
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => setPasting(true)}>
-                <ClipboardPaste /> 粘贴文字
-              </Button>
-            </div>
-          ) : null}
-          <p className="text-xs text-muted-foreground">没有资料也可以先去填表，以后再补。</p>
-        </div>
+        <EmptyState
+          className="py-10"
+          text="把企业简介、组织架构、上年经营复盘传上来（Word、PDF、Excel、txt，单个不超过 20 MB），数字咨询师会据此整理企业画像；没有资料也可以先去填表。"
+          action={
+            canEdit ? (
+              <>
+                <Button size="lg" disabled={busy} onClick={() => fileRef.current?.click()}>
+                  <FileUp /> {busy ? "上传中…" : "选择文件上传"}
+                </Button>
+                <Button size="lg" variant="ghost" onClick={() => setPasting(true)}>
+                  <ClipboardPaste /> 粘贴文字
+                </Button>
+              </>
+            ) : null
+          }
+        />
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">
           {materials.map((m) => (

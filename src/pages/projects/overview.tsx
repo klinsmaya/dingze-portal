@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router";
 
 import { STAGES, nextAction, isEmployee } from "@dingze/shared";
 
-import { StatusBadge, StatusDot } from "@/components/dingze/status-badge";
+import { LockedStepBadge, StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
@@ -75,7 +75,7 @@ export default function ProjectOverviewPage() {
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
       <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="min-w-0 flex-1 font-heading text-3xl font-bold text-brand">总览</h1>
+        <h1 className="min-w-0 flex-1 font-heading text-2xl font-bold text-brand">总览</h1>
         <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
           看操作指引
         </Button>
@@ -149,11 +149,7 @@ export default function ProjectOverviewPage() {
                             {def.priority === "P1" ? " · 可选" : ""}
                           </span>
                         </span>
-                        {a?.unlock.unlocked ? (
-                          <StatusBadge status={status} stale={a.stale} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">待解锁</span>
-                        )}
+                        {a?.unlock.unlocked ? <StatusBadge status={status} stale={a.stale} /> : <LockedStepBadge />}
                       </Link>
                     </li>
                   );
