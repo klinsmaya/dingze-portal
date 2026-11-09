@@ -445,7 +445,7 @@ export function validateStrategyKpis(table: StrategyKpiTable): Issue[] {
     const missing = [
       ['definition', '口径'],
       ['source', '数据来源'],
-      ['period', '统计周期'],
+      ['period', '考核周期'],
     ].filter(([key]) => !filled(k[key as keyof StrategyKpi]));
     if (missing.length) {
       issues.push({ level: 'error', message: `“${name}”的${missing.map(([, label]) => label).join('、')}未填写`, anchor: k.id });

@@ -190,7 +190,7 @@ function strategyKpiSheets(table: StrategyKpiTable): SheetModel[] {
     ["口径 / 计算公式", 36],
     ["单位", 8],
     ["数据来源", 16],
-    ["统计周期", 10],
+    ["考核周期", 10],
     ["责任部门", 14],
   ]);
   for (const k of table.kpis ?? []) s.rows.push([k.theme, k.name, k.definition, k.unit, k.source, k.period, k.owner]);

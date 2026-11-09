@@ -234,11 +234,16 @@ export function unlockInfo(def: ArtifactDef, states: StateMap): UnlockInfo {
     return { unlocked: false, waitingFor: '上一阶段全部 P0 成果定版后开启' };
   }
   if (def.attachedTo) {
-    return unlockInfo(getArtifactDef(def.attachedTo), states);
+    // A method worksheet opens with the table it belongs to, then follows its own order.
+    const parent = unlockInfo(getArtifactDef(def.attachedTo), states);
+    if (!parent.unlocked) return parent;
   }
   const pending = def.unlockAfter.filter((code) => !hasReachedStepDone(states[code]));
   if (pending.length > 0) {
-    const names = pending.map((code) => `${getArtifactDef(code).specId} ${getArtifactDef(code).name}`);
+    const names = pending.map((code) => {
+      const d = getArtifactDef(code);
+      return d.priority === 'method' ? d.name : `${d.specId} ${d.name}`;
+    });
     return { unlocked: false, waitingFor: `${names.join('、')}“本步完成”后解锁` };
   }
   return { unlocked: true };

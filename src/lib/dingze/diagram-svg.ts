@@ -194,7 +194,7 @@ export function sixfoldSvg(content: StrategyContent, subtitle?: string): SvgDiag
   return wrap(WIDTH, y + margin, body, "战略简约六分法表");
 }
 
-/** 战略地图: four perspective lanes, objectives as boxes, cause arrows and synergy dashes. */
+/** 战略地图: four perspective lanes, objectives as ellipses (图 2-8), cause arrows and synergy dashes. */
 export function strategyMapSvg(map: StrategyMap, subtitle?: string, title = "战略地图"): SvgDiagram {
   const head = header(title, subtitle);
   const top = head.height + 8;
@@ -208,17 +208,17 @@ export function strategyMapSvg(map: StrategyMap, subtitle?: string, title = "战
     body += textLines([lane.label], 14, lane.y + LANE_HEIGHT / 2 + 5, { size: 14, color: C.brand, weight: 700 });
     body += `<line x1="${LANE_LABEL_WIDTH}" x2="${LANE_LABEL_WIDTH}" y1="${lane.y}" y2="${lane.y + LANE_HEIGHT}" stroke="${C.border}"/>`;
   });
-  for (const l of linkLines(map.links, byId)) {
+  for (const l of linkLines(map.links, byId, "ellipse")) {
     body +=
       l.kind === "synergy"
         ? `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${C.gold}" stroke-width="2" stroke-dasharray="6 4"/>`
         : `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${C.brand}" stroke-width="1.5" marker-end="url(#arrow)"/>`;
   }
   for (const n of nodes) {
-    const lines = wrapText(n.title || "（未命名）", n.w - 14, 12, 3);
+    const lines = wrapText(n.title || "（未命名）", n.w - 48, 12, 2);
     const lh = 16;
     const firstY = n.y + n.h / 2 - ((lines.length - 1) * lh) / 2 + 4;
-    body += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8" fill="${C.paper}" stroke="${C.brand}" stroke-width="2"/>`;
+    body += `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2 - 1}" ry="${n.h / 2 - 1}" fill="${C.paper}" stroke="${C.brand}" stroke-width="2"/>`;
     body += textLines(lines, n.x + n.w / 2, firstY, { size: 12, color: C.brand, weight: 700, anchor: "middle", lineHeight: lh });
   }
   if (!nodes.length) body += textLines(["还没有战略目标"], WIDTH / 2, height / 2, { size: 14, color: C.sub, anchor: "middle" });

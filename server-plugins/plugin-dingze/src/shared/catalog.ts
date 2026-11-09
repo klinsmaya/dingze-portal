@@ -36,7 +36,10 @@ export interface ArtifactDef {
   bookRef: string;
   priority: Priority;
   editor: EditorKind;
-  /** Artifacts that must reach "本步完成" (or later) before this one unlocks. P1 and method items never block. */
+  /**
+   * Artifacts that must reach "本步完成" (or later) before this one unlocks. P1 and method items never
+   * block a P0 table; a method worksheet may still wait for the step before it (使命共识 → 愿景共识).
+   */
   unlockAfter: string[];
   /** Upstream artifacts whose content this one reads. Used for "上游已变更" propagation. */
   dependsOn: string[];
@@ -76,12 +79,12 @@ export const ARTIFACTS: ArtifactDef[] = [
   {
     code: 'M-MISSION', specId: 'S1-01', name: '使命五要素萃取', plain: '提炼使命', stage: 'strategy',
     task: '逻辑共识：简约战略逻辑化', step: '使命共识', bookRef: '表 2-3',
-    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
+    priority: 'method', editor: 'worksheet', unlockAfter: ['S1-01'], dependsOn: [], attachedTo: 'S1-01',
   },
   {
     code: 'M-VISION', specId: 'S1-01', name: '愿景三法', plain: '提炼愿景', stage: 'strategy',
     task: '逻辑共识：简约战略逻辑化', step: '愿景共识', bookRef: '战略推导法、对标一流法、引以为傲法',
-    priority: 'method', editor: 'worksheet', unlockAfter: [], dependsOn: [], attachedTo: 'S1-01',
+    priority: 'method', editor: 'worksheet', unlockAfter: ['M-MISSION'], dependsOn: [], attachedTo: 'S1-01',
   },
   {
     code: 'S1-02', specId: 'S1-02', name: '战略地图', plain: '战略地图', stage: 'strategy',

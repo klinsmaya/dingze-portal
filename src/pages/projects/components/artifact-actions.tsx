@@ -167,7 +167,6 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
           </Button>
         </span>
       ) : null}
-      {main === "confirm" ? <span className="hidden text-[11px] text-muted-foreground xl:inline">仅企业项目负责人可定版</span> : null}
 
       <FlowIntroDialog
         open={!!introFor}

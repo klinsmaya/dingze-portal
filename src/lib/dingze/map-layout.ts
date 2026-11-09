@@ -39,13 +39,25 @@ export function layoutStrategyMap(map: StrategyMap, width: number) {
 
 type Box = { x: number; y: number; w: number; h: number };
 export type LinkLine = { id: string; kind: "cause" | "synergy"; x1: number; y1: number; x2: number; y2: number };
+/** How objectives are drawn: the strategy map uses ellipses (图 2-8), the decode map keeps boxes. */
+export type NodeShape = "box" | "ellipse";
+
+/** Vertical position of the ellipse inscribed in `box` at horizontal position `x`. */
+function ellipseY(box: Box, x: number, side: "top" | "bottom"): number {
+  const rx = box.w / 2;
+  const ry = box.h / 2;
+  const dx = (x - (box.x + rx)) / rx;
+  const dy = ry * Math.sqrt(Math.max(0, 1 - dx * dx));
+  return side === "top" ? box.y + ry - dy : box.y + ry + dy;
+}
 
 /**
  * Line ends for the map's links. Cause arrows leave the top or bottom edge and spread their
  * ends along it, so several arrows into one objective stay apart; synergy links join the
- * facing sides. Links to missing objectives are dropped.
+ * facing sides. With `shape: "ellipse"` the ends sit on the ellipse rather than its bounding
+ * box. Links to missing objectives are dropped.
  */
-export function linkLines(links: StrategyMap["links"], byId: Map<string, Box>): LinkLine[] {
+export function linkLines(links: StrategyMap["links"], byId: Map<string, Box>, shape: NodeShape = "box"): LinkLine[] {
   const cause = (links ?? []).filter((l) => l.kind !== "synergy" && byId.has(l.from) && byId.has(l.to));
   // Each edge (node + side) lists its links ordered by where the other end sits.
   const slots = new Map<string, string[]>();
@@ -79,13 +91,17 @@ export function linkLines(links: StrategyMap["links"], byId: Map<string, Box>): 
       continue;
     }
     const upward = to.y < from.y;
+    const fromSide = upward ? "top" : "bottom";
+    const toSide = upward ? "bottom" : "top";
+    const x1 = at(l.from, fromSide, `${l.id}:from`);
+    const x2 = at(l.to, toSide, `${l.id}:to`);
     lines.push({
       id: l.id,
       kind: "cause",
-      x1: at(l.from, upward ? "top" : "bottom", `${l.id}:from`),
-      y1: upward ? from.y : from.y + from.h,
-      x2: at(l.to, upward ? "bottom" : "top", `${l.id}:to`),
-      y2: upward ? to.y + to.h : to.y,
+      x1,
+      y1: shape === "ellipse" ? ellipseY(from, x1, fromSide) : upward ? from.y : from.y + from.h,
+      x2,
+      y2: shape === "ellipse" ? ellipseY(to, x2, toSide) : upward ? to.y + to.h : to.y,
     });
   }
   return lines;

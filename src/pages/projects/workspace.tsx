@@ -1300,7 +1300,6 @@ function Workspace({ code }: { code: string }) {
               </button>
             ))}
           </div>
-          <p className="shrink-0 border-b px-3 py-1 text-[11px] text-muted-foreground">{TAB_DUTY[asideTab]}</p>
           <div className={cn("flex min-h-0 flex-1 flex-col", asideTab !== "coach" && "hidden")}>
             <CoachPanel stage={def.stage} chatId={`dingze-${project.id}-${code}`} />
           </div>
