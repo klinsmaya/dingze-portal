@@ -5,7 +5,6 @@ import { Link } from "react-router";
 import {
   BOARD_BUCKETS,
   type BoardBucket,
-  PROJECT_ROLE_LABELS,
   STAGES,
   type StageKey,
   boardBucket,
@@ -19,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,10 +70,7 @@ export default function ConsultantBoardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-brand">咨询师工作台</h1>
-        <p className="mt-1 text-sm text-muted-foreground">所有你负责的企业与项目里，需要你推进的成果。</p>
-      </div>
+      <h1 className="font-heading text-2xl font-bold text-brand">咨询师工作台</h1>
 
       {board.error ? (
         <Alert variant="destructive">
@@ -90,7 +86,6 @@ export default function ConsultantBoardPage() {
               <Inbox />
             </EmptyMedia>
             <EmptyTitle>还没有负责的项目</EmptyTitle>
-            <EmptyDescription>运营管理员把你设为项目的主咨询师或协作咨询师后，项目会出现在这里。</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -112,7 +107,6 @@ export default function ConsultantBoardPage() {
                 >
                   <div className="text-2xl font-bold tabular-nums">{counts.get(b.key) ?? 0}</div>
                   <div className="text-sm font-medium">{b.label}</div>
-                  <div className="mt-1 hidden text-xs text-muted-foreground sm:block">{b.hint}</div>
                 </button>
               );
             })}
@@ -152,7 +146,6 @@ export default function ConsultantBoardPage() {
                   <ClipboardCheck />
                 </EmptyMedia>
                 <EmptyTitle>没有待处理的成果</EmptyTitle>
-                <EmptyDescription>企业提交复核或上游发生变化时，会出现在这里。</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -200,13 +193,11 @@ function BoardRow({ item }: { item: Item }) {
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 last:border-b-0">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">《{item.name}》</span>
-          <span className="font-mono text-xs text-muted-foreground">{artifact.code}</span>
+          <span className="font-medium" title={artifact.code}>《{item.name}》</span>
           <StatusBadge status={artifact.status} stale={artifact.stale} />
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           {project.enterprise?.shortName ?? "—"} · {project.name}
-          {project.projectRole ? ` · 我是${PROJECT_ROLE_LABELS[project.projectRole]}` : ""}
           {artifact.stale && artifact.staleReason ? ` · ${artifact.staleReason}` : ""}
         </div>
       </div>

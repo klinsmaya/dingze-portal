@@ -58,7 +58,6 @@ export function CampFormDialog({ open, onClose, camp, onSaved }: { open: boolean
         <form onSubmit={submit} className="flex flex-col gap-5">
           <DialogHeader>
             <DialogTitle>{camp ? "编辑批次" : "新建训练营批次"}</DialogTitle>
-            <DialogDescription>批次只在运营侧使用：企业看到的界面和企业内训一样。</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
@@ -278,7 +277,6 @@ export function CampAttachDialog({ open, onClose, camp }: { open: boolean; onClo
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>编入已有项目</DialogTitle>
-          <DialogDescription>编入后项目场景改为训练营，原来的数据和成员不变。</DialogDescription>
         </DialogHeader>
         <ul className="max-h-72 overflow-y-auto rounded-lg border">
           {choices.length === 0 ? (
@@ -333,7 +331,6 @@ export function CampAccountsDialog({ project, onClose, onIssued }: { project: Ca
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>批量发账号 · {project?.enterprise.shortName}</DialogTitle>
-          <DialogDescription>新账号开为这家企业的企业成员，并按表里的角色和部门加入「{project?.name}」；登录名已存在的只加入项目。</DialogDescription>
         </DialogHeader>
         <ImportSource template={ACCOUNT_TEMPLATE} onText={setText} />
         <Textarea aria-label="成员名单" className="min-h-32 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"姓名\t登录名\t手机\t邮箱\t项目角色\t部门"} />

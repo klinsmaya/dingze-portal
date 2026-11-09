@@ -319,7 +319,6 @@ function MemberDepartments({ detail, nodes }: { detail: EnterpriseDetail; nodes:
       <h3 id="member-depts" className="font-semibold">
         成员所属部门
       </h3>
-      <p className="text-xs text-muted-foreground">设置后对本企业所有项目生效；项目里的“组织与职责”、项目启动检查都按这里显示。</p>
       <ul className="overflow-hidden rounded-xl border bg-card">
         {people.map((m) => {
           const c = current(m.id);
@@ -383,7 +382,7 @@ function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boo
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>从 Excel 粘贴组织表</DialogTitle>
-          <DialogDescription>每行一个部门，列依次是：名称、上级、类型（公司 / 部门 / 团队）、负责人、职责；后几列可以空。同名部门会更新上级、负责人和职责。负责人和企业账号同名时自动关联，否则记为“无账号”姓名。</DialogDescription>
+          <DialogDescription>列依次是：名称、上级、类型、负责人、职责。</DialogDescription>
         </DialogHeader>
         <ImportSource template={ORG_TEMPLATE} onText={setText} />
         <Textarea autoFocus aria-label="组织表内容" className="min-h-40 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"市场营销部\t\t部门\t赵部长\t工商业与居民用户开发、客户服务\n大客户组\t市场营销部\t团队\t\t重点工业用户维护"} />

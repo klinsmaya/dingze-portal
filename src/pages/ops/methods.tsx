@@ -89,9 +89,7 @@ function RulePack() {
         const items = ARTIFACTS.filter((a) => a.stage === stage.key);
         return (
           <section key={stage.key} className="flex flex-col gap-3">
-            <h2 className="font-heading text-lg font-bold">
-              {stage.name} <span className="text-sm font-normal text-muted-foreground">· {stage.goal}</span>
-            </h2>
+            <h2 className="font-heading text-lg font-bold">{stage.name}</h2>
             <div className="overflow-hidden rounded-xl border bg-card">
               <ul>
                 {items.map((a) => (
@@ -111,7 +109,7 @@ function RulePack() {
                     <Badge variant={a.priority === "P0" ? "default" : "outline"}>{PRIORITY_LABELS[a.priority]}</Badge>
                     {bookNote(a.code) ? (
                       <details className="basis-full text-sm">
-                        <summary className="cursor-pointer text-xs text-muted-foreground">书中方法：目的 · 怎么做 · 完成检查</summary>
+                        <summary className="cursor-pointer text-xs text-muted-foreground">书中方法</summary>
                         <div className="mt-2 rounded-lg border border-book-border bg-book px-4 py-2 text-book-foreground">
                           <BookMethod def={a} />
                         </div>

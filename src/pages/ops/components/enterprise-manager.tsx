@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -172,7 +171,6 @@ function EditEnterpriseDialog({
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>编辑企业档案</DialogTitle>
-            <DialogDescription>维护企业名称、简称与规模。</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
