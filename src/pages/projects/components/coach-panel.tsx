@@ -1,4 +1,4 @@
-import { Check, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, Ellipsis, Eye, FolderOpen, History, Paperclip, MessageSquarePlus, MessageSquareText, PencilLine, Sparkles, TriangleAlert } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +16,7 @@ import {
   useAIChatMessages,
   useAIPageContextScope,
 } from "@/extensions/nocobase-ai/providers";
-import { INCOMPLETE_ROW_MESSAGE, type StageKey, canManageLibrary, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
+import { INCOMPLETE_ROW_MESSAGE, STATUS_LABELS, type StageKey, canManageLibrary, diffPayloads, getArtifactDef, isArtifactCode } from "@dingze/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
+import { ROLE_GUIDES } from "@/lib/dingze/guide";
+import { PORTAL_ROLE_LABELS, type PortalRole, portalRoleOf } from "@/lib/dingze/portal-role";
+import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { cn } from "@/lib/utils";
 import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { getAt, preview } from "@/lib/dingze/edit-log";
@@ -625,6 +628,42 @@ function ChatMenu({ onUpload }: { onUpload: (() => void) | null }) {
   );
 }
 
+/**
+ * 面板顶部的角色指南（定稿方案五）：按角色一份、八条以内、可折叠；「下一步该怎么做」把角色和
+ * 这张表的状态一起问数字咨询师。
+ */
+function RoleGuide({ role, code }: { role: PortalRole; code: string | null }) {
+  const { overview } = useProjectContext();
+  const [collapsed, setCollapsed] = usePersistentFlag(`dingze:coach-guide:${role}`);
+  const open = collapsed !== true;
+  const table = code && isArtifactCode(code) ? getArtifactDef(code).plain : null;
+  const status = code ? overview.artifacts.find((a) => a.code === code)?.status : undefined;
+  const ask = () =>
+    askCoach(
+      `我是${PORTAL_ROLE_LABELS[role]}${table ? `，正在看《${table}》，它现在是「${STATUS_LABELS[status ?? "not_started"]}」` : ""}。按我的角色和现在的状态，下一步该做什么？只说要做的事。`,
+    );
+  return (
+    <section aria-label="怎么用" className="shrink-0 border-b bg-muted/30 px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setCollapsed(open)} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1 py-0.5 font-semibold">
+          <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")} />
+          怎么用 · {PORTAL_ROLE_LABELS[role]}
+        </button>
+        <Button size="xs" variant="ghost" onClick={ask}>
+          下一步该怎么做？
+        </Button>
+      </div>
+      {open ? (
+        <ol className="mt-1 flex list-decimal flex-col gap-0.5 pl-5 leading-5 text-muted-foreground">
+          {ROLE_GUIDES[role].map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
+}
+
 /** Right column of the workspace: the stage's digital consultant, scoped to this page. */
 export function CoachPanel({
   stage,
@@ -645,6 +684,7 @@ export function CoachPanel({
   // 资料库只有企业管理员和咨询师能传；在填表页，📎 变成“上传附件填这张表”（任何能填表的人都可以）。
   const library = canManageLibrary(overview.projectRole, overview.isConsultAdmin);
   const fill = !!session && !session.readOnly;
+  const role = portalRoleOf(overview.projectRole, overview.isConsultAdmin);
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(
     () => ai.employees.some((e) => e.username === employee),
@@ -671,6 +711,7 @@ export function CoachPanel({
       >
         <AttachPageContext />
         <CoachBridge />
+        <RoleGuide role={role} code={session?.code ?? null} />
         {/* Messages scroll; the composer stays at the bottom of the panel (design 10). */}
         <div
           ref={host}
