@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { diffPayloads, summarizeDiff } from "@dingze/shared";
 
+import { useConfirm } from "@/components/dingze/confirm";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +22,7 @@ type Row = { key: string; command: Command; saved: boolean; rev: number | null }
 
 /** 修改 tab: the command log — unsaved edits first, then what each saved version contained. */
 export function ChangesPanel({ project, code, commentNo }: { project: ProjectSummary; code: string; commentNo: (id: number) => number | null }) {
+  const { confirm } = useConfirm();
   const session = useEditSession();
   const history = useArtifactHistory(project, code);
   const [byPerson, setByPerson] = useState("");
@@ -44,16 +46,16 @@ export function ChangesPanel({ project, code, commentNo }: { project: ProjectSum
   const people = [...new Set(rows.map((r) => r.command.by).filter(Boolean))] as string[];
   const shown = rows.filter((r) => (!byPerson || r.command.by === byPerson) && (!byVia || r.command.via === byVia));
 
-  const undo = (row: Row) => {
+  const undo = async (row: Row) => {
     if (session.readOnly) return toast.error("当前不能修改这张表");
     if (!row.saved) {
       const later = laterConflicts(session.log, row.command);
-      if (later.length && !window.confirm(`之后还有 ${later.length} 处修改改过同一位置，撤销会把它们一起覆盖。继续？`)) return;
+      if (later.length && !(await confirm({ title: `撤销「${row.command.label}」？`, description: `之后还有 ${later.length} 处修改改过同一位置，会一起被覆盖。`, confirmLabel: "一起撤销", destructive: true }))) return;
       session.undoCommand(row.command);
       return;
     }
     // A saved command: revert its paths on the current draft as a new edit.
-    if (!window.confirm(`撤销已保存的修改「${row.command.label}」？会作为一次新修改记录，保存后生效。`)) return;
+    if (!(await confirm({ title: `撤销已保存的修改「${row.command.label}」？`, description: "会作为一次新修改记录，保存后生效。", confirmLabel: "撤销" }))) return;
     session.commit(revertCommand(session.draft, row.command), { via: "undo", label: `撤销：${row.command.label}` });
   };
 

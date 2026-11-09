@@ -52,6 +52,13 @@ export const GUIDE_STEPS: GuideSection[] = [
   },
 ];
 
+/** 普通员工的首次指引：三步，只说要做的事。 */
+export const EMPLOYEE_GUIDE: GuideSection[] = [
+  { no: 1, title: "看任务", items: ["总览最上面的蓝色按钮，就是现在要填的表。", "左栏是本阶段的全部表，带锁的还没轮到。"] },
+  { no: 2, title: "填表", items: ["不会填就问右边的数字咨询师；手头有现成的 Word、Excel、PDF 或图片，点 📎 上传，它抽取后给你修改卡，确认才写进表。", "每格都可以写批注圈同事讨论。"] },
+  { no: 3, title: "保存后告诉负责人", items: ["保存就是提交。本步完成、提交复核由企业项目负责人来点。", "负责人退回时，表头会写原因，按批注改完再保存。"] },
+];
+
 export const GUIDE_FAQ: GuideSection = {
   title: "常见问题",
   items: [

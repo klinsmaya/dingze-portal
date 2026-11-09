@@ -47,7 +47,7 @@ export function BasicSignInForm({
   return (
     <form onSubmit={handleSignIn} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor={`${authenticator.name}-account`}>用户名或邮箱</Label>
+        <Label htmlFor={`${authenticator.name}-account`}>手机号 / 用户名</Label>
         <Input
           id={`${authenticator.name}-account`}
           type="text"
@@ -99,7 +99,7 @@ export function BasicSignInForm({
               忘记密码？
             </summary>
             <p className="mt-2 rounded-md bg-muted px-3 py-2 leading-relaxed">
-              账号由平台统一开通，不能自助注册。企业成员请联系本企业管理员；企业管理员和咨询团队请联系平台运营，在“运营管理”里重置密码，新密码会当面或通过安全渠道转交给你。
+              企业成员请联系本企业管理员重置密码；企业管理员和咨询团队请联系平台运营，新密码会通过安全渠道转交给你。
             </p>
           </details>
         )}

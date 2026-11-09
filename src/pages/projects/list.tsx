@@ -1,5 +1,5 @@
 import { ArrowRight, FolderKanban } from "lucide-react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 
 import { PROJECT_ROLE_LABELS, STAGES } from "@dingze/shared";
 
@@ -15,6 +15,8 @@ const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
 
 export default function ProjectsPage() {
   const { data: projects, isLoading, error } = useMyProjects();
+  // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。
+  if (projects?.length === 1) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
 
   return (
     <div className="flex flex-col gap-6">

@@ -157,15 +157,9 @@ export function useTreeActions<T extends TreeItem>(cfg: TreeConfig<T>) {
         mergeWithNeighbour(cfg.nodes, id, cfg.combine),
         `合并「${name(id)}」和相邻同级`,
       ),
+    // 连同下级一起删；不再先问一遍，删完的提示里有“撤销”。
     remove: (id: string) => {
       const count = subtree(cfg.nodes, id).size - 1;
-      if (
-        count > 0 &&
-        !window.confirm(
-          `「${name(id)}」下面还有 ${count} 条，会一起删除（之后可以撤销）。继续？`,
-        )
-      )
-        return null;
       return run(
         removeBranch(cfg.nodes, id),
         `删除「${name(id)}」${count ? `及下级 ${count} 条` : ""}`,

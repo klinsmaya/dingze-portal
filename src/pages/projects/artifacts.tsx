@@ -124,7 +124,7 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
           <ToggleGroupItem value="all">全部阶段</ToggleGroupItem>
           {STAGES.map((s) => (
             <ToggleGroupItem key={s.key} value={s.key}>
-              {s.name}
+              {s.flow}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -169,7 +169,7 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
                     <tr key={item.specId} className="border-t align-top text-muted-foreground">
                       <td className="px-3 py-2">
                         <span className="font-medium">《{item.name}》</span>
-                        <div className="mt-0.5 text-xs">{item.specId} · {STAGES.find((s) => s.key === item.stage)?.name}</div>
+                        <div className="mt-0.5 text-xs">{item.specId} · {STAGES.find((s) => s.key === item.stage)?.flow}</div>
                       </td>
                       <td colSpan={6} className="px-3 py-2 text-xs">{item.note}</td>
                     </tr>

@@ -17,7 +17,7 @@ export function describeChanges(before: unknown, after: unknown, nameOf: (path: 
   const entries = diffPayloads(before, after);
   return {
     total: entries.length,
-    changes: entries.slice(0, limit).map((e) => ({ where: nameOf(e.path), kind: e.kind, before: show(e.before), after: show(e.after) })),
+    changes: entries.slice(0, limit).map((e) => ({ path: e.path, where: nameOf(e.path), kind: e.kind, before: show(e.before), after: show(e.after) })),
   };
 }
 

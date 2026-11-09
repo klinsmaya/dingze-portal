@@ -27,11 +27,12 @@ import type { ProjectContextValue } from "./project-context";
 // 咨询方另有专家咨询。三个阶段各自跳到本阶段第一张还没定版的表。
 type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean };
 
-function flowNav(artifacts: ArtifactOverview[], consulting: boolean): NavItem[] {
+function flowNav(artifacts: ArtifactOverview[], consulting: boolean, library: boolean): NavItem[] {
   const stages = stageProgress(artifacts);
   return [
     { key: "overview", to: "overview", label: "总览", title: "总览：现在在第几步、下一步做什么" },
-    { key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" },
+    // 资料库和画像由企业管理员、咨询师管；普通员工在填表时传附件，不进这一页。
+    ...(library ? [{ key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" }] : []),
     ...STAGES.map((stage, i): NavItem => {
       const p = stages.find((x) => x.stage === stage.key);
       return {
@@ -44,7 +45,7 @@ function flowNav(artifacts: ArtifactOverview[], consulting: boolean): NavItem[] 
         done: !!p?.complete,
       };
     }),
-    { key: "results", to: "results", label: "成果", no: 5, title: "成果：每张表的状态与版本，下载计划书和各表" },
+    { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
     ...(consulting ? [{ key: "expert", to: "expert", label: "专家咨询", title: "专家咨询：方法流程解决不了的关键分歧，由人工咨询师受理" }] : []),
   ];
 }
@@ -110,7 +111,7 @@ function ProjectTopbar({
   const parts = useLocation().pathname.split("/");
   const section = parts[3] || "overview";
   const consulting = !(projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin);
-  const nav = flowNav(artifacts, consulting);
+  const nav = flowNav(artifacts, consulting, consulting || projectRole === "ent_lead");
   // 在填写页时，亮起当前这张表所在的阶段。
   const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
   const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;
@@ -125,23 +126,18 @@ function ProjectTopbar({
       <nav aria-label="项目导航" className="ml-2 flex h-full min-w-0 items-stretch overflow-x-auto">
         {nav.map((item) => {
           const active = item.key === activeKey;
-          return (
-            <Link
-              key={item.key}
-              to={item.to}
-              title={item.title}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
-                active ? "border-gold font-bold text-band-foreground" : "border-transparent text-band-muted hover:text-band-foreground",
-              )}
-            >
+          const className = cn(
+            "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
+            active ? "border-gold font-bold text-band-foreground" : item.locked ? "cursor-not-allowed border-transparent text-band-muted/60" : "border-transparent text-band-muted hover:text-band-foreground",
+          );
+          const inner = (
+            <>
               {item.no ? (
                 <span
                   aria-hidden
                   className={cn(
                     "flex size-[18px] items-center justify-center rounded-full border text-[11px] font-bold",
-                    item.done ? "border-gold bg-gold text-[#0c3d52]" : active ? "border-gold text-gold" : "border-white/40",
+                    item.done ? "border-gold bg-gold text-[#0c3d52]" : active ? "border-gold text-gold" : item.locked ? "border-white/25" : "border-white/40",
                   )}
                 >
                   {item.done ? <Check className="size-3" /> : item.no}
@@ -149,6 +145,16 @@ function ProjectTopbar({
               ) : null}
               {item.label}
               {item.locked ? <Lock className="size-3 opacity-70" aria-label="待开启" /> : null}
+            </>
+          );
+          // 还没开启的阶段不可点：点进去也只是一张锁定页。
+          return item.locked && !active ? (
+            <span key={item.key} title={item.title} aria-disabled="true" className={className}>
+              {inner}
+            </span>
+          ) : (
+            <Link key={item.key} to={item.to} title={item.title} aria-current={active ? "page" : undefined} className={className}>
+              {inner}
             </Link>
           );
         })}

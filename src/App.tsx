@@ -16,6 +16,7 @@ import { i18nProvider } from "@nocobase/portal-sdk/i18n";
 import { getPortalBase } from "@nocobase/portal-sdk/runtime";
 import { DocumentTitleHandler } from "./components/app-shell/document-title-handler";
 import { useNotificationProvider } from "./components/notifications/use-notification-provider";
+import { ConfirmProvider } from "./components/dingze/confirm";
 import { Toaster } from "./components/notifications/toaster";
 import { ThemeProvider } from "./components/theme/theme-provider";
 import { applyFontSize, storedFontSize } from "./lib/dingze/font-size";
@@ -73,7 +74,9 @@ function App() {
                       },
                     }}
                   >
-                    <AppRoutes />
+                    <ConfirmProvider>
+                      <AppRoutes />
+                    </ConfirmProvider>
 
                     <Toaster />
                     <UnsavedChangesNotifier />

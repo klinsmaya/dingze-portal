@@ -10,7 +10,11 @@ import {
   Combine,
   CornerDownRight,
   Download,
+  Ellipsis,
+  Eye,
   FolderInput,
+  GitCompareArrows,
+  History,
   IndentDecrease,
   IndentIncrease,
   Keyboard,
@@ -32,16 +36,25 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
 import { formatTime } from "@/lib/dingze/records";
 import { type RouteSub, routePath } from "@/lib/dingze/route";
 import { cn } from "@/lib/utils";
 
 import type { EditorChrome } from "./edit-session";
 
-// The workspace chrome from design 10: a three-row header over the canvas (where you are · title and view · structure toolbar).
+// The workspace header: two rows over the canvas (where you are · title with its few controls); a third row of
+// structure tools appears only for 思维导图 / 树形表.
 
 /** 本表小节：左栏收起（窄屏）时，在位置行给一个下拉，代替左栏里的小节列表。 */
 export function SubsMenu({ projectId, items }: { projectId: number; items: RouteSub[] }) {
@@ -87,23 +100,73 @@ export function PanelToggle({ slot, open, onToggle, count }: { slot: HTMLElement
   );
 }
 
-/** 工具栏右侧的“书中方法”：这一步怎么做的一句话，点开右栏书中方法。 */
-export function MethodButton({ text, active, onClick }: { text: string; active: boolean; onClick: () => void }) {
+/** 标题行的“书中方法”：唯一入口，点开右栏（这张表怎么填、本步目的、完成检查都在那里）。 */
+export function MethodButton({ text, active, onClick }: { text: string | null; active: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={`${text}（点开右栏“书中方法”）`}
-      className={cn(
-        "mx-1 flex h-8 max-w-[26rem] min-w-0 items-center gap-1.5 rounded-md border px-2 text-xs",
-        active ? "border-[color:var(--book-border,var(--border))] bg-book text-book-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      <BookOpen className="size-3.5 shrink-0" />
-      <span className="shrink-0 font-semibold">书中方法</span>
-      <span className="truncate">{text}</span>
-    </button>
+    <Button variant={active ? "secondary" : "ghost"} size="sm" onClick={onClick} aria-pressed={active} title={text ?? "这张表怎么填"}>
+      <BookOpen /> 书中方法
+    </Button>
+  );
+}
+
+export type MoreMenuProps = {
+  revision: { on: boolean; can: boolean; toggle: () => void };
+  comments: { open: number; onOpen: () => void };
+  selecting: boolean;
+  onLasso: () => void;
+  onHistory: () => void;
+  onExport: () => void;
+  /** 示例企业同一张表的地址（新窗口打开）。 */
+  sample: string | null;
+  onShortcuts: () => void;
+};
+
+/** 标题行右侧的“更多”：修订、批注、圈选、历史、导出、看示例、快捷键，各只在这里有一个入口。 */
+export function MoreMenu({ revision, comments, selecting, onLasso, onHistory, onExport, sample, onShortcuts }: MoreMenuProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="outline" size="sm" aria-label="更多" title="修订、批注、历史、导出、快捷键" />}
+      >
+        <Ellipsis />
+        {comments.open ? (
+          <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: "var(--dz-comment)" }}>
+            {comments.open}
+          </span>
+        ) : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuCheckboxItem checked={revision.on} disabled={!revision.can} onCheckedChange={() => revision.toggle()}>
+          <GitCompareArrows /> 修订：和某一版对比
+          <DropdownMenuShortcut>⌘⇧E</DropdownMenuShortcut>
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuItem onClick={comments.onOpen}>
+          <MessageSquarePlus /> 批注
+          {comments.open ? <span className="text-xs text-muted-foreground">{comments.open} 条未解决</span> : null}
+          <DropdownMenuShortcut>⌘⌥M</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onLasso}>
+          <LassoSelect /> {selecting ? "结束圈选" : "圈选多处一起批注"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onHistory}>
+          <History /> 历史版本
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onExport}>
+          <Download /> 导出…
+        </DropdownMenuItem>
+        {sample ? (
+          <DropdownMenuItem render={<Link to={sample} target="_blank" rel="noopener" />}>
+            <Eye /> 看示例企业的这张表
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onShortcuts}>
+          <Keyboard /> 快捷键
+          <DropdownMenuShortcut>?</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -203,88 +266,86 @@ export function WhereRow({
   );
 }
 
-/** Row 2: book title of the current view, view switch, 修订, 批注, 导出, the one next action. */
+/**
+ * Row 2: book title of the current view, then on the right the view switch, 撤销 / 重做, 书中方法, the 更多 menu
+ * and the one next action. A locked table keeps only the title.
+ */
 export function TitleRow({
   title,
   chip,
   chrome,
-  revisionOn,
-  canRevise,
-  onRevision,
-  openComments,
-  onComments,
-  exportMenu,
-  history,
+  edit,
+  method,
+  more,
   actions,
   links,
+  locked = false,
 }: {
   title: string;
   chip: string;
+  /** 还没解锁的表：只留标题和流程位。 */
+  locked?: boolean;
   /** 上下游按钮，紧跟表号。 */
   links?: ReactNode;
   chrome: EditorChrome | null;
-  revisionOn: boolean;
-  canRevise: boolean;
-  onRevision: () => void;
-  openComments: number;
-  onComments: () => void;
-  exportMenu: ReactNode;
-  /** 历史：版本、轮次与查看任意一版。 */
-  history?: ReactNode;
+  /** 撤销 / 重做；不能改的表不显示。 */
+  edit?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void } | null;
+  method?: ReactNode;
+  more?: MoreMenuProps | null;
   actions: ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <h1 className="min-w-0 font-heading text-xl font-bold text-brand">《{title}》</h1>
-      <span className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">{chip}</span>
+      {/* 标题先缩（省略号），控件不够放才换行。 */}
+      <h1 className="min-w-0 flex-1 basis-[9rem] truncate font-heading text-xl font-bold text-brand" title={title}>
+        《{title}》
+      </h1>
+      <span className="hidden shrink-0 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground 2xl:inline">{chip}</span>
       {links}
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        {chrome?.views && chrome.views.length > 1 ? (
-          <div role="radiogroup" aria-label="展示方式" className="flex rounded-lg border p-0.5">
-            {chrome.views.map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                role="radio"
-                aria-checked={chrome.view === v.key}
-                onClick={() => chrome.setView?.(v.key)}
-                className={cn("flex h-7 items-center gap-1 rounded-md px-2.5 text-sm", chrome.view === v.key ? "bg-brand font-semibold text-brand-foreground" : "text-muted-foreground hover:text-foreground")}
-              >
-                {v.icon}
-                {v.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {chrome?.variants && chrome.variants.length > 1 ? (
-          <select
-            aria-label="版式"
-            value={chrome.variant}
-            onChange={(e) => chrome.setVariant?.(e.target.value)}
-            className="h-8 rounded-lg border bg-background px-2 text-sm"
-          >
-            {chrome.variants.map((v) => (
-              <option key={v.key} value={v.key}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        ) : null}
-        {/* 次要组：修订、批注、导出只在这里有入口（页脚只显示状态）；流程按钮固定在最右（开营前 UX 改版 F6、F10）。 */}
-        <div role="group" aria-label="修订、批注与导出" className="flex items-center gap-0.5 rounded-lg border p-0.5">
-          <label className={cn("flex h-7 items-center gap-1.5 rounded-md px-2 text-sm", revisionOn && "text-[color:var(--dz-changed)]")} title="修订（Ctrl / ⌘ + Shift + E）：和任意一版对比">
-            <Switch checked={revisionOn} disabled={!canRevise} onCheckedChange={onRevision} aria-label="修订开关" />
-            修订
-          </label>
-          <Button variant="ghost" size="sm" onClick={onComments} title="批注（Ctrl / ⌘ + Alt + M）">
-            <MessageSquarePlus /> 批注
-            {openComments ? <span className="rounded-full px-1.5 text-[11px] font-bold text-white" style={{ background: "var(--dz-comment)" }}>{openComments}</span> : null}
-          </Button>
-          {history}
-          {exportMenu}
+      {locked ? null : (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {chrome?.views && chrome.views.length > 1 ? (
+            <div role="radiogroup" aria-label="展示方式" className="flex rounded-lg border p-0.5">
+              {chrome.views.map((v) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={chrome.view === v.key}
+                  onClick={() => chrome.setView?.(v.key)}
+                  className={cn("flex h-7 items-center gap-1 rounded-md px-2.5 text-sm", chrome.view === v.key ? "bg-brand font-semibold text-brand-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  {v.icon}
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {chrome?.variants && chrome.variants.length > 1 ? (
+            <select
+              aria-label="版式"
+              value={chrome.variant}
+              onChange={(e) => chrome.setVariant?.(e.target.value)}
+              className="h-8 rounded-lg border bg-background px-2 text-sm"
+            >
+              {chrome.variants.map((v) => (
+                <option key={v.key} value={v.key}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {edit ? (
+            <div role="group" aria-label="撤销与重做" className="flex items-center">
+              <ToolButton label="撤销" shortcut="Ctrl+Z" icon={<Undo2 />} onClick={edit.onUndo} disabled={!edit.canUndo} />
+              <ToolButton label="重做" shortcut="Ctrl+Shift+Z" icon={<Redo2 />} onClick={edit.onRedo} disabled={!edit.canRedo} />
+            </div>
+          ) : null}
+          {method}
+          {more ? <MoreMenu {...more} /> : null}
+          {actions}
         </div>
-        {actions}
-      </div>
+      )}
     </div>
   );
 }
@@ -381,16 +442,17 @@ export function LinksButton({
   );
 }
 
-export function ExportMenu({ children }: { children: ReactNode }) {
+/** 导出：整表、Word、图片、计划书各一个按钮；从“更多”里打开。 */
+export function ExportDialog({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
   return (
-    <Popover>
-      <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label="导出" title="导出" />}>
-        <Download />
-      </PopoverTrigger>
-      <PopoverContent align="end" className="flex w-60 flex-col items-stretch gap-1.5 p-2 [&_button]:w-full [&_button]:justify-start">
-        {children}
-      </PopoverContent>
-    </Popover>
+    <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>导出</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-stretch gap-1.5 [&_button]:w-full [&_button]:justify-start">{children}</div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -414,70 +476,38 @@ function ToolButton({ label, shortcut, icon, onClick, disabled, active, text }: 
 
 const Sep = () => <span aria-hidden className="mx-1 h-5 w-px bg-border" />;
 
-/** Row 3: the structure toolbar (same in 思维导图 and 表格; acts on the selected node / row). */
-export function StructureToolbar({
-  chrome,
-  readOnly,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  onComment,
-  selecting,
-  onLasso,
-  onShortcuts,
-  method,
-  setHowToSlot,
-}: {
-  /** 编辑器的“怎么填”放进这里。 */
-  setHowToSlot?: (el: HTMLElement | null) => void;
-  /** 书中方法一句话，点开右栏“书中方法”（打开时高亮）。 */
-  method?: ReactNode;
-  chrome: EditorChrome | null;
-  readOnly: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  onComment: () => void;
-  selecting: boolean;
-  onLasso: () => void;
-  onShortcuts: () => void;
-}) {
+/** 是否需要第三行：只有带结构工具、缩放或自带按钮的编辑器（导图、树形表）才有。 */
+export function hasToolbar(chrome: EditorChrome | null): boolean {
+  return !!(chrome?.tools || chrome?.zoom || chrome?.extra);
+}
+
+/** Row 3 (only for 思维导图 / 树形表): structure tools on the selected node, zoom and the editor's own buttons. */
+export function StructureToolbar({ chrome, readOnly }: { chrome: EditorChrome | null; readOnly: boolean }) {
   const t = chrome?.tools;
   const off = readOnly || !t?.selected;
   const z = chrome?.zoom;
+  if (!hasToolbar(chrome)) return null;
   return (
     <div role="toolbar" aria-label="调整工具条" className="flex min-h-10 flex-wrap items-center gap-0.5">
-      <ToolButton label="撤销" shortcut="Ctrl+Z" icon={<Undo2 />} onClick={onUndo} disabled={readOnly || !canUndo} />
-      <ToolButton label="重做" shortcut="Ctrl+Shift+Z" icon={<Redo2 />} onClick={onRedo} disabled={readOnly || !canRedo} />
       {t ? (
         <>
-      <Sep />
-      <ToolButton text label="下级" shortcut="Tab" icon={<CornerDownRight />} onClick={t?.child} disabled={off} />
-      <ToolButton text label="同级" shortcut="Enter" icon={<Plus />} onClick={t?.sibling} disabled={off} />
-      <Sep />
-      <ToolButton label="升一级" shortcut="Alt+Shift+←" icon={<IndentDecrease />} onClick={t?.outdent} disabled={off} />
-      <ToolButton label="降一级" shortcut="Alt+Shift+→" icon={<IndentIncrease />} onClick={t?.indent} disabled={off} />
-      <ToolButton label="上移" shortcut="Alt+Shift+↑" icon={<ArrowUp />} onClick={t?.up} disabled={off} />
-      <ToolButton label="下移" shortcut="Alt+Shift+↓" icon={<ArrowDown />} onClick={t?.down} disabled={off} />
-      <Sep />
-      <ToolButton text label="移动到…" shortcut="Shift+F10" icon={<FolderInput />} onClick={t?.moveTo} disabled={off} />
-      {t?.split || t?.merge ? (
-        <>
-          <ToolButton label="拆分" icon={<Split />} onClick={t?.split} disabled={off} />
-          <ToolButton label="合并" icon={<Combine />} onClick={t?.merge} disabled={off} />
-        </>
-      ) : null}
-        </>
-      ) : null}
-      <Sep />
-      <ToolButton text label="批注" shortcut="Ctrl+Alt+M" icon={<MessageSquarePlus />} onClick={onComment} />
-      <ToolButton text label="圈选" icon={<LassoSelect />} onClick={onLasso} active={selecting} />
-      {t ? (
-        <>
+          <ToolButton text label="下级" shortcut="Tab" icon={<CornerDownRight />} onClick={t.child} disabled={off} />
+          <ToolButton text label="同级" shortcut="Enter" icon={<Plus />} onClick={t.sibling} disabled={off} />
           <Sep />
-          <ToolButton label="删除" shortcut="Delete" icon={<Trash2 className="text-destructive" />} onClick={t?.remove} disabled={off} />
+          <ToolButton label="升一级" shortcut="Alt+Shift+←" icon={<IndentDecrease />} onClick={t.outdent} disabled={off} />
+          <ToolButton label="降一级" shortcut="Alt+Shift+→" icon={<IndentIncrease />} onClick={t.indent} disabled={off} />
+          <ToolButton label="上移" shortcut="Alt+Shift+↑" icon={<ArrowUp />} onClick={t.up} disabled={off} />
+          <ToolButton label="下移" shortcut="Alt+Shift+↓" icon={<ArrowDown />} onClick={t.down} disabled={off} />
+          <Sep />
+          <ToolButton text label="移动到…" shortcut="Shift+F10" icon={<FolderInput />} onClick={t.moveTo} disabled={off} />
+          {t.split || t.merge ? (
+            <>
+              <ToolButton label="拆分" icon={<Split />} onClick={t.split} disabled={off} />
+              <ToolButton label="合并" icon={<Combine />} onClick={t.merge} disabled={off} />
+            </>
+          ) : null}
+          <Sep />
+          <ToolButton label="删除" shortcut="Delete" icon={<Trash2 className="text-destructive" />} onClick={t.remove} disabled={off} />
         </>
       ) : null}
       <span className="flex-1" />
@@ -491,9 +521,6 @@ export function StructureToolbar({
           {z.setMinimap ? <ToolButton label="小地图" icon={<MapIcon />} onClick={() => z.setMinimap?.(!z.minimap)} active={z.minimap} /> : null}
         </div>
       ) : null}
-      {method}
-      <span ref={setHowToSlot} className="contents" />
-      <ToolButton label="快捷键" shortcut="?" icon={<Keyboard />} onClick={onShortcuts} />
     </div>
   );
 }

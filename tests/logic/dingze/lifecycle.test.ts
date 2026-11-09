@@ -10,6 +10,8 @@ import {
   nextStatus,
   staleTargets,
   unlockInfo,
+  canPerform,
+  isEmployee,
 } from "@dingze/shared";
 
 const lead: Actor = { projectRole: "ent_lead", isConsultAdmin: false };
@@ -28,7 +30,8 @@ describe("artifact lifecycle", () => {
   it("walks the normal path from draft to locked", () => {
     let status = nextStatus("save", "not_started", member);
     expect(status).toBe("in_progress");
-    status = nextStatus("stepDone", status, dept);
+    // 2026-11 起只有企业项目负责人能点“这步做完了”，部门负责人和普通员工只保存。
+    status = nextStatus("stepDone", status, lead);
     expect(status).toBe("step_done");
     status = nextStatus("submitReview", status, lead);
     expect(status).toBe("in_review");
@@ -81,6 +84,18 @@ describe("unlocking", () => {
   it("unlocks the next table once the previous one reaches step done", () => {
     const states: StateMap = { "S1-01": { status: "step_done" } };
     expect(unlockInfo(getArtifactDef("S1-02"), states).unlocked).toBe(true);
+  });
+
+  it("opens the 使命 / 愿景 worksheets once the strategy page has been saved, before it is finished", () => {
+    const locked = unlockInfo(getArtifactDef("M-MISSION"), {});
+    expect(locked.unlocked).toBe(false);
+    expect(locked.waitingFor).toContain("战略一页纸");
+    expect(unlockInfo(getArtifactDef("M-VISION"), { "S1-01": { status: "not_started" } }).unlocked).toBe(false);
+    const drafted: StateMap = { "S1-01": { status: "in_progress" } };
+    expect(unlockInfo(getArtifactDef("M-MISSION"), drafted).unlocked).toBe(true);
+    expect(unlockInfo(getArtifactDef("M-VISION"), drafted).unlocked).toBe(true);
+    // Worksheets never hold back the next P0 table.
+    expect(unlockInfo(getArtifactDef("S1-02"), { "S1-01": { status: "step_done" } }).unlocked).toBe(true);
   });
 
   it("does not let optional P1 worksheets block the strategy KPI table", () => {
@@ -156,5 +171,25 @@ describe("step exceptions", () => {
     expect(validationApplies("confirm", true)).toBe(true);
     expect(validationApplies("forceLock", true)).toBe(true);
     expect(validationApplies("save", false)).toBe(false);
+  });
+});
+
+describe("普通员工不点流转（会议纪要 2026-11）", () => {
+  const member: Actor = { projectRole: "member", isConsultAdmin: false };
+  it("member and dept_head can save but not move the flow", () => {
+    for (const actor of [member, dept]) {
+      expect(canPerform("save", actor)).toBe(true);
+      expect(canPerform("stepDone", actor)).toBe(false);
+      expect(canPerform("submitReview", actor)).toBe(false);
+      expect(canPerform("confirm", actor)).toBe(false);
+      expect(canPerform("reopen", actor)).toBe(false);
+    }
+    expect(isEmployee("member")).toBe(true);
+    expect(isEmployee("dept_head")).toBe(true);
+    expect(isEmployee("ent_lead")).toBe(false);
+    expect(isEmployee(null)).toBe(false);
+  });
+  it("the enterprise lead still completes the step", () => {
+    expect(canPerform("stepDone", { projectRole: "ent_lead", isConsultAdmin: false })).toBe(true);
   });
 });

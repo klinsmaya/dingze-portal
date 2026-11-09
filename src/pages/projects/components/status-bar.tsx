@@ -1,11 +1,10 @@
-import { BookOpen, CircleAlert, CircleCheck, GitCompareArrows, Keyboard, MessageSquareText, TriangleAlert } from "lucide-react";
+import { CircleAlert, CircleCheck, GitCompareArrows, MessageSquareText, TriangleAlert } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
-/** Bottom status line of the workspace (design 10): checks, comments, save state, shortcuts. */
+/** Bottom status line of the workspace: checks, comments, 修订 state and the two or three shortcuts that matter here. */
 export function StatusBar({
   errors,
   warnings,
@@ -15,8 +14,6 @@ export function StatusBar({
   selected,
   hints,
   onIssues,
-  onShortcuts,
-  onBook,
   summary,
   optional = false,
 }: {
@@ -32,9 +29,6 @@ export function StatusBar({
   hints: [string, string][];
   selected: string | null;
   onIssues: () => void;
-  onShortcuts: () => void;
-  /** 打开右栏“书中方法”。 */
-  onBook: () => void;
 }) {
   return (
     <div
@@ -66,19 +60,16 @@ export function StatusBar({
         <GitCompareArrows className="size-3.5" /> 修订 {revisionOn ? `开${revisionLabel ? ` · 对比 ${revisionLabel}` : ""}` : "关"}
       </span>
       {selected ? <span className="hidden max-w-64 truncate text-muted-foreground sm:inline">选中：{selected}</span> : null}
-      <span className="ml-auto hidden items-center gap-2 text-muted-foreground 2xl:flex">
+      <span className="ml-auto hidden items-center gap-2 text-muted-foreground lg:flex">
         {hints.map(([keys, what]) => (
           <span key={keys} className="flex items-center gap-1">
             <Kbd>{keys}</Kbd> {what}
           </span>
         ))}
+        <span className="flex items-center gap-1">
+          <Kbd>?</Kbd> 全部快捷键
+        </span>
       </span>
-      <Button size="xs" variant="ghost" className="ml-auto 2xl:ml-0" onClick={onBook} title="在右栏打开这张表的书中方法：目的、怎么做、完成检查">
-        <BookOpen /> 书中方法
-      </Button>
-      <Button size="xs" variant="ghost" onClick={onShortcuts} aria-label="全部快捷键（?）">
-        <Keyboard /> ? 全部快捷键
-      </Button>
     </div>
   );
 }
@@ -99,9 +90,9 @@ const SHORTCUTS: { group: string; items: [string, string][] }[] = [
   {
     group: "表格",
     items: [
-      ["点格子", "直接改，改完自动记一条修改"],
       ["Tab / Shift + Tab", "下一格 / 上一格"],
-      ["行右侧按钮", "上移、下移、删除（删除后可撤销）"],
+      ["Alt + Shift + ↑ / ↓", "当前行上移 / 下移"],
+      ["Alt + Shift + Backspace", "删除当前行（可撤销）"],
     ],
   },
   {

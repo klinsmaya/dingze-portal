@@ -1,3 +1,4 @@
+import { Crosshair } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -9,11 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProjectSummary } from "@/lib/dingze/api";
 import { describeChanges } from "@/lib/dingze/confirm-summary";
 import { errorMessage } from "@/lib/dingze/errors";
+import { locateAnchor } from "@/lib/dingze/locate";
 import { formatTime } from "@/lib/dingze/records";
+import { idsInPath, referencesOf } from "@/lib/dingze/references";
 import { useAcknowledgeUpstream, useUpstreamChanges } from "@/lib/dingze/queries";
 import { workspacePath } from "@/lib/dingze/progress";
 
-import { pathNamer } from "./edit-session";
+import { pathNamer, useEditSession } from "./edit-session";
 
 const KIND = { added: "新增", removed: "删除", changed: "改为" } as const;
 
@@ -42,6 +45,15 @@ export function UpstreamChangesDialog({
   const [note, setNote] = useState("");
   const list = changes.data?.changes ?? [];
   const reopened = list.filter((c) => c.reopened);
+  // 每条上游改动 → 本表里引用了那一条的行，点一下关掉弹层、滚到那一行。
+  const draft = useEditSession()?.draft;
+  const affected = (path: string) => [...new Set(idsInPath(path).flatMap((id) => referencesOf(draft, id)))];
+  const jump = (anchors: string[]) => {
+    onClose();
+    window.setTimeout(() => {
+      if (!anchors.some((a) => locateAnchor(a))) toast.info("这几行现在不在表里（可能换了视图或被删除）");
+    }, 120);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
@@ -74,11 +86,21 @@ export function UpstreamChangesDialog({
                 {diff ? (
                   diff.total ? (
                     <ul className="mt-2 flex flex-col gap-1">
-                      {diff.changes.map((d, i) => (
-                        <li key={i} className="text-xs">
-                          <span className="font-medium">{d.where}</span>：{d.kind === "added" ? `新增 ${d.after}` : d.kind === "removed" ? `删除 ${d.before}` : `${d.before} ${KIND.changed} ${d.after}`}
-                        </li>
-                      ))}
+                      {diff.changes.map((d, i) => {
+                        const rows = affected(d.path);
+                        return (
+                          <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                            <span>
+                              <span className="font-medium">{d.where}</span>：{d.kind === "added" ? `新增 ${d.after}` : d.kind === "removed" ? `删除 ${d.before}` : `${d.before} ${KIND.changed} ${d.after}`}
+                            </span>
+                            {rows.length ? (
+                              <button type="button" onClick={() => jump(rows)} className="inline-flex items-center gap-1 text-primary hover:underline">
+                                <Crosshair className="size-3" /> 本表 {rows.length} 行引用了它
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                       {diff.total > diff.changes.length ? <li className="text-xs text-muted-foreground">……另有 {diff.total - diff.changes.length} 处，打开上游表的“修改”看全部</li> : null}
                     </ul>
                   ) : (
