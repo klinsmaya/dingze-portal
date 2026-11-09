@@ -82,19 +82,14 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
 
   return (
     <div className={embedded ? "flex flex-col gap-6" : "mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6"}>
-      {part && part !== "deliver" ? null : <div className="flex flex-wrap items-end gap-3">
-        <div>
-          {embedded ? null : <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>}
-          <p className="mt-1 text-sm text-muted-foreground">
-            最终交付是年度经营计划书（Word）。没定版的内容导出时会标“草稿”，避免被当作定版件流转。
-          </p>
-        </div>
-        {embedded ? null : (
+      {embedded ? null : (
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-heading text-2xl font-bold text-brand">导出</h1>
           <Link to={`/projects/${project.id}/results`} className="ml-auto text-sm text-primary hover:underline">
-            查看全部表的版本与修改记录 →
+            全部表的版本与修改记录 →
           </Link>
-        )}
-      </div>}
+        </div>
+      )}
 
       {bundle.error ? (
         <Alert variant="destructive">
@@ -115,10 +110,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
                   <FileText className={cn("size-9 shrink-0", code === "S3-07" ? "text-primary" : "text-muted-foreground")} />
                   <div className="min-w-56 flex-1">
                     <div className={cn("font-heading font-bold text-brand", code === "S3-07" ? "text-xl" : "text-base")}>{def.plain}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {def.specId} · {def.name} ·{" "}
-                      {a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}（未定版）`) : "还没有开始写"}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{a?.payload ? (a.locked ? `已定版 v${a.rev}` : `草稿 v${a.rev}`) : "还没有开始写"}</div>
                     {a?.payload && a.stale ? (
                       <div className="mt-1 text-xs font-medium text-[color:var(--dz-warn)]">
                         上游已变更（{a.staleReason || "引用的表有新版本"}）。{a.locked ? `下载的仍是定版 v${a.rev} 批准时的内容；新方案要重开计划书、重新定版后再出新版本。` : "导出前请先核对并保存。"}
@@ -150,7 +142,7 @@ export default function DeliveryPage({ embedded = false, part }: { embedded?: bo
 
           {show("tables") ? <details className="group rounded-xl border bg-card" open={part === "tables" ? true : undefined}>
             <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-              其他表格与图片 <span className="font-normal text-muted-foreground">· 单张表的 Excel、任务书 Word、战略图 / 解码地图 / 路径系统图 PNG · SVG（按需导出）</span>
+              其他表格与图片
             </summary>
           <section aria-labelledby="deliverables" className="flex flex-col gap-3 border-t p-4">
             <h2 id="deliverables" className="sr-only">

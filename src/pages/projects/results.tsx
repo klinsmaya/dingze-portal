@@ -8,10 +8,7 @@ import DeliveryPage from "./delivery";
 const TABS = ["deliver", "list", "tables", "records"] as const;
 type ResultsTab = (typeof TABS)[number];
 
-/**
- * 成果（2026-10-16 调整）：页签固定在标题下方，切换不用上下滚动。第一个页签是交付成果——年度经营计划书
- * （公司 / 部门）和各部门绩效计分卡；后面三个是过程资料与成果——成果清单、单表与图片导出、导出记录。
- */
+/** 成果：交付成果（计划书、计分卡）、成果清单、单表与图片导出、导出记录四个页签，页签固定在标题旁。 */
 export default function ResultsPage() {
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab");
@@ -20,17 +17,11 @@ export default function ResultsPage() {
     <Tabs value={tab} onValueChange={(v) => setParams(v === "deliver" ? {} : { tab: String(v) }, { replace: true })} className="flex w-full flex-col gap-0">
       <div className="sticky top-0 z-20 border-b bg-background shadow-[0_1px_0_var(--border)]">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-end gap-x-6 gap-y-2 px-4 pt-4 md:px-6">
-          <div className="pb-2">
-            <h1 className="font-heading text-2xl font-bold text-brand">成果</h1>
-            <p className="text-sm text-muted-foreground">先看交付成果；过程中每张表的版本、导出都在后面三个页签。</p>
-          </div>
+          <h1 className="pb-2 font-heading text-2xl font-bold text-brand">成果</h1>
           <TabsList variant="line" className="h-auto flex-wrap gap-1 p-0">
             <TabsTrigger value="deliver" className="px-3 py-2 font-semibold">
               交付成果
             </TabsTrigger>
-            <span aria-hidden className="mx-2 self-center text-xs text-muted-foreground">
-              过程资料与成果：
-            </span>
             <TabsTrigger value="list" className="px-3 py-2">
               成果清单
             </TabsTrigger>
