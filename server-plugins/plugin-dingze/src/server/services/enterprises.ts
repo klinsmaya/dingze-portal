@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, nextAction, stageGateCodes } from '../../shared';
+import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, nextAction, selfProjectAllowed, stageGateCodes } from '../../shared';
 import { projectProgress } from './artifacts';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames } from './access';
 import { notifyAssignment } from './notify';
@@ -139,13 +139,13 @@ async function insertProject(ctx: Context, enterprise: any, input: ProjectInput,
 }
 
 /**
- * 企业管理员自建项目（运营按企业打开开关后）：企业内训 · 自助，只能分派本企业账号的企业侧角色，
+ * 企业管理员自建项目（默认允许，运营可以按企业关掉）：企业内训 · 自助，只能分派本企业账号的企业侧角色，
  * 至少一位企业项目负责人。需要咨询师陪跑时由运营改服务方式并分派咨询师。
  */
 export async function createOwnProject(ctx: Context, input: ProjectInput) {
   const { enterprise, spaceName, access } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
   if (!access.isOps) {
-    if (!enterprise.get('allowSelfProject')) throw new HttpError(403, '本企业还没开通自建项目，请联系运营', 'SELF_PROJECT_OFF');
+    if (!selfProjectAllowed({ selfProjectOff: enterprise.get('selfProjectOff') })) throw new HttpError(403, '本企业的自建项目已关闭，需要新项目请联系运营', 'SELF_PROJECT_OFF');
     if (enterprise.get('status') === 'suspended') throw new HttpError(403, '该企业已停用，请联系咨询机构', 'ENTERPRISE_SUSPENDED');
   }
   const year = input.year ? Number(input.year) : new Date().getFullYear();

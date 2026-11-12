@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Lock } from "lucide-react";
+import { Check, ChevronDown, Lock, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
 
@@ -20,6 +20,7 @@ import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
 import { stageBlockers, stageEntryCode, stageProgress } from "@/lib/dingze/progress";
 import { useProject, useProjectOverview } from "@/lib/dingze/queries";
+import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
 import { cn } from "@/lib/utils";
 
 import type { ProjectContextValue } from "./project-context";
@@ -63,7 +64,9 @@ function ProjectSwitcher({ projectId, projects, section }: { projectId: number; 
   const project = projects.find((p) => p.id === projectId);
   const label = project ? `${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} · ${project.name}` : "加载项目…";
   const title = <span className="truncate font-heading text-[15px] font-bold tracking-wide">{label}</span>;
-  if (projects.length < 2) return <div className="flex min-w-0 max-w-[20rem] items-center" title={label}>{title}</div>;
+  // 能自建项目的企业管理员即使只有一个项目也给下拉：从这里去「新建项目」（测试反馈 4、5）。
+  const selfEnterprise = useSelfProjectEnterprise();
+  if (projects.length < 2 && !selfEnterprise) return <div className="flex min-w-0 max-w-[20rem] items-center" title={label}>{title}</div>;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex min-w-0 max-w-[20rem] items-center gap-1 rounded-md px-1.5 py-1 hover:bg-white/10" aria-label="切换项目" title={`${label}（切换项目）`}>
@@ -88,7 +91,12 @@ function ProjectSwitcher({ projectId, projects, section }: { projectId: number; 
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("/projects")}>全部项目</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/projects?all=1")}>全部项目</DropdownMenuItem>
+        {selfEnterprise ? (
+          <DropdownMenuItem onClick={() => navigate("/projects?new=1")}>
+            <Plus /> 新建项目
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

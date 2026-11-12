@@ -71,7 +71,7 @@ export async function trialSignUp(ctx: Context, input: TrialInput) {
     const by = { createdById: userId, updatedById: userId };
     await ctx.db.getRepository('spaces.users', spaceName).add({ tk: [...new Set([userId, ...staffIds])], transaction });
     const enterprise = await ctx.db.getRepository('dz_enterprises').create({
-      values: { name: enterpriseName, shortName, size: 'sme', status: 'active', trial: true, allowSelfProject: true, spaceName, ...by },
+      values: { name: enterpriseName, shortName, size: 'sme', status: 'active', trial: true, spaceName, ...by },
       transaction,
     });
     const project = await ctx.db.getRepository('dz_projects').create({

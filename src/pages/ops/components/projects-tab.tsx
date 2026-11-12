@@ -1,4 +1,4 @@
-import { SERVICE_LABELS } from "@dingze/shared";
+import { SERVICE_LABELS, selfProjectAllowed } from "@dingze/shared";
 import { ArrowRight, FolderKanban, Pencil, Plus, Trash2, TriangleAlert, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -42,7 +42,7 @@ const CONSULTANT_PROJECT_ROLES: ProjectRole[] = ["lead_consultant", "co_consulta
 export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
   const [editing, setEditing] = useState<ProjectWithMembers | "new" | null>(null);
   const [staffing, setStaffing] = useState<ProjectWithMembers | null>(null);
-  const allowSelf = !!detail.enterprise.allowSelfProject;
+  const allowSelf = selfProjectAllowed(detail.enterprise);
   const update = useOpsMutation(opsApi.updateEnterprise);
 
   return (
@@ -54,7 +54,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
             onCheckedChange={(on) =>
               update.mutate(
                 { enterpriseId: detail.enterprise.id, allowSelfProject: !!on },
-                { onSuccess: () => toast.success(on ? "已允许企业管理员自建项目" : "已关闭企业自建项目"), onError: (e) => toast.error(errorMessage(e)) },
+                { onSuccess: () => toast.success(on ? "已允许企业管理员自建项目" : "已关闭企业自建项目，需要新项目由运营来建"), onError: (e) => toast.error(errorMessage(e)) },
               )
             }
             aria-label="允许企业管理员自建项目"
@@ -463,7 +463,7 @@ function MembersDialog({
 }
 
 /**
- * 企业管理员自建项目（运营打开开关后，入口在「我的项目」）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
+ * 企业管理员自建项目（默认允许，运营可按企业关掉；入口在「我的项目」）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
  * 默认把自己设为企业项目负责人。建好后直接进项目并打开“从已有项目带入”。
  */
 export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: EnterpriseDetail; onClose: () => void }) {

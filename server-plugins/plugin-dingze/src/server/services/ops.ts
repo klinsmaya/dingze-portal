@@ -273,7 +273,8 @@ export async function updateEnterprise(
     if (!['active', 'suspended'].includes(input.status)) throw new HttpError(400, '状态不正确');
     values.status = input.status;
   }
-  if (input.allowSelfProject !== undefined) values.allowSelfProject = input.allowSelfProject === true;
+  // 接口参数仍叫 allowSelfProject（开 / 关）；存的是“关掉”这一个状态，没存过的企业就是开启。
+  if (input.allowSelfProject !== undefined) values.selfProjectOff = input.allowSelfProject !== true;
   await enterprise.update(values);
   await audit(ctx, spaceName, 'enterprise.update', { enterpriseId: enterprise.get('id'), ...values });
   return enterprise.toJSON();
