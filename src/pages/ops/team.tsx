@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { useCanAccess } from "@nocobase/portal-sdk/acl";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type DzUser, SYSTEM_ROLE_LABELS, type SystemRole, opsApi } from "@/lib/dingze/ops-api";
@@ -54,19 +54,14 @@ export default function TeamPage() {
         }
       />
 
-      <ToggleGroup
-        value={[filter]}
-        onValueChange={(value) => setFilter((value[0] as SystemRole | "all" | undefined) ?? "all")}
-        variant="outline"
-        className="self-start"
-      >
-        <ToggleGroupItem value="all">全部</ToggleGroupItem>
+      <FilterGroup value={filter} onChange={setFilter} className="self-start" aria-label="按系统角色筛选">
+        <FilterItem value="all">全部</FilterItem>
         {TEAM_ROLES.map((r) => (
-          <ToggleGroupItem key={r} value={r}>
+          <FilterItem key={r} value={r}>
             {SYSTEM_ROLE_LABELS[r]}
-          </ToggleGroupItem>
+          </FilterItem>
         ))}
-      </ToggleGroup>
+      </FilterGroup>
 
       {users.error ? (
         <Alert variant="destructive">

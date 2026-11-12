@@ -18,6 +18,15 @@ export function portalRoleOf(projectRole: ProjectRole | null | undefined, isCons
   return "employee";
 }
 
+/**
+ * Inside a project, for an account that may have no project role: 运营 and 咨询管理员 open projects
+ * they are not members of, and must not be shown the 普通员工 guide (测试反馈 9).
+ */
+export function portalRoleIn(projectRole: ProjectRole | null | undefined, isConsultAdmin: boolean, systemRoles: readonly string[]): PortalRole {
+  if (projectRole || isConsultAdmin) return portalRoleOf(projectRole, isConsultAdmin);
+  return portalRoleFromSystem(systemRoles);
+}
+
 /** Outside a project (使用指南页): by the account's system roles. */
 export function portalRoleFromSystem(roles: readonly string[]): PortalRole {
   if (roles.some((r) => r === "dz_consultant" || r === "dz_consult_admin" || r === "dz_ops" || r === "root")) return "consultant";

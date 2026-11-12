@@ -14,7 +14,7 @@ import {
 } from "@dingze/shared";
 
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
@@ -68,14 +68,14 @@ export function StrategyMapEditor({ value, onChange, readOnly, issues, upstream 
         {objectives.length === 0 && seed ? (
           <ImportButton label="从战略屋带入目标" count={seed.objectives.length} readOnly={readOnly} onClick={() => onChange(seed)} />
         ) : null}
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "diagram")} variant="outline" size="sm">
-          <ToggleGroupItem value="table">
+        <FilterGroup value={view} onChange={setView} size="sm" aria-label="展示方式">
+          <FilterItem value="table">
             <Table2 /> 表格
-          </ToggleGroupItem>
-          <ToggleGroupItem value="diagram">
+          </FilterItem>
+          <FilterItem value="diagram">
             <Network /> 地图
-          </ToggleGroupItem>
-        </ToggleGroup>
+          </FilterItem>
+        </FilterGroup>
       </EditorToolbar>
 
       {view === "diagram" ? (

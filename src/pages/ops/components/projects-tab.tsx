@@ -1,4 +1,4 @@
-import { SERVICE_LABELS } from "@dingze/shared";
+import { SERVICE_LABELS, selfProjectAllowed } from "@dingze/shared";
 import { ArrowRight, FolderKanban, Pencil, Plus, Trash2, TriangleAlert, Users } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -38,42 +38,33 @@ type ProjectWithMembers = EnterpriseDetail["projects"][number];
 const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ["ent_lead", "dept_head", "member", "readonly"];
 const CONSULTANT_PROJECT_ROLES: ProjectRole[] = ["lead_consultant", "co_consultant"];
 
-export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail; asOps?: boolean }) {
+/** 运营管理 › 企业 › 项目与分派。企业管理员不进这里：他们的项目都在「我的项目」（测试反馈 5）。 */
+export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
   const [editing, setEditing] = useState<ProjectWithMembers | "new" | null>(null);
   const [staffing, setStaffing] = useState<ProjectWithMembers | null>(null);
-  const [creatingOwn, setCreatingOwn] = useState(false);
-  const allowSelf = !!detail.enterprise.allowSelfProject;
+  const allowSelf = selfProjectAllowed(detail.enterprise);
   const update = useOpsMutation(opsApi.updateEnterprise);
 
   return (
     <div className="flex flex-col gap-4">
-      {asOps ? (
-        <label className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
+      <label className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
           <Switch
             checked={allowSelf}
             disabled={update.isPending}
             onCheckedChange={(on) =>
               update.mutate(
                 { enterpriseId: detail.enterprise.id, allowSelfProject: !!on },
-                { onSuccess: () => toast.success(on ? "已允许企业管理员自建项目" : "已关闭企业自建项目"), onError: (e) => toast.error(errorMessage(e)) },
+                { onSuccess: () => toast.success(on ? "已允许企业管理员自建项目" : "已关闭企业自建项目，需要新项目由运营来建"), onError: (e) => toast.error(errorMessage(e)) },
               )
             }
             aria-label="允许企业管理员自建项目"
           />
           <span className="min-w-0 flex-1 font-medium">允许企业管理员自建项目</span>
         </label>
-      ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{asOps || allowSelf ? null : "需要新项目请联系运营。"}</p>
-        {asOps ? (
-          <Button onClick={() => setEditing("new")}>
-            <Plus /> 新建项目
-          </Button>
-        ) : allowSelf ? (
-          <Button onClick={() => setCreatingOwn(true)}>
-            <Plus /> 新建项目
-          </Button>
-        ) : null}
+      <div className="flex justify-end">
+        <Button onClick={() => setEditing("new")}>
+          <Plus /> 新建项目
+        </Button>
       </div>
 
       {detail.projects.length === 0 ? (
@@ -99,16 +90,12 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
                 {project.status === "archived" ? <Badge variant="outline">已归档</Badge> : null}
               </CardTitle>
               <CardAction className="flex flex-wrap gap-1">
-                {asOps ? (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(project)}>
-                      <Pencil /> 编辑
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setStaffing(project)}>
-                      <Users /> 成员
-                    </Button>
-                  </>
-                ) : null}
+                <Button variant="ghost" size="sm" onClick={() => setEditing(project)}>
+                  <Pencil /> 编辑
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setStaffing(project)}>
+                  <Users /> 成员
+                </Button>
                 <Button variant="outline" size="sm" nativeButton={false} render={<Link to={`/projects/${project.id}/overview`} />}>
                   进入 <ArrowRight />
                 </Button>
@@ -133,14 +120,8 @@ export function ProjectsTab({ detail, asOps = true }: { detail: EnterpriseDetail
         ))
       )}
 
-      {asOps ? (
-        <>
-          <ProjectDialog target={editing} detail={detail} onClose={() => setEditing(null)} />
-          <MembersDialog project={staffing} detail={detail} onClose={() => setStaffing(null)} />
-        </>
-      ) : (
-        <OwnProjectDialog open={creatingOwn} detail={detail} onClose={() => setCreatingOwn(false)} />
-      )}
+      <ProjectDialog target={editing} detail={detail} onClose={() => setEditing(null)} />
+      <MembersDialog project={staffing} detail={detail} onClose={() => setStaffing(null)} />
     </div>
   );
 }
@@ -482,10 +463,10 @@ function MembersDialog({
 }
 
 /**
- * 企业管理员自建项目（运营打开开关后）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
+ * 企业管理员自建项目（默认允许，运营可按企业关掉；入口在「我的项目」）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
  * 默认把自己设为企业项目负责人。建好后直接进项目并打开“从已有项目带入”。
  */
-function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: EnterpriseDetail; onClose: () => void }) {
+export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; detail: EnterpriseDetail; onClose: () => void }) {
   const { data: me } = useGetIdentity<{ id: number }>();
   const navigate = useNavigate();
   const year = new Date().getFullYear() + 1;

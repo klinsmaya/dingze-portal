@@ -2,6 +2,7 @@ import { type ReactNode, createContext, useContext, useEffect, useRef } from "re
 
 import type { Issue } from "@dingze/shared";
 
+import type { ProposedChange } from "@/lib/dingze/changes";
 import { anchorOptions } from "@/lib/dingze/comment-anchors";
 import type { Command, CommandMeta } from "@/lib/dingze/edit-log";
 
@@ -29,6 +30,8 @@ export type EditSession = {
   /** 修改卡预览 (design 10 画面 6): the canvas shows this payload read-only, numbered items amber. */
   previewDraft: { payload: unknown; items: { anchor: string; no: number }[] } | null;
   setPreviewDraft: (preview: { payload: unknown; items: { anchor: string; no: number }[] } | null) => void;
+  /** This card was already written into the draft (a card re-issued after a broken round trip). */
+  proposalWritten: (changes: ProposedChange[]) => boolean;
   /** 修订 (design 10 画面 7): what a cell was in the compared version and who changed it. */
   revisionCell: (key: string) => { kind: "changed" | "added"; before?: string; by?: string } | null;
   /** 对比 vN：改 a 处 · 增 b 行 · 删 c 行 · d 人. */

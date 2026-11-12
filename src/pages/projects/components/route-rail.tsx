@@ -62,7 +62,16 @@ function stepNote(s: RouteStep): string {
   }
 }
 
-export type RailStage = { key: StageKey; to: string; open: boolean; complete: boolean; locked: number; gateTotal: number };
+export type RailStage = {
+  key: StageKey;
+  to: string;
+  open: boolean;
+  complete: boolean;
+  locked: number;
+  gateTotal: number;
+  /** 还没开启时：前面还差几张必做表没定版，以及第一张在哪。 */
+  gate?: { to: string; count: number };
+};
 export type RailStats = { ready: number; review: number };
 
 const CHEVRON = [
@@ -72,7 +81,7 @@ const CHEVRON = [
 ];
 
 /** 三段阶段条：定战略 ▸ 定目标 ▸ 定行动，当前段深色，未开启的上锁，点一下切换。 */
-function StageBar({ current, stages }: { current: StageKey; stages: RailStage[] }) {
+function StageBar({ current, stages, onGate }: { current: StageKey; stages: RailStage[]; onGate?: (stage: StageKey) => void }) {
   return (
     <ol aria-label="三阶段" className="flex min-w-0 flex-1">
       {stages.map((st, i) => {
@@ -93,6 +102,10 @@ function StageBar({ current, stages }: { current: StageKey; stages: RailStage[] 
           <li key={st.key} className={cn("min-w-0 flex-1", i > 0 && "-ml-1")} style={{ clipPath: CHEVRON[i] }}>
             {st.open && !now ? (
               <Link to={st.to} className={cls} title={`切换到${STAGES[i].flow}（必做表已定版 ${st.locked} / ${st.gateTotal}）`}>
+                {body}
+              </Link>
+            ) : !st.open && !now && st.gate ? (
+              <Link to={st.gate.to} onClick={() => onGate?.(st.key)} className={cn(cls, "hover:text-foreground")} title={`${STAGES[i].flow}：前面还有 ${st.gate.count} 张必做表没定版，点一下去看`}>
                 {body}
               </Link>
             ) : (
@@ -148,7 +161,13 @@ export function RouteRail({
   onToggle,
   materials = [],
   onOpenMaterial,
+  gateCodes,
+  onGate,
 }: {
+  /** 测试反馈 3：挡住下一阶段的必做表（还没定版），在路线里用红色闪烁标出。 */
+  gateCodes?: string[];
+  /** 点了一个还没开启的阶段。 */
+  onGate?: (stage: StageKey) => void;
   /** 参考资料: the project's materials, newest first; opened in a side sheet. */
   materials?: { id: number; title: string }[];
   onOpenMaterial?: (id: number) => void;
@@ -172,6 +191,7 @@ export function RouteRail({
     }
   };
   const stage = stages.find((x) => x.key === route.stage);
+  const blocks = (s: RouteStep) => !s.method && !!gateCodes?.length && s.codes.some((c) => gateCodes.includes(c));
   const products = route.current ? route.current.codes.filter((c) => getArtifactDef(c).priority !== "method") : [];
 
   if (collapsed) {
@@ -189,10 +209,10 @@ export function RouteRail({
                 <Link
                   key={s.key}
                   to={routePath(projectId, s.to)}
-                  title={`${s.label}${s.badge ? ` · ${s.badge}` : ""}`}
-                  aria-label={s.label}
+                  title={`${s.label}${blocks(s) ? " · 必做，还没定版" : s.badge ? ` · ${s.badge}` : ""}`}
+                  aria-label={blocks(s) ? `${s.label}（必做，还没定版）` : s.label}
                   aria-current={s.current ? "step" : undefined}
-                  className={cn("flex size-8 items-center justify-center rounded-md hover:bg-background", s.current && "bg-brand text-brand-foreground hover:bg-brand")}
+                  className={cn("flex size-8 items-center justify-center rounded-md hover:bg-background", s.current && "bg-brand text-brand-foreground hover:bg-brand", blocks(s) && "dz-gate-todo")}
                 >
                   <StepIcon step={s} className={s.current ? "text-brand-foreground" : undefined} />
                 </Link>
@@ -206,7 +226,7 @@ export function RouteRail({
   return (
     <nav aria-label="项目路线" className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b px-3 pt-3 pb-2.5">
-        <StageBar current={route.stage} stages={stages} />
+        <StageBar current={route.stage} stages={stages} onGate={onGate} />
         <div className="mt-2.5 px-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1 font-heading text-[15px] font-bold leading-snug">
@@ -234,7 +254,8 @@ export function RouteRail({
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {route.tasks.map((task) => {
           // 当前阶段的工作任务都展开（每节只有 1–3 步，后面要做什么一眼看清），手动收起的记住。
-          const expanded = !closed[task.label];
+          // 有被标出的必做表时不收起，免得标了却看不见。
+          const expanded = !closed[task.label] || task.steps.some(blocks);
           return (
             <section key={task.label} className="mb-1.5">
               <button
@@ -258,6 +279,7 @@ export function RouteRail({
                           "flex min-h-8 items-start gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-muted",
                           s.current && "bg-primary/8 font-semibold shadow-[inset_3px_0_0_var(--primary)] hover:bg-primary/10",
                           s.method && "py-1 pl-6 text-muted-foreground",
+                          blocks(s) && "dz-gate-todo",
                         )}
                       >
                         <StepIcon step={s} className="mt-[3px] shrink-0" />
@@ -268,6 +290,7 @@ export function RouteRail({
                           </span>
                           {s.method ? null : (
                             <span className={cn("mt-0.5 flex items-center gap-1 text-[11px] font-normal", s.state === "returned" ? "text-destructive" : "text-muted-foreground")}>
+                              {blocks(s) ? <span className="shrink-0 font-semibold text-destructive">必做 · 未定版</span> : null}
                               <span className="truncate">{stepNote(s)}</span>
                               {s.stale ? (
                                 <span className="flex shrink-0 items-center gap-1 text-[color:var(--dz-warn)]" title="上游已变更，需要核对">

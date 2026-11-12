@@ -17,7 +17,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
@@ -56,14 +56,14 @@ export function ProgressPlanEditor({ value, onChange, readOnly, issues, upstream
     <section aria-label="计划实施推进表" className="flex flex-col gap-4">
       <EditorToolbar hint="每个节点写清时间、名称、成果、验收标准，避免“推进、加强、持续优化”这类不可验收的描述。">
         <ImportButton label="导入项目及关键节点" count={seed.length} readOnly={readOnly} onClick={() => set([...rows, ...seed])} />
-        <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "timeline")} variant="outline" size="sm">
-          <ToggleGroupItem value="table">
+        <FilterGroup value={view} onChange={setView} size="sm" aria-label="展示方式">
+          <FilterItem value="table">
             <Table2 /> 节点表
-          </ToggleGroupItem>
-          <ToggleGroupItem value="timeline">
+          </FilterItem>
+          <FilterItem value="timeline">
             <CalendarRange /> 时间刻度
-          </ToggleGroupItem>
-        </ToggleGroup>
+          </FilterItem>
+        </FilterGroup>
       </EditorToolbar>
 
       {rows.length === 0 ? (

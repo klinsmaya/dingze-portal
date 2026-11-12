@@ -38,7 +38,10 @@ export function Layout({ children }: PropsWithChildren) {
             "px-4",
             "py-5",
             "md:p-6",
+            // 右边多留一点：全局智能体入口贴在右边缘，正文不排到它下面（测试反馈 9）。
+            "md:pr-10",
             "lg:px-8",
+            "lg:pr-10",
             "lg:py-7"
           )}
         >

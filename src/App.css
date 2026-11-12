@@ -374,6 +374,18 @@
   }
 }
 
+/* 测试反馈 9：全局智能体入口收窄成贴边的小标签（约 36px 宽），不再压住正文右侧的文字；
+   正文右侧留出同样的空（见 app-shell/layout.tsx）。 */
+[data-slot="ai-chat-drag-handle"] {
+  padding: 4px 2px 4px 4px;
+  translate: 0 0;
+  opacity: 1;
+}
+[data-slot="ai-chat-drag-handle"] > button {
+  width: 30px;
+  height: 30px;
+}
+
 /* Inside a 定责 project the stage consultant in the workspace is the one AI entry; the global
    floating entry would be a second, different assistant (usability #6). */
 body:has([data-dingze-project]) [data-slot="ai-chat-drag-handle"],
@@ -525,4 +537,30 @@ body:has([data-dingze-coach]) [data-slot="ai-chat-drag-handle"] {
   opacity: 1;
   color: inherit;
   cursor: default;
+}
+
+/* 测试反馈 3：挡住下一阶段的必做表，在项目路线里红色发光、闪烁。 */
+@keyframes dz-gate-blink {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px var(--destructive),
+      0 0 10px 1px color-mix(in oklab, var(--destructive) 60%, transparent);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in oklab, var(--destructive) 30%, transparent),
+      0 0 0 0 transparent;
+  }
+}
+.dz-gate-todo {
+  animation: dz-gate-blink 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dz-gate-todo {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 1.5px var(--destructive),
+      0 0 8px 1px color-mix(in oklab, var(--destructive) 50%, transparent);
+  }
 }

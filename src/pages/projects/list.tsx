@@ -1,5 +1,7 @@
-import { ArrowRight } from "lucide-react";
-import { Link, Navigate } from "react-router";
+import { ArrowRight, Plus } from "lucide-react";
+import { useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 import { PROJECT_ROLE_LABELS, STAGES } from "@dingze/shared";
 
@@ -8,24 +10,59 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { errorMessage } from "@/lib/dingze/errors";
+import type { Enterprise } from "@/lib/dingze/ops-api";
+import { useEnterpriseDetail } from "@/lib/dingze/ops-queries";
 import { nextActionPath } from "@/lib/dingze/progress";
 import { useMyProjects } from "@/lib/dingze/queries";
 import { samplePath } from "@/lib/dingze/sample";
+import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
+import { OwnProjectDialog } from "@/pages/ops/components/projects-tab";
 
 const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
 
+/**
+ * 企业管理员自建项目：默认都可以，运营可以按企业关掉（测试反馈 4）。入口从「本企业 › 项目」
+ * 挪到这里，项目只在「我的项目」一处出现（测试反馈 5）。
+ */
+function NewOwnProject({ enterprise, autoOpen }: { enterprise: Enterprise; autoOpen: boolean }) {
+  const [open, setOpen] = useState(autoOpen);
+  const detail = useEnterpriseDetail(open ? enterprise.id : undefined);
+  return (
+    <>
+      <Button
+        disabled={open && detail.isLoading}
+        onClick={() => {
+          if (detail.error) toast.error(errorMessage(detail.error));
+          setOpen(true);
+        }}
+      >
+        <Plus /> 新建项目
+      </Button>
+      {detail.data ? <OwnProjectDialog open={open} detail={detail.data} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
 export default function ProjectsPage() {
   const { data: projects, isLoading, error } = useMyProjects();
-  // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。
-  if (projects?.length === 1) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
+  const selfEnterprise = useSelfProjectEnterprise();
+  // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。从项目里点「全部项目」「新建项目」
+  // 过来的（?all=1 / ?new=1）留在列表，否则只有一个项目的企业管理员没有地方新建项目。
+  const [params] = useSearchParams();
+  const stay = params.has("all") || params.has("new");
+  if (projects?.length === 1 && !stay) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-brand">我的项目</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          选一个项目继续。不知道怎么填，先看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
-        </p>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-heading text-2xl font-bold text-brand">我的项目</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            选一个项目继续。不知道怎么填，先看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
+          </p>
+        </div>
+        {selfEnterprise ? <NewOwnProject key={selfEnterprise.id} enterprise={selfEnterprise} autoOpen={params.has("new")} /> : null}
       </div>
 
       {error ? (

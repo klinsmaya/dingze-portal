@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
 import { type FlowStep, flowSteps } from "@/lib/dingze/flow";
 import type { ArtifactOverview } from "@/lib/dingze/api";
-import { STEP_ARTIFACTS, nextActionPath, progressOf, stageEntryCode, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import { setGateHint } from "@/lib/dingze/gate-hint";
+import { STEP_ARTIFACTS, nextActionPath, progressOf, stageBlockers, stageEntryCode, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
 import { cn } from "@/lib/utils";
 
@@ -246,13 +247,20 @@ function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: 
       ? `/projects/${projectId}/materials`
       : step.key === "deliver"
         ? `/projects/${projectId}/results`
-        : workspacePath(projectId, stageEntryCode(artifacts, step.key));
+        : workspacePath(projectId, gateOf(step)?.codes[0] ?? stageEntryCode(artifacts, step.key));
+  // 还没开启的阶段：带到前面第一张没定版的必做表，那里把没定版的都标红（测试反馈 3）。
+  const gateOf = (step: FlowStep) => (step.state === "locked" && step.key !== "materials" && step.key !== "deliver" ? stageBlockers(artifacts, step.key) : null);
   return (
     <ol aria-label="流程" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
       {steps.map((step) => (
         <li key={step.key}>
           <Link
             to={href(step)}
+            onClick={() => {
+              const gate = gateOf(step);
+              if (gate && step.key !== "materials" && step.key !== "deliver") setGateHint(projectId, step.key);
+            }}
+            title={gateOf(step) ? `前面还有 ${gateOf(step)!.codes.length} 张必做表没定版，点一下去看` : undefined}
             aria-current={step.state === "current" ? "step" : undefined}
             className={cn(
               "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",

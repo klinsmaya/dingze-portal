@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-import { ARTIFACTS, SPEC_ITEMS, STAGES, STATUS_LABELS, type ArtifactStatus, type SpecItem, type StageKey, getArtifactDef } from "@dingze/shared";
+import { ARTIFACTS, SPEC_ITEMS, STAGES, STATUS_LABELS, type ArtifactStatus, type SpecItem, getArtifactDef } from "@dingze/shared";
 
 import { StatusBadge } from "@/components/dingze/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { errorMessage } from "@/lib/dingze/errors";
 import { downloadXlsx } from "@/lib/dingze/export/xlsx";
 import { workspacePath } from "@/lib/dingze/progress";
@@ -111,20 +111,14 @@ export default function ArtifactsPage({ embedded = false }: { embedded?: boolean
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <ToggleGroup
-          value={[filter.stage]}
-          onValueChange={(v) => v[0] && setFilter((f) => ({ ...f, stage: v[0] as StageKey | "all" }))}
-          variant="outline"
-          size="sm"
-          aria-label="按阶段筛选"
-        >
-          <ToggleGroupItem value="all">全部阶段</ToggleGroupItem>
+        <FilterGroup value={filter.stage} onChange={(stage) => setFilter((f) => ({ ...f, stage }))} size="sm" aria-label="按阶段筛选">
+          <FilterItem value="all">全部阶段</FilterItem>
           {STAGES.map((s) => (
-            <ToggleGroupItem key={s.key} value={s.key}>
+            <FilterItem key={s.key} value={s.key}>
               {s.flow}
-            </ToggleGroupItem>
+            </FilterItem>
           ))}
-        </ToggleGroup>
+        </FilterGroup>
         <NativeSelect size="sm" aria-label="按状态筛选" value={filter.status} onChange={(e) => setFilter((f) => ({ ...f, status: e.target.value as RegistryFilter["status"] }))}>
           {STATUS_FILTERS.map((s) => (
             <NativeSelectOption key={s.value} value={s.value}>

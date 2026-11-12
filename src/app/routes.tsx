@@ -5,6 +5,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { AclBootstrap } from "@/components/access-control/acl-bootstrap";
 import { NavigateToAccessibleResource } from "@/components/access-control/navigate-to-accessible-resource";
 import { ErrorComponent } from "@/components/app-shell/error-component";
+import { LoginSideGuard } from "@/components/auth/login-side-guard";
 import { Layout } from "@/components/app-shell/layout";
 import { ForgotPassword } from "@/pages/forgot-password";
 import { Login } from "@/pages/login";
@@ -33,9 +34,11 @@ export function AppRoutes() {
             fallback={<SignedOutFallback />}
           >
             <AclBootstrap>
-              <AppExtensionProviders>
-                <Outlet />
-              </AppExtensionProviders>
+              <LoginSideGuard>
+                <AppExtensionProviders>
+                  <Outlet />
+                </AppExtensionProviders>
+              </LoginSideGuard>
             </AclBootstrap>
           </Authenticated>
         }
@@ -58,7 +61,9 @@ export function AppRoutes() {
         element={
           <Authenticated key="authenticated-outer" fallback={<Outlet />}>
             <AclBootstrap>
-              <NavigateToAccessibleResource />
+              <LoginSideGuard>
+                <NavigateToAccessibleResource />
+              </LoginSideGuard>
             </AclBootstrap>
           </Authenticated>
         }

@@ -44,6 +44,7 @@ export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
       orgUnits={detail.orgUnits}
       people={entPeople(detail)}
       footer={<MemberDepartments detail={detail} nodes={nodes} />}
+      showDuty={false}
     />
   );
 }
@@ -57,7 +58,13 @@ export function OrgUnitsEditor({
   actions,
   footer,
   rowExtra,
+  showDuty = true,
 }: {
+  /**
+   * 「本企业 › 组织部门」只看架构：部门、层级、负责人，不显示也不编辑职责（测试反馈 7）；职责在项目
+   * 「资料 › 组织与职责」里维护，已填的职责原样保留。
+   */
+  showDuty?: boolean;
   scope: OrgScope;
   orgUnits: OrgUnit[];
   people: OrgPerson[];
@@ -80,7 +87,7 @@ export function OrgUnitsEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {intro ?? (
           <p className="text-sm text-muted-foreground">
-            部门用于成员归属、责任分工、部门承接与计分卡；可按“公司 › 部门 › 团队”分层。职责会在责任分工矩阵里作参考；已定版的部门表在组织变更后会提示主咨询师判断是否重开。
+            部门用于成员归属、责任分工、部门承接与计分卡；可按“公司 › 部门 › 团队”分层。
           </p>
         )}
         <span className="flex flex-wrap gap-2">
@@ -121,7 +128,7 @@ export function OrgUnitsEditor({
                     </span>
                   ) : null}
                 </span>
-                {node.duty ? <span className="line-clamp-2 text-xs text-muted-foreground">职责：{node.duty}</span> : null}
+                {showDuty && node.duty ? <span className="line-clamp-2 text-xs text-muted-foreground">职责：{node.duty}</span> : null}
                 {rowExtra?.(node.id)}
               </span>
               <Button
@@ -163,7 +170,7 @@ export function OrgUnitsEditor({
 
       {footer}
 
-      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} scope={scope} people={people} nodes={nodes} />
+      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} scope={scope} people={people} nodes={nodes} showDuty={showDuty} />
       <OrgImportDialog open={importing} onClose={() => setImporting(false)} scope={scope} orgUnits={orgUnits} people={people} />
     </div>
   );
@@ -175,12 +182,14 @@ function OrgUnitDialog({
   scope,
   people,
   nodes,
+  showDuty,
 }: {
   draft: Draft | null;
   onClose: () => void;
   scope: OrgScope;
   people: OrgPerson[];
   nodes: OrgNode[];
+  showDuty: boolean;
 }) {
   const [value, setValue] = useState<Draft | null>(draft);
   const [shown, setShown] = useState<Draft | null>(draft);
@@ -279,16 +288,18 @@ function OrgUnitDialog({
                   <Input id="org-head-name" value={value.headName} placeholder="如“赵部长”" onChange={(e) => setValue({ ...value, headName: e.target.value })} />
                 </Field>
               ) : null}
-              <Field>
-                <FieldLabel htmlFor="org-duty">职责</FieldLabel>
-                <Textarea
-                  id="org-duty"
-                  value={value.duty}
-                  placeholder="这个部门主要负责什么，如“工商业与居民用户开发、客户服务、价格管理”"
-                  className="min-h-20"
-                  onChange={(e) => setValue({ ...value, duty: e.target.value })}
-                />
-              </Field>
+              {showDuty ? (
+                <Field>
+                  <FieldLabel htmlFor="org-duty">职责</FieldLabel>
+                  <Textarea
+                    id="org-duty"
+                    value={value.duty}
+                    placeholder="这个部门主要负责什么，如“工商业与居民用户开发、客户服务、价格管理”"
+                    className="min-h-20"
+                    onChange={(e) => setValue({ ...value, duty: e.target.value })}
+                  />
+                </Field>
+              ) : null}
             </FieldGroup>
           ) : null}
           <DialogFooter>

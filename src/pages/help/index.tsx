@@ -1,14 +1,10 @@
-import { useGetIdentity } from "@refinedev/core";
-
 import { ROLE_GUIDES, faqFor } from "@/lib/dingze/guide";
 import { PORTAL_ROLE_LABELS, portalRoleFromSystem } from "@/lib/dingze/portal-role";
-
-type Identity = { roles?: { name: string }[] };
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 
 /** 使用指南：按账号角色只显示自己那份（八条以内），再加常见问题。 */
 export default function HelpPage() {
-  const identity = useGetIdentity<Identity>();
-  const role = portalRoleFromSystem((identity.data?.roles ?? []).map((r) => r.name));
+  const role = portalRoleFromSystem(useSystemRoles().roles);
   const faq = faqFor(role);
   return (
     <div className="flex max-w-3xl flex-col gap-6">

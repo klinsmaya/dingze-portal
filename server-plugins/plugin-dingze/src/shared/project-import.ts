@@ -2,8 +2,16 @@ import { isArtifactCode } from './catalog';
 import { type ArtifactStatus, type ProjectRole, STATUS_LABELS } from './lifecycle';
 
 // 企业自建项目与“从已有项目带入”（2026-10-16 甲方确认）：
-// - 运营按企业打开“允许企业管理员自建项目”后，企业管理员可以建项目（企业内训 · 自助），只能分派企业侧角色；
+// - 企业管理员可以建项目（企业内训 · 自助），只能分派企业侧角色；默认允许，运营可以按企业关掉（2026-11-12 用户确认）；
 // - 新项目里由企业项目负责人手动选择来源项目和表，带入后一律是草稿，照常本步完成、复核、定版。
+
+/**
+ * 这家企业的企业管理员能不能自建项目：默认可以，运营按企业关掉（selfProjectOff）后不行。
+ * 0.37.0 之前是按企业打开（allowSelfProject，默认关）；改成“关掉才不行”后，已有企业不用回填数据就都是开启。
+ */
+export function selfProjectAllowed(enterprise: { selfProjectOff?: boolean | null } | null | undefined): boolean {
+  return !!enterprise && enterprise.selfProjectOff !== true;
+}
 
 /** 企业管理员自建项目时可以分派的项目角色（咨询师由运营分派）。 */
 export const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ['ent_lead', 'dept_head', 'member', 'readonly'];

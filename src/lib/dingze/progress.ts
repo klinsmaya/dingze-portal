@@ -116,3 +116,17 @@ export function stageEntryCode(artifacts: ArtifactOverview[], stage: StageKey): 
   });
   return (open ?? steps[0]).code;
 }
+
+/**
+ * What still keeps a stage closed (测试反馈 3): the earliest earlier stage with 必做 tables that are
+ * not 定版 yet, and those tables in book order. Null when nothing before the stage is left to do.
+ */
+export function stageBlockers(artifacts: ArtifactOverview[], stage: StageKey): { stage: StageKey; codes: string[] } | null {
+  const map = byCode(artifacts);
+  const index = STAGES.findIndex((s) => s.key === stage);
+  for (const prior of STAGES.slice(0, Math.max(index, 0))) {
+    const codes = stageGateCodes(prior.key).filter((code) => !["locked", "archived"].includes(map.get(code)?.status ?? ""));
+    if (codes.length) return { stage: prior.key, codes };
+  }
+  return null;
+}

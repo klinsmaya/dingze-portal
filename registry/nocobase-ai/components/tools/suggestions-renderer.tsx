@@ -48,7 +48,9 @@ export function SuggestionsRenderer({
           disabled={disabled || hasSelected || !canSelect}
           onClick={() => {
             setSelected(option);
-            void Promise.resolve(onEdit({ ...input, option })).catch(() => {
+            // Send the normalised list back: models sometimes emit `options` as a JSON
+            // string, which the server-side schema rejects on the edit decision.
+            void Promise.resolve(onEdit({ ...input, options, option })).catch(() => {
               setSelected((current) =>
                 current === option ? undefined : current
               );

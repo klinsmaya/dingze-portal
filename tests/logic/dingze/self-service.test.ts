@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bookNote, canPerform, missingSelfReview, nextAction, nextStatus, selfReviewChecklist } from "@dingze/shared";
+import { bookNote, canPerform, missingSelfReview, nextAction, nextStatus, selfProjectAllowed, selfReviewChecklist } from "@dingze/shared";
 
 const lead = { projectRole: "ent_lead" as const, isConsultAdmin: false };
 
@@ -39,5 +39,20 @@ describe("自助 projects", () => {
     const steps = [{ code: "S1-01", status: "step_done" as const, stale: false, unlocked: true }];
     expect(nextAction(steps, "ent_lead", "self").label).toBe("自查复核：" + nextAction(steps, "ent_lead", "self").label.split("：")[1]);
     expect(nextAction(steps, "ent_lead").label.startsWith("提交顾问审")).toBe(true);
+  });
+});
+
+// 测试反馈 4（2026-11-12 用户确认）：企业管理员默认可以自建项目，运营按企业关掉后才不行。
+describe("selfProjectAllowed", () => {
+  it("is on for an enterprise nobody has switched off, including rows from before the switch existed", () => {
+    expect(selfProjectAllowed({})).toBe(true);
+    expect(selfProjectAllowed({ selfProjectOff: false })).toBe(true);
+    expect(selfProjectAllowed({ selfProjectOff: null })).toBe(true);
+  });
+
+  it("is off once ops switch it off, and for no enterprise at all", () => {
+    expect(selfProjectAllowed({ selfProjectOff: true })).toBe(false);
+    expect(selfProjectAllowed(null)).toBe(false);
+    expect(selfProjectAllowed(undefined)).toBe(false);
   });
 });

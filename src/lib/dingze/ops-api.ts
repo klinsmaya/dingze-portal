@@ -33,8 +33,8 @@ export type Enterprise = {
   status: EnterpriseStatus;
   spaceName: string;
   createdAt: string;
-  /** 运营打开后，企业管理员可以自建项目（企业内训 · 自助）。 */
-  allowSelfProject?: boolean;
+  /** 企业管理员默认可以自建项目（企业内训 · 自助）；运营按企业关掉后为 true。用 selfProjectAllowed() 判断。 */
+  selfProjectOff?: boolean;
   /** 客户在首页自助注册的试用企业。 */
   trial?: boolean;
 };
@@ -162,7 +162,7 @@ export const opsApi = {
     admin?: { username: string; nickname: string; email?: string; phone?: string };
   }) =>
     post<{ enterprise: Enterprise; spaceName: string; admin: CreatedAccount | null }>("provisionEnterprise", values),
-  updateEnterprise: (values: { enterpriseId: number } & Partial<Pick<Enterprise, "name" | "shortName" | "size" | "status" | "allowSelfProject">>) =>
+  updateEnterprise: (values: { enterpriseId: number } & Partial<Pick<Enterprise, "name" | "shortName" | "size" | "status">> & { allowSelfProject?: boolean }) =>
     post<Enterprise>("updateEnterprise", values),
   addEnterpriseMembers: (values: { enterpriseId: number; userIds: number[] }) => post("addEnterpriseMembers", values),
   removeEnterpriseMember: (values: { enterpriseId: number; userId: number }) => post("removeEnterpriseMember", values),
