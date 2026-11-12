@@ -23,7 +23,7 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
     <section aria-labelledby="org" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 id="org" className="font-heading text-lg font-bold text-brand">
-          ② 组织与职责
+          ③ 组织与职责
         </h2>
         <span className="text-xs text-muted-foreground">
           由企业项目负责人、主咨询师在这里维护，或企业管理员在

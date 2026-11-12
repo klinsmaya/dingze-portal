@@ -22,7 +22,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empt
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { cn } from "@/lib/utils";
 import type { BoardArtifact, BoardProject } from "@/lib/dingze/api";
 import { errorMessage } from "@/lib/dingze/errors";
@@ -101,11 +101,12 @@ export default function ConsultantBoardPage() {
                   onClick={() => setBucket(active ? null : b.key)}
                   className={cn(
                     "rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-                    active && "border-primary bg-primary/5",
-                    b.key === "stale" && (counts.get("stale") ?? 0) > 0 && "border-destructive/40"
+                    b.key === "stale" && (counts.get("stale") ?? 0) > 0 && "border-destructive/40",
+                    // 选中态要一眼看得出（测试反馈 8）：主色描边加一圈、浅主色底、数字变主色。
+                    active && "border-primary bg-primary/10 ring-2 ring-primary"
                   )}
                 >
-                  <div className="text-2xl font-bold tabular-nums">{counts.get(b.key) ?? 0}</div>
+                  <div className={cn("text-2xl font-bold tabular-nums", active && "text-primary")}>{counts.get(b.key) ?? 0}</div>
                   <div className="text-sm font-medium">{b.label}</div>
                 </button>
               );
@@ -125,18 +126,14 @@ export default function ConsultantBoardPage() {
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-            <ToggleGroup
-              value={[stage]}
-              onValueChange={(value) => setStage((value[0] as StageKey | "all" | undefined) ?? "all")}
-              variant="outline"
-            >
-              <ToggleGroupItem value="all">全部阶段</ToggleGroupItem>
+            <FilterGroup value={stage} onChange={setStage} aria-label="按阶段筛选">
+              <FilterItem value="all">全部阶段</FilterItem>
               {STAGES.map((s) => (
-                <ToggleGroupItem key={s.key} value={s.key}>
+                <FilterItem key={s.key} value={s.key}>
                   {s.flow}
-                </ToggleGroupItem>
+                </FilterItem>
               ))}
-            </ToggleGroup>
+            </FilterGroup>
           </div>
 
           {visibleBuckets.length === 0 ? (

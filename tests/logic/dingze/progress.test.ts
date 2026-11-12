@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { ARTIFACTS, type ArtifactStatus } from "@dingze/shared";
+import { ARTIFACTS, STAGES, type ArtifactStatus, stageGateCodes } from "@dingze/shared";
 
 import type { ArtifactOverview } from "@/lib/dingze/api";
-import { nextStep, stageProgress, todosFor } from "@/lib/dingze/progress";
+import { nextStep, stageBlockers, stageProgress, todosFor } from "@/lib/dingze/progress";
 
 const make = (overrides: Record<string, Partial<ArtifactOverview>>): ArtifactOverview[] =>
   ARTIFACTS.map((a) => ({
@@ -49,5 +49,31 @@ describe("project progress", () => {
     expect(todosFor(artifacts, "ent_lead").map((t) => t.kind)).toEqual(["confirm", "stale"]);
     expect(todosFor(artifacts, "lead_consultant").map((t) => t.kind)).toEqual(["review", "stale"]);
     expect(todosFor(artifacts, "readonly")).toEqual([]);
+  });
+});
+
+// 测试反馈 3：点还没开启的阶段，要知道前面哪几张必做表没定版、第一张是哪张。
+describe("stageBlockers", () => {
+  const [first, second, third] = STAGES.map((s) => s.key);
+  const gate1 = stageGateCodes(first);
+  const lockAll = (codes: string[]) => Object.fromEntries(codes.map((c) => [c, { status: "locked" as ArtifactStatus }]));
+
+  it("has nothing for the first stage", () => {
+    expect(stageBlockers(make({}), first)).toBeNull();
+  });
+
+  it("lists the previous stage's 必做 tables that are not 定版, in book order", () => {
+    const artifacts = make({ [gate1[0]]: { status: "locked" }, [gate1[1]]: { status: "in_review" } });
+    expect(stageBlockers(artifacts, second)).toEqual({ stage: first, codes: gate1.slice(1) });
+  });
+
+  it("points the third stage at the earliest stage that is still open work", () => {
+    expect(stageBlockers(make({}), third)).toEqual({ stage: first, codes: gate1 });
+    const gate2 = stageGateCodes(second);
+    expect(stageBlockers(make(lockAll(gate1)), third)).toEqual({ stage: second, codes: gate2 });
+  });
+
+  it("is null once everything before the stage is 定版", () => {
+    expect(stageBlockers(make(lockAll(gate1)), second)).toBeNull();
   });
 });

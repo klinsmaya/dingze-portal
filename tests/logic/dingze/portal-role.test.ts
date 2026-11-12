@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ROLE_GUIDES, faqFor } from "@/lib/dingze/guide";
-import { portalRoleFromSystem, portalRoleOf } from "@/lib/dingze/portal-role";
+import { portalRoleFromSystem, portalRoleIn, portalRoleOf } from "@/lib/dingze/portal-role";
 
 describe("三类角色", () => {
   it("folds project roles into employee / lead / consultant", () => {
@@ -21,6 +21,13 @@ describe("三类角色", () => {
     expect(portalRoleFromSystem(["dz_ent_admin", "dz_consultant"])).toBe("consultant");
     expect(portalRoleFromSystem(["dz_consult_admin"])).toBe("consultant");
     expect(portalRoleFromSystem(["dz_ops"])).toBe("consultant");
+  });
+  it("uses the system roles inside a project when the account has no project role", () => {
+    expect(portalRoleIn(null, false, ["dz_ops"])).toBe("consultant");
+    expect(portalRoleIn(null, false, [])).toBe("employee");
+    expect(portalRoleIn("member", false, ["dz_ops"])).toBe("employee");
+    expect(portalRoleIn("ent_lead", false, [])).toBe("lead");
+    expect(portalRoleIn(null, true, [])).toBe("consultant");
   });
   it("keeps every guide within eight lines", () => {
     for (const items of Object.values(ROLE_GUIDES)) {

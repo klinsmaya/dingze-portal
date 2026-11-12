@@ -16,6 +16,8 @@ import {
   isArtifactCode,
   validateArtifact,
   ARTIFACTS,
+  STAGES,
+  STATUS_LABELS,
   type ArtifactDef,
   isEmployee,
   isStageOpen,
@@ -37,7 +39,8 @@ import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { nextStep, stageProgress, workspacePath } from "@/lib/dingze/progress";
+import { setGateHint, useGateHint } from "@/lib/dingze/gate-hint";
+import { nextStep, stageBlockers, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import type { ArtifactOverview } from "@/lib/dingze/api";
 import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPayloads } from "@/lib/dingze/queries";
 import { useComments } from "@/lib/dingze/comments-api";
@@ -55,7 +58,7 @@ import { buildRoute, topbarItems } from "@/lib/dingze/route";
 import { cn } from "@/lib/utils";
 
 import { EDITABLE_CODES, emptyPayload } from "@/lib/dingze/artifact-payloads";
-import { type ProposedChange, applyChanges } from "@/lib/dingze/changes";
+import { type ProposedChange, applyChanges, createAppliedProposals } from "@/lib/dingze/changes";
 import { workflowContext } from "@/lib/dingze/coach-context";
 import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { samePayload } from "@/lib/dingze/stable-json";
@@ -419,8 +422,12 @@ function Workspace({ code }: { code: string }) {
   const [revision, setRevision] = useState<RevisionState>({ on: false, baseRev: null, basePayload: undefined, baseLabel: "" });
   const [previewAnchors, setPreviewAnchors] = useState<string[]>([]);
   const [previewDraft, setPreviewDraft] = useState<EditSession["previewDraft"]>(null);
-  // 自动保存：有未保存的改动、没有在保存、没有在预览修改建议或看旧版本、本地基于的就是服务端最新版。
-  const autosaveOk = canSave && dirty && !save.isPending && !previewDraft && !viewRev && serverRev === baseRev;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const applied = useMemo(() => createAppliedProposals(), [code]);
+  // 自动保存：有未保存的改动、没有在保存、没有在看旧版本、本地基于的就是服务端最新版。
+  // 预览修改建议不挡自动保存（测试反馈 10）：预览只是显示，存的始终是草稿本身；否则数字咨询师写入后，
+  // 只要还有一张修改卡在预览（或对话没走完），这次写入就一直存不下去。
+  const autosaveOk = canSave && dirty && !save.isPending && !viewRev && serverRev === baseRev;
   useEffect(() => {
     if (!autosaveOk) return;
     const timer = window.setTimeout(() => saveShortcut.current(false), AUTOSAVE_MS);
@@ -470,6 +477,7 @@ function Workspace({ code }: { code: string }) {
       setPreview: setPreviewAnchors,
       previewDraft,
       setPreviewDraft,
+      proposalWritten: (changes) => applied.has(changes, draft),
       revisionCell: (key: string) => {
         const data = revisionRef.current;
         if (!data) return null;
@@ -511,7 +519,7 @@ function Workspace({ code }: { code: string }) {
       chrome: chromeRef,
       publishChrome: setChromeSig,
     }),
-    [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, previewDraft, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
+    [code, draft, readOnly, issues, commit, edit.log, undoCommand, activeComment, previewAnchors, previewDraft, applied, selecting, selection, focusAnchor, revision, compareWith, versions, validate, nameOf],
   );
 
   // Canvas markers: 修订 against a chosen version, or just what changed since the last save.
@@ -608,6 +616,7 @@ function Workspace({ code }: { code: string }) {
     readOnly,
     editable: EDITABLE_CODES.has(code),
     commit,
+    applied,
   });
   latest.current = {
     draft,
@@ -615,6 +624,7 @@ function Workspace({ code }: { code: string }) {
     readOnly,
     editable: EDITABLE_CODES.has(code),
     commit,
+    applied,
   };
   const profile = useProfile(project);
   const tools = useMemo(
@@ -623,7 +633,7 @@ function Workspace({ code }: { code: string }) {
         name: PROPOSE_TOOL,
         title: "建议写入成果表",
         description:
-          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、nodes.+）；label 是给用户看的格子名称。调结构用 op：set（默认，改一格或追加一条）、remove（删掉 path 指向的一条，路径/WBS 里连同下级）、split（把一条拆成几条同级，value 是每条的字段列表，如 [{path, metric, value}, …]，原来的下级跟第一条）、move（value 为 {parentId, goalId}，整枝移到新上级，层级自动调整）。路径的指标值要让下级合计推得回上级。卡片会给用户看原值→新值→合计核对，并在导图/表格里用琥珀色虚线预览，用户确认后才写入草稿，用户保存后生效。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
+          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、nodes.+）；label 是给用户看的格子名称。调结构用 op：set（默认，改一格或追加一条）、remove（删掉 path 指向的一条，路径/WBS 里连同下级）、split（把一条拆成几条同级，value 是每条的字段列表，如 [{path, metric, value}, …]，原来的下级跟第一条）、move（value 为 {parentId, goalId}，整枝移到新上级，层级自动调整）。路径的指标值要让下级合计推得回上级。卡片会给用户看原值→新值→合计核对，并在导图/表格里用琥珀色虚线预览，用户确认后才写入草稿，系统随后自动保存。同一张修改卡用户确认过就不要再出第二遍。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -655,6 +665,7 @@ function Workspace({ code }: { code: string }) {
             readOnly: locked,
             editable,
             commit: write,
+            applied: done,
           } = latest.current;
           if (!editable)
             return {
@@ -669,14 +680,23 @@ function Workspace({ code }: { code: string }) {
           const changes = (args as { changes?: ProposedChange[] })?.changes;
           if (!Array.isArray(changes) || changes.length === 0)
             return { status: "error", content: "没有要写入的内容。" };
+          // 同一张修改卡被重出（上一轮确认后对话中断）：内容已经在草稿里，不再写第二遍。
+          if (done.has(changes, current)) {
+            toast.info("这组修改已经在草稿里，没有重复写入");
+            return {
+              status: "success",
+              content: "这组修改此前已经写入草稿，本次没有重复写入。不要再出同样的修改卡，直接继续下一步。",
+            };
+          }
           try {
             const next = applyChanges(current, changes);
             const summary = (args as { summary?: string })?.summary;
             write(next, { via: "chat", label: summary ? `数字咨询师：${summary}` : undefined });
-            toast.success("已写入草稿，记得保存", { description: "在右侧“修改”里可以看到并撤销这条修改" });
+            done.record(changes, next);
+            toast.success("已写入草稿，稍后自动保存", { description: "在右侧“修改”里可以看到并撤销这条修改" });
             return {
               status: "success",
-              content: "用户已确认，内容已写入草稿（尚未保存，用户保存后生效）。",
+              content: "用户已确认，内容已写入草稿（系统会自动保存）。",
             };
           } catch (error) {
             return { status: "error", content: errorMessage(error) };
@@ -757,8 +777,27 @@ function Workspace({ code }: { code: string }) {
   // 三阶段条与本阶段进度（参考稿左栏）：入口取每阶段第一张表，进度与待办页同口径（必做表定版数）。
   const stageLinks = stageProgress(overview.artifacts).map((st) => {
     const first = ARTIFACTS.find((a) => a.stage === st.stage && a.priority !== "method")!;
-    return { key: st.stage, to: workspacePath(project.id, first.code), open: st.open, complete: st.complete, locked: st.locked, gateTotal: st.gateTotal };
+    const blockers = st.open ? null : stageBlockers(overview.artifacts, st.stage);
+    return {
+      key: st.stage,
+      to: workspacePath(project.id, first.code),
+      open: st.open,
+      complete: st.complete,
+      locked: st.locked,
+      gateTotal: st.gateTotal,
+      gate: blockers ? { to: workspacePath(project.id, blockers.codes[0]), count: blockers.codes.length } : undefined,
+    };
   });
+  // 测试反馈 3：用户点过一个还没开启的阶段时，在挡住它的那个阶段里标出全部没定版的必做表。
+  const gateStage = useGateHint(project.id);
+  const gate = gateStage ? stageBlockers(overview.artifacts, gateStage) : null;
+  const gateHere = gate && gate.stage === def.stage ? gate : null;
+  const gateDone = !!gateStage && !gate;
+  useEffect(() => {
+    if (gateDone) setGateHint(project.id, null);
+  }, [gateDone, project.id]);
+  // 这张表所在的阶段还没开启：挡住它的必做表（上一阶段没定版的）。
+  const stageGate = stageProgress(overview.artifacts).find((st) => st.stage === def.stage)?.open === false ? stageBlockers(overview.artifacts, def.stage) : null;
   const inStage = overview.artifacts.filter((a) => getArtifactDef(a.code).stage === route.stage && getArtifactDef(a.code).priority !== "method");
   const railStats = { ready: inStage.filter((a) => a.status === "step_done").length, review: inStage.filter((a) => a.status === "in_review" || a.status === "pending_confirm").length };
   const currentSub = route.current?.subs.find((x) => x.current);
@@ -889,9 +928,11 @@ function Workspace({ code }: { code: string }) {
             stats={railStats}
             collapsed={railCollapsed}
             onToggle={() => setRailPref(!railCollapsed)}
-                materials={materialList}
-                onOpenMaterial={setViewingMaterial}
-              />
+            materials={materialList}
+            onOpenMaterial={setViewingMaterial}
+            gateCodes={gateHere?.codes}
+            onGate={(stage) => setGateHint(project.id, stage)}
+          />
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -1066,12 +1107,52 @@ function Workspace({ code }: { code: string }) {
               }}
             />
 
+            {gateHere && gateStage ? (
+              <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-2 text-sm">
+                <Lock className="size-4 shrink-0 text-destructive" />
+                <span className="min-w-0 flex-1">
+                  「{STAGES.find((x) => x.key === gateStage)!.flow}」还没开启：{STAGES.find((x) => x.key === gateHere.stage)!.flow}还有{" "}
+                  <b className="text-destructive">{gateHere.codes.length} 张必做表没定版</b>，左侧已用红色标出，全部定版后自动开启。
+                </span>
+                {gateHere.codes.includes(code) ? null : (
+                  <Link to={workspacePath(project.id, gateHere.codes[0])} className="inline-flex shrink-0 items-center gap-1 font-medium text-destructive underline">
+                    去第一张 <ArrowRight className="size-3.5" />
+                  </Link>
+                )}
+                <Button size="xs" variant="ghost" onClick={() => setGateHint(project.id, null)}>
+                  知道了
+                </Button>
+              </div>
+            ) : null}
+
             {detail.isLoading ? (
               <Skeleton className="h-96 rounded-xl" />
             ) : detail.error ? (
               <Alert variant="destructive">
                 <AlertTitle>成果加载失败</AlertTitle>
                 <AlertDescription>{errorMessage(detail.error)}</AlertDescription>
+              </Alert>
+            ) : !unlocked && stageGate ? (
+              <Alert>
+                <Lock />
+                <AlertTitle>这一步还没解锁</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2">
+                  <span>
+                    「{STAGES.find((x) => x.key === stageGate.stage)!.flow}」还有 {stageGate.codes.length} 张必做表没定版，全部定版后这里才开启。
+                  </span>
+                  <ul className="flex flex-col gap-1">
+                    {stageGate.codes.map((c) => (
+                      <li key={c}>
+                        <Link to={workspacePath(project.id, c)} onClick={() => setGateHint(project.id, def.stage)} className="inline-flex items-center gap-1 font-medium text-destructive underline">
+                          {getArtifactDef(c).specId} 《{getArtifactDef(c).name}》 · {STATUS_LABELS[overview.artifacts.find((a) => a.code === c)?.status ?? "not_started"]} <ArrowRight className="size-3.5" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button className="self-start" nativeButton={false} render={<Link to={workspacePath(project.id, stageGate.codes[0])} onClick={() => setGateHint(project.id, def.stage)} />}>
+                    去第一张没定版的表 <ArrowRight />
+                  </Button>
+                </AlertDescription>
               </Alert>
             ) : !unlocked ? (
               <Alert>
@@ -1175,7 +1256,7 @@ function Workspace({ code }: { code: string }) {
                         : (fix) => {
                             try {
                               commit(applyChanges(draft, fix.changes), { via: "edit", label: `${fix.label}：${fix.changes.map((c) => c.label).filter(Boolean).join("、")}` });
-                              toast.success(`${fix.label}：已写入草稿，记得保存`);
+                              toast.success(`${fix.label}：已写入草稿，稍后自动保存`);
                             } catch (error) {
                               toast.error(errorMessage(error));
                             }

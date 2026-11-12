@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { errorAnchors, moveById, patchById, removeById } from "@/lib/dingze/rows";
 import { cn } from "@/lib/utils";
 
@@ -410,14 +410,14 @@ function WbsTable({ wbs, onChange, readOnly, invalid, charterName }: { wbs: WbsP
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold text-muted-foreground">WBS</div>
         <div className="flex items-center gap-2">
-          <ToggleGroup value={[view]} onValueChange={(v) => v[0] && setView(v[0] as "table" | "mind")} variant="outline" size="sm" aria-label="WBS 展示方式">
-            <ToggleGroupItem value="mind">
+          <FilterGroup value={view} onChange={setView} size="sm" aria-label="WBS 展示方式">
+            <FilterItem value="mind">
               <Network /> 思维导图
-            </ToggleGroupItem>
-            <ToggleGroupItem value="table">
+            </FilterItem>
+            <FilterItem value="table">
               <Table2 /> 表格
-            </ToggleGroupItem>
-          </ToggleGroup>
+            </FilterItem>
+          </FilterGroup>
           {!readOnly ? <AddButton label="一级工作包" onClick={() => onChange([...wbs, wbsPackage()])} /> : null}
         </div>
       </div>

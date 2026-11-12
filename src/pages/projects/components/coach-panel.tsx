@@ -37,7 +37,8 @@ import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { ROLE_GUIDES } from "@/lib/dingze/guide";
-import { PORTAL_ROLE_LABELS, type PortalRole, portalRoleOf } from "@/lib/dingze/portal-role";
+import { PORTAL_ROLE_LABELS, type PortalRole, portalRoleIn } from "@/lib/dingze/portal-role";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { cn } from "@/lib/utils";
 import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
@@ -93,11 +94,15 @@ function readOutcome(part: AIToolRendererProps["part"]) {
     typeof output === "string" ? output : (result?.content ?? errorText);
   const status = String(result?.status ?? meta?.status ?? "").toLowerCase();
   const invoke = String(meta?.invokeStatus ?? "").toLowerCase();
+  // A card left open when the user typed something else is closed by the server as “ignored”:
+  // nothing was written, so it must not read as 已写入草稿.
+  const ignored = typeof message === "string" && /ignored the application for tools usage/i.test(message);
   const ok =
     state === "output-available" &&
     status !== "error" &&
-    !invoke.startsWith("reject");
-  return { ok, message };
+    !invoke.startsWith("reject") &&
+    !ignored;
+  return { ok, message: ignored ? "这张卡没有确认，表里没有任何改动。" : message };
 }
 
 /**
@@ -250,16 +255,23 @@ function PendingCard({
   const [previewing, setPreviewing] = useState(live);
   // One decision per card: a fast double click must not send both 确认 and 不采纳.
   const [decided, setDecided] = useState(false);
+  const draftAtDecision = useRef<unknown>(undefined);
   const decide = (fn: () => void) => () => {
     if (decided) return;
+    draftAtDecision.current = session?.draft;
     setDecided(true);
     fn();
   };
+  // Once the confirmed change is in the draft the preview has done its job. Keeping it up until the
+  // conversation finishes would leave the table read-only and show the change applied twice.
+  const written = decided && session?.draft !== draftAtDecision.current;
+  // The same card issued again after it was already written (测试反馈 1): nothing left to preview.
+  const repeated = !decided && !!session?.proposalWritten(changes);
   // 改一下 is not a decision: the card stays open, can be cancelled, and 确认修改 stays available.
   const [revising, setRevising] = useState(false);
   const key = JSON.stringify(built?.items ?? []);
   useEffect(() => {
-    if (!session || !built || built.invalid) return;
+    if (!session || !built || built.invalid || written || repeated) return;
     if (previewing) session.setPreviewDraft({ payload: built.next, items: built.items });
     else session.setPreview(built.items.map((i) => i.anchor));
     return () => {
@@ -267,7 +279,7 @@ function PendingCard({
       session.setPreview([]);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, previewing]);
+  }, [key, previewing, written, repeated]);
 
   const impact = useMemo(() => {
     if (!session || !built || built.invalid) return null;
@@ -313,8 +325,13 @@ function PendingCard({
         <span className="flex items-center gap-1">
           <Sparkles className="size-3.5" /> 修改建议{args.summary ? ` · ${args.summary}` : ""}
         </span>
-        <span className="shrink-0">待你确认</span>
+        <span className="shrink-0">{written ? "已写入草稿" : "待你确认"}</span>
       </div>
+      {repeated ? (
+        <p className="rounded-lg border bg-card px-2.5 py-2 text-xs" role="status">
+          这组修改刚才已经写入草稿，这是重复出的一张卡。点“确认修改”不会重复写入，也可以直接“不采纳”。
+        </p>
+      ) : null}
       {built?.invalid ? <p className="text-xs text-destructive">这条建议对不上表里的位置（{built.invalid}），请让数字咨询师重出。</p> : null}
       <ul className="flex flex-col divide-y rounded-lg border bg-card">
         {built?.rows.map((row, i) => (
@@ -404,7 +421,7 @@ function PendingCard({
         <Button size="sm" variant="ghost" disabled={disabled || decided} onClick={decide(() => onReject("用户不采纳这条建议"))}>
           不采纳
         </Button>
-        {built && !built.invalid && built.items.length ? (
+        {built && !built.invalid && built.items.length && !written && !repeated ? (
           <Button size="xs" variant="ghost" className="ml-auto" aria-pressed={previewing} onClick={() => setPreviewing((v) => !v)}>
             <Eye /> {previewing ? "收起预览" : "在图里预览"}
           </Button>
@@ -415,7 +432,7 @@ function PendingCard({
           正在改这条建议：请在下面的对话框说明怎么改，数字咨询师会重出修改卡。不改了就点“取消改一下”，仍可直接“确认修改”。
         </p>
       ) : null}
-      <p className="text-[11px] text-muted-foreground">确认后写入草稿、记入“修改”，可撤销；保存后生效。</p>
+      <p className="text-[11px] text-muted-foreground">确认后写入草稿、记入“修改”，可撤销；稍后自动保存。</p>
     </div>
   );
 }
@@ -708,7 +725,8 @@ export function CoachPanel({
   // 资料库只有企业管理员和咨询师能传；在填表页，📎 变成“上传附件填这张表”（任何能填表的人都可以）。
   const library = canManageLibrary(overview.projectRole, overview.isConsultAdmin);
   const fill = !!session && !session.readOnly;
-  const role = portalRoleOf(overview.projectRole, overview.isConsultAdmin);
+  const systemRoles = useSystemRoles().roles;
+  const role = portalRoleIn(overview.projectRole, overview.isConsultAdmin, systemRoles);
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(
     () => ai.employees.some((e) => e.username === employee),

@@ -9,6 +9,7 @@
 
 import { parseAmount } from "@dingze/shared";
 
+import { samePayload, stableStringify } from "./stable-json";
 import { type TreeItem, moveTo, removeBranch } from "./tree-ops";
 
 export type ChangeOp = "set" | "remove" | "split" | "move";
@@ -170,3 +171,54 @@ export function describeValue(value: unknown): string {
   }
   return String(value ?? "");
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+
+/** Every field the proposal gives is already what the row holds (the row may hold more, e.g. its id). */
+function holds(current: unknown, proposed: unknown): boolean {
+  if (!isRecord(proposed)) return samePayload(current, proposed);
+  if (!isRecord(current)) return false;
+  return Object.entries(proposed).every(([key, value]) => key === "id" || samePayload(current[key], value));
+}
+
+function valueAt(payload: unknown, segments: string[]): unknown {
+  let cur = payload;
+  for (const seg of segments) {
+    if (Array.isArray(cur)) cur = cur.find((x) => isRecord(x) && x.id === seg);
+    else if (isRecord(cur)) cur = cur[seg];
+    else return undefined;
+  }
+  return cur;
+}
+
+/** The draft already holds what this change would write (set / append only). */
+function present(payload: unknown, change: ProposedChange): boolean {
+  if ((change.op ?? "set") !== "set") return false;
+  const segments = change.path.split(".").filter(Boolean);
+  if (segments[segments.length - 1] !== "+") return holds(valueAt(payload, segments), change.value);
+  const list = valueAt(payload, segments.slice(0, -1));
+  return Array.isArray(list) && list.some((item) => holds(item, change.value));
+}
+
+/**
+ * Remembers the change cards already written into the draft (测试反馈 1): when a round trip breaks
+ * after 确认修改, the model issues the same card again, and writing it a second time would append
+ * the same rows twice. A card counts as written only if this session wrote it and the draft still
+ * holds what it wrote.
+ */
+export function createAppliedProposals() {
+  const written = new Map<string, string>();
+  const keyOf = (changes: ProposedChange[]) => stableStringify(changes.map((c) => ({ path: c.path, op: c.op ?? "set", value: c.value })));
+  return {
+    record(changes: ProposedChange[], result: unknown) {
+      written.set(keyOf(changes), stableStringify(result));
+    },
+    has(changes: ProposedChange[], current: unknown): boolean {
+      const result = written.get(keyOf(changes));
+      if (result === undefined) return false;
+      return result === stableStringify(current) || changes.every((change) => present(current, change));
+    },
+  };
+}
+
+export type AppliedProposals = ReturnType<typeof createAppliedProposals>;

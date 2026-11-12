@@ -1,5 +1,5 @@
 import { samePayload } from "@/lib/dingze/stable-json";
-import { CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -103,11 +103,15 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
 
   const uploadFiles = useMaterialUpload({ offerFill: true });
   const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
     setBusy(true);
     await uploadFiles(files);
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   };
+  // 拖拽上传：拖到上传区松手即传（测试反馈 12）。
+  const [dragging, setDragging] = useState(false);
+  const empty = materials.length === 0;
 
   return (
     <section aria-labelledby="library" className="flex flex-col gap-3">
@@ -116,35 +120,48 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
           ① 上传资料
         </h2>
         <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载</span>
-        {canEdit ? (
-          <div className="ml-auto flex gap-2">
-            <input ref={fileRef} type="file" multiple accept={MATERIAL_ACCEPT} className="hidden" onChange={(e) => upload(e.target.files)} />
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-              <FileUp /> {busy ? "上传中…" : "上传原件"}
+      </div>
+      {canEdit ? (
+        <div
+          data-dragging={dragging || undefined}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void upload(e.dataTransfer.files);
+          }}
+          className={cn(
+            "flex items-center gap-x-4 gap-y-2 rounded-xl border-2 border-dashed px-4 transition-colors",
+            empty ? "flex-col py-10 text-center" : "flex-wrap py-3",
+            dragging ? "border-primary bg-primary/10" : "border-primary/40 bg-primary/5",
+          )}
+        >
+          <input ref={fileRef} type="file" multiple accept={MATERIAL_ACCEPT} className="hidden" onChange={(e) => upload(e.target.files)} />
+          <FileUp className={cn("shrink-0 text-primary", empty ? "size-8" : "size-5")} aria-hidden />
+          <div className={cn("min-w-0", !empty && "flex-1")}>
+            <div className="text-sm font-semibold">{dragging ? "松手即可上传" : "把文件拖到这里上传"}</div>
+            <div className="text-xs text-muted-foreground">
+              {empty ? "企业简介、组织架构、上年经营复盘等；" : ""}Word、PDF、Excel、txt，单个不超过 20 MB
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button size={empty ? "lg" : "default"} disabled={busy} onClick={() => fileRef.current?.click()}>
+              <FileUp /> {busy ? "上传中…" : "选择文件上传"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setPasting(true)}>
+            <Button size={empty ? "lg" : "default"} variant="ghost" onClick={() => setPasting(true)}>
               <ClipboardPaste /> 粘贴文字
             </Button>
           </div>
-        ) : null}
-      </div>
-      {materials.length === 0 ? (
-        <EmptyState
-          className="py-10"
-          text="把企业简介、组织架构、上年经营复盘传上来（Word、PDF、Excel、txt，单个不超过 20 MB），数字咨询师会据此整理企业画像；没有资料也可以先去填表。"
-          action={
-            canEdit ? (
-              <>
-                <Button size="lg" disabled={busy} onClick={() => fileRef.current?.click()}>
-                  <FileUp /> {busy ? "上传中…" : "选择文件上传"}
-                </Button>
-                <Button size="lg" variant="ghost" onClick={() => setPasting(true)}>
-                  <ClipboardPaste /> 粘贴文字
-                </Button>
-              </>
-            ) : null
-          }
-        />
+        </div>
+      ) : null}
+      {empty ? (
+        canEdit ? null : <EmptyState className="py-10" text="还没有资料。" />
       ) : (
         <ul className="overflow-hidden rounded-xl border bg-card">
           {materials.map((m) => (
@@ -262,6 +279,12 @@ const MATERIAL_TABS = [
   ["org", "③ 组织与职责"],
 ] as const;
 type MaterialTab = (typeof MATERIAL_TABS)[number][0];
+/** 本阶段三小步各自的“下一步”：前两步往下一小步走，最后一步才离开资料进入战略解码。 */
+const NEXT_LABEL: Record<MaterialTab, string> = {
+  library: "下一步：确认企业画像",
+  profile: "下一步：组织与职责",
+  org: "完成资料准备，进入战略解码",
+};
 
 /** 让数字咨询师从资料库整理画像或组织架构：只出修改卡，确认后才写入。 */
 const AI_ASK = {
@@ -275,7 +298,7 @@ function askAI(kind: keyof typeof AI_ASK) {
   askCoach(AI_ASK[kind]);
 }
 
-/** ② 组织与职责：企业项目负责人、主咨询师在这里直接维护（企业级，对本企业所有项目生效）；其他人只读。 */
+/** ③ 组织与职责：企业项目负责人、主咨询师在这里直接维护（企业级，对本企业所有项目生效）；其他人只读。 */
 function OrgSection({ canEditOrg, onAI }: { canEditOrg: boolean; onAI: () => void }) {
   const { project, overview } = useProjectContext();
   const team = overview.team ?? [];
@@ -285,7 +308,7 @@ function OrgSection({ canEditOrg, onAI }: { canEditOrg: boolean; onAI: () => voi
   return (
     <section aria-labelledby="org" className="flex flex-col gap-3">
       <h2 id="org" className="font-heading text-lg font-bold text-brand">
-        ② 组织与职责
+        ③ 组织与职责
       </h2>
       <OrgUnitsEditor
         scope={{ enterpriseId: project.enterprise.id, enterpriseName: project.enterprise.shortName, projectId: project.id }}
@@ -322,6 +345,7 @@ export default function MaterialsPage() {
   const fromHash = hash === "#org" ? "org" : hash === "#library" ? "library" : hash === "#profile" ? "profile" : null;
   const tab: MaterialTab = (MATERIAL_TABS.map(([k]) => k) as string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as MaterialTab) : (fromHash ?? "library");
   const setTab = (next: MaterialTab) => setParams(next === "library" ? {} : { tab: next }, { replace: true });
+  const tabIndex = MATERIAL_TABS.findIndex(([k]) => k === tab);
   const { project, overview } = useProjectContext();
   const materials = useMaterials(project);
   const profile = useProfile(project);
@@ -449,19 +473,26 @@ export default function MaterialsPage() {
           <div className="shrink-0 border-b bg-background px-4 pt-4 md:px-6">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h1 className="font-heading text-2xl font-bold text-brand">
-                <span className="mr-2 text-base font-semibold text-muted-foreground">第 1 步</span>上传资料
+                <span className="mr-2 text-base font-semibold text-muted-foreground">项目流程 · 第 1 步</span>资料准备
               </h1>
               <p className="min-w-0 flex-1 text-sm text-muted-foreground">
                 上传企业简介、组织架构、上年经营复盘，让数字咨询师整理企业画像，你确认后才写入。试用期间请用脱敏资料。
               </p>
-              <Link
-                to={workspacePath(project.id, stageEntryCode(overview.artifacts, "strategy"))}
-                className="shrink-0 self-center text-sm font-semibold text-primary hover:underline"
-              >
-                下一步：战略解码 →
-              </Link>
+              {/* 两级流程分开（测试反馈 12）：这里的“下一步”先走完本阶段的三小步，最后一步才进战略解码。 */}
+              {tabIndex < MATERIAL_TABS.length - 1 ? (
+                <Button className="shrink-0 self-center" onClick={() => setTab(MATERIAL_TABS[tabIndex + 1][0])}>
+                  {NEXT_LABEL[tab]} <ArrowRight />
+                </Button>
+              ) : (
+                <Button className="shrink-0 self-center" nativeButton={false} render={<Link to={workspacePath(project.id, stageEntryCode(overview.artifacts, "strategy"))} />}>
+                  {NEXT_LABEL[tab]} <ArrowRight />
+                </Button>
+              )}
             </div>
-            <nav aria-label="资料页签" role="tablist" className="mt-3 -mb-px flex flex-wrap items-end gap-1 text-sm">
+            <nav aria-label="本阶段进度" role="tablist" className="mt-3 -mb-px flex flex-wrap items-end gap-1 text-sm">
+              <span className="mr-2 pb-2 text-xs font-semibold text-muted-foreground">
+                本阶段进度 · 第 {tabIndex + 1}/{MATERIAL_TABS.length} 步
+              </span>
               {MATERIAL_TABS.map(([key, label]) => {
                 const count = key === "profile" ? items.length : key === "org" ? (overview.orgUnits ?? []).length : materialList.length;
                 const unit = key === "profile" ? "条" : key === "org" ? "个部门" : "份";

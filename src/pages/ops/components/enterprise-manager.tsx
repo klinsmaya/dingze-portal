@@ -32,7 +32,7 @@ import { ProjectsTab } from "./projects-tab";
 
 /**
  * One enterprise's administration. Ops (and consulting admins) see projects and can
- * suspend the enterprise; an enterprise admin maintains only its members and departments.
+ * suspend the enterprise; an enterprise admin maintains only its members, departments and invites.
  */
 export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: number; asOps: boolean }) {
   const detail = useEnterpriseDetail(enterpriseId);
@@ -41,7 +41,8 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
   const pendingRegistrations = usePendingRegistrations(enterpriseId);
   const [params, setParams] = useSearchParams();
   const defaultTab = asOps ? "projects" : "members";
-  const tabs = ["projects", "members", "org", "invites"];
+  // 企业管理员的「本企业」只管成员、组织部门、邀请注册；项目只在「我的项目」里出现（测试反馈 5）。
+  const tabs = asOps ? ["projects", "members", "org", "invites"] : ["members", "org", "invites"];
   const tab = tabs.includes(params.get("tab") ?? "") ? (params.get("tab") as string) : defaultTab;
 
   if (detail.isLoading) return <Skeleton className="h-96 rounded-xl" />;
@@ -109,7 +110,7 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === defaultTab ? {} : { tab: String(v) }, { replace: true })}>
         <TabsList>
-          <TabsTrigger value="projects">{asOps ? "项目与分派" : "项目"}</TabsTrigger>
+          {asOps ? <TabsTrigger value="projects">项目与分派</TabsTrigger> : null}
           <TabsTrigger value="members">成员</TabsTrigger>
           <TabsTrigger value="org">组织部门</TabsTrigger>
           <TabsTrigger value="invites">
@@ -117,9 +118,11 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
             {pendingRegistrations ? <Badge className="ml-1 h-4 px-1.5 text-[10px]">{pendingRegistrations}</Badge> : null}
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="projects" className="pt-4">
-          <ProjectsTab detail={detail.data} asOps={asOps} />
-        </TabsContent>
+        {asOps ? (
+          <TabsContent value="projects" className="pt-4">
+            <ProjectsTab detail={detail.data} />
+          </TabsContent>
+        ) : null}
         <TabsContent value="members" className="pt-4">
           <MembersTab detail={detail.data} asOps={asOps} />
         </TabsContent>

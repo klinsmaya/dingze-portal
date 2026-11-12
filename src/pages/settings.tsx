@@ -1,7 +1,7 @@
 import { useTheme } from "@/components/theme/theme-provider";
 import { THEME_MODES } from "@/components/dingze/display-menu";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { FONT_SIZES, type FontSize, useFontSize } from "@/lib/dingze/font-size";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
+import { FONT_SIZES, useFontSize } from "@/lib/dingze/font-size";
 
 /** 显示设置页：与头像菜单同一份偏好，只存在本机。 */
 export default function SettingsPage() {
@@ -12,23 +12,23 @@ export default function SettingsPage() {
       <h1 className="font-heading text-2xl font-bold text-brand">显示设置</h1>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">显示模式</h2>
-        <ToggleGroup variant="outline" value={[theme ?? "system"]} onValueChange={(v: string[]) => v[0] && setTheme(v[0] as "light" | "dark" | "system")}>
+        <FilterGroup value={(theme ?? "system") as "light" | "dark" | "system"} onChange={setTheme} aria-label="主题">
           {THEME_MODES.map(({ value, label, icon: Icon }) => (
-            <ToggleGroupItem key={value} value={value} aria-label={label}>
+            <FilterItem key={value} value={value} aria-label={label}>
               <Icon /> {label}
-            </ToggleGroupItem>
+            </FilterItem>
           ))}
-        </ToggleGroup>
+        </FilterGroup>
       </section>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">字号</h2>
-        <ToggleGroup variant="outline" value={[size]} onValueChange={(v: string[]) => v[0] && setSize(v[0] as FontSize)}>
+        <FilterGroup value={size} onChange={setSize} aria-label="字号">
           {FONT_SIZES.map((s) => (
-            <ToggleGroupItem key={s.value} value={s.value} aria-label={`字号${s.label}`}>
+            <FilterItem key={s.value} value={s.value} aria-label={`字号${s.label}`}>
               {s.label}
-            </ToggleGroupItem>
+            </FilterItem>
           ))}
-        </ToggleGroup>
+        </FilterGroup>
       </section>
     </div>
   );

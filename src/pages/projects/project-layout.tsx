@@ -15,9 +15,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, type ProjectRole } from "@dingze/shared";
+import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, type ProjectRole, type StageKey } from "@dingze/shared";
 import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
-import { stageEntryCode, stageProgress } from "@/lib/dingze/progress";
+import { setGateHint } from "@/lib/dingze/gate-hint";
+import { stageBlockers, stageEntryCode, stageProgress } from "@/lib/dingze/progress";
 import { useProject, useProjectOverview } from "@/lib/dingze/queries";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ import type { ProjectContextValue } from "./project-context";
 
 // 项目导航按客户流程排（2026-11 甲方反馈）：总览 · ① 资料 · ② 战略解码 · ③ 目标分解 · ④ 计划制定 · ⑤ 成果；
 // 专家咨询只在数字咨询师面板底部有一个入口。三个阶段各自跳到本阶段第一张还没定版的表。
-type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean };
+type NavItem = { key: string; to: string; label: string; no?: number; title: string; locked?: boolean; done?: boolean; gate?: StageKey };
 
 function flowNav(artifacts: ArtifactOverview[], library: boolean): NavItem[] {
   const stages = stageProgress(artifacts);
@@ -35,14 +36,18 @@ function flowNav(artifacts: ArtifactOverview[], library: boolean): NavItem[] {
     ...(library ? [{ key: "materials", to: "materials", label: "资料", no: 1, title: "上传资料：企业简介、组织架构、上年经营复盘，确认企业画像" }] : []),
     ...STAGES.map((stage, i): NavItem => {
       const p = stages.find((x) => x.stage === stage.key);
+      const locked = !!p && !p.open;
+      // 还没开启的阶段：点一下去前面第一张还没定版的必做表，左栏把没定版的都标出来。
+      const blockers = locked ? stageBlockers(artifacts, stage.key) : null;
       return {
         key: stage.key,
-        to: `workspace/${encodeURIComponent(stageEntryCode(artifacts, stage.key))}`,
+        to: `workspace/${encodeURIComponent(blockers ? blockers.codes[0] : stageEntryCode(artifacts, stage.key))}`,
         label: stage.flow,
         no: i + 2,
-        title: `${stage.flow}（书中：${stage.name}）${p && !p.open ? "：上一步全部定版后开启" : ""}`,
-        locked: !!p && !p.open,
+        title: `${stage.flow}（书中：${stage.name}）${blockers ? `：前面还有 ${blockers.codes.length} 张必做表没定版，点一下去看` : locked ? "：上一步全部定版后开启" : ""}`,
+        locked,
         done: !!p?.complete,
+        gate: blockers ? stage.key : undefined,
       };
     }),
     { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
@@ -127,7 +132,7 @@ function ProjectTopbar({
           const active = item.key === activeKey;
           const className = cn(
             "flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-0.5 text-sm",
-            active ? "border-gold font-bold text-band-foreground" : item.locked ? "cursor-not-allowed border-transparent text-band-muted/60" : "border-transparent text-band-muted hover:text-band-foreground",
+            active ? "border-gold font-bold text-band-foreground" : item.locked ? cn("border-transparent text-band-muted/60", item.gate ? "hover:text-band-foreground" : "cursor-not-allowed") : "border-transparent text-band-muted hover:text-band-foreground",
           );
           const inner = (
             <>
@@ -146,13 +151,20 @@ function ProjectTopbar({
               {item.locked ? <Lock className="size-3 opacity-70" aria-label="待开启" /> : null}
             </>
           );
-          // 还没开启的阶段不可点：点进去也只是一张锁定页。
-          return item.locked && !active ? (
+          // 还没开启的阶段不进锁定页：带到前面第一张没定版的必做表，并在左栏标红（测试反馈 3）。
+          return item.locked && !active && !item.gate ? (
             <span key={item.key} title={item.title} aria-disabled="true" className={className}>
               {inner}
             </span>
           ) : (
-            <Link key={item.key} to={item.to} title={item.title} aria-current={active ? "page" : undefined} className={className}>
+            <Link
+              key={item.key}
+              to={item.to}
+              title={item.title}
+              aria-current={active ? "page" : undefined}
+              className={className}
+              onClick={item.gate ? () => setGateHint(projectId, item.gate!) : undefined}
+            >
               {inner}
             </Link>
           );

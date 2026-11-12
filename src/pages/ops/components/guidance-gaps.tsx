@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type GuidanceGap, useGuidanceGaps, useReviewGuidanceGap } from "@/lib/dingze/guidance-api";
 import { formatTime } from "@/lib/dingze/records";
@@ -154,14 +154,14 @@ export function GuidanceGapsSection() {
       <p className="text-sm text-muted-foreground">
         咨询师在工作台右侧“记录引导缺口”。采纳后由方法论负责人改写 Skill 规则并随新版插件发布，再标记“已发布”；每次评审都会通知记录人。
       </p>
-      <ToggleGroup value={[status]} onValueChange={(v) => v[0] && setStatus(v[0] as GapStatus | "all")} variant="outline" size="sm" className="flex-wrap">
+      <FilterGroup value={status} onChange={setStatus} size="sm" className="flex-wrap" aria-label="按状态筛选">
         {(["open", "accepted", "shipped", "rejected"] as const).map((s) => (
-          <ToggleGroupItem key={s} value={s}>
+          <FilterItem key={s} value={s}>
             {GAP_STATUSES[s]} {all.filter((g) => g.status === s).length}
-          </ToggleGroupItem>
+          </FilterItem>
         ))}
-        <ToggleGroupItem value="all">全部 {all.length}</ToggleGroupItem>
-      </ToggleGroup>
+        <FilterItem value="all">全部 {all.length}</FilterItem>
+      </FilterGroup>
       {shown.length === 0 ? (
         <Empty className="border bg-card">
           <EmptyHeader>
