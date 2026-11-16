@@ -1,5 +1,5 @@
 import { samePayload } from "@/lib/dingze/stable-json";
-import { ArrowRight, CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, Building2, CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -35,7 +35,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useMaterials, useProfile, useSaveProfile, useSetMaterialLibrary } from "@/lib/dingze/materials-api";
+import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useMaterials, useProfile, useSaveProfile, useSetMaterialLibrary, useSetMaterialShared } from "@/lib/dingze/materials-api";
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
 import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
@@ -94,10 +94,11 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { materials: MaterialSummary[]; canEdit: boolean; canDeleteAny: boolean; currentUserId: number | null }) {
+function MaterialLibrary({ materials, canEdit, canShare, canDeleteAny, currentUserId }: { materials: MaterialSummary[]; canEdit: boolean; canShare: boolean; canDeleteAny: boolean; currentUserId: number | null }) {
   const { project } = useProjectContext();
   const add = useAddMaterial(project);
   const remove = useDeleteMaterial(project);
+  const share = useSetMaterialShared(project);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [pasting, setPasting] = useState(false);
@@ -121,7 +122,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         <h2 id="library" className="font-heading text-lg font-bold text-brand">
           ① 上传资料
         </h2>
-        <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载</span>
+        <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载，设为「企业共用」的本企业其他项目也能用</span>
       </div>
       {canEdit ? (
         <div
@@ -171,6 +172,11 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
               <span className="w-10 text-xs text-muted-foreground tabular-nums">#{m.id}</span>
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{m.title}</span>
+                {m.shared ? (
+                  <Badge variant="secondary" className="ml-2">
+                    企业共用{m.fromProject ? ` · 来自《${m.fromProject}》` : ""}
+                  </Badge>
+                ) : null}
                 <span className="block text-xs text-muted-foreground">
                   {m.kind === "note" ? "粘贴的文字" : m.fileName}
                   {[m.hasFile ? `原件 ${formatSize(m.size)}` : "", m.chars ? `可检索 ${m.chars} 字` : "无可检索文字", m.by, formatTime(m.at)].filter(Boolean).join(" · ")}
@@ -184,7 +190,18 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
               <Button variant="ghost" size="sm" disabled={!m.chars} onClick={() => setViewing(m.id)}>
                 <Eye /> 文字
               </Button>
-              {canEdit && (canDeleteAny || m.byId === currentUserId) ? (
+              {canShare && !m.fromProject ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={share.isPending}
+                  title={m.shared ? "取消后，本企业其他项目不再能用这份资料" : "企业简介、组织架构这类每个项目都要用的资料：设为共用后，本企业其他项目不用重传"}
+                  onClick={() => share.mutate({ id: m.id, shared: !m.shared }, { onError: (e) => toast.error(errorMessage(e)) })}
+                >
+                  <Building2 /> {m.shared ? "取消共用" : "设为企业共用"}
+                </Button>
+              ) : null}
+              {canEdit && !m.fromProject && (canDeleteAny || m.byId === currentUserId) ? (
                 <ConfirmAction
                   trigger={
                     <Button variant="ghost" size="sm" aria-label={`删除资料《${m.title}》`}>
@@ -192,7 +209,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
                     </Button>
                   }
                   title={`删除资料《${m.title}》？`}
-                  description="原件和提取的文字一起删除，数字咨询师不再能检索到它。"
+                  description={`原件和提取的文字一起删除，数字咨询师不再能检索到它。${m.shared ? "这是企业共用资料，本企业其他项目也不再能用。" : ""}`}
                   confirmLabel="删除"
                   destructive
                   onConfirm={() =>
@@ -627,7 +644,7 @@ export default function MaterialsPage() {
               <Skeleton className="h-32" />
             ) : (
               <>
-                <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canManageLibrary(role, isAdmin)} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
                 {canManageLibrary(role, isAdmin) ? <MemberUploads /> : null}
               </>
             )

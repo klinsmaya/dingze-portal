@@ -13,6 +13,10 @@ export type MaterialSummary = {
   artifactCode?: string | null;
   /** 附件是否已加入资料库（资料库的资料恒为 true）。 */
   inLibrary?: boolean;
+  /** 企业共用：本企业其他项目也能看到、检索这份资料。 */
+  shared?: boolean;
+  /** 别的项目共用过来的：那个项目的名字（只能在那边取消共用或删除）。 */
+  fromProject?: string | null;
   fileName: string;
   size: number;
   chars: number;
@@ -97,6 +101,16 @@ export function useDeleteMaterial(project: ProjectSummary) {
       client.invalidateQueries({ queryKey: keys.materials(project.id) });
       client.invalidateQueries({ queryKey: ["dingze", "attachments", project.id] });
     },
+  });
+}
+
+/** 把资料库里的一份资料设为「企业共用」，或取消。 */
+export function useSetMaterialShared(project: ProjectSummary) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: number; shared: boolean }) => post<MaterialSummary>(project, "setMaterialShared", input),
+    // 本企业其他项目的资料清单也变了。
+    onSuccess: () => client.invalidateQueries({ queryKey: ["dingze", "materials"] }),
   });
 }
 

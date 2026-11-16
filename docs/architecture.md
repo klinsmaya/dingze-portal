@@ -53,7 +53,7 @@
 | `dz_exports` | 导出记录 |
 | `dz_notifications` | 站内通知 |
 | `dz_comments` | 批注：锚点（行 id / 字段路径）、anchors（圈选的一组锚点）、内容、@ 提及、回复（parentId）、解决状态、所在版本 |
-| `dz_materials` | 企业资料：标题、类型、文件名、原件（fileId，存于 `dz_material_files`，本地存储）、提取后的文字（≤ 15 万字） |
+| `dz_materials` | 企业资料：标题、类型、文件名、原件（fileId，存于 `dz_material_files`，本地存储）、提取后的文字（≤ 15 万字）；`shared` 为真时同一企业的其他项目也能读（企业共用） |
 | `dz_material_files` | 资料原件（NocoBase 文件表，只允许登录用户上传，下载经 `downloadMaterial` 校验项目权限） |
 | `dz_profiles` | 企业画像：条目（类别、主题、内容、来源、草稿 / 已复核 / 已确认）、rev（并发保护） |
 | `dz_expert_requests` | 专家咨询：议题、问题、引用的定版版本（code / versionId / rev）、状态、专家、预约、纪要、意见 |
