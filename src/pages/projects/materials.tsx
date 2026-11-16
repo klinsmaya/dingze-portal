@@ -15,6 +15,8 @@ import {
   canSetProfileStatus,
   getArtifactDef,
   isArtifactCode,
+  orgKindFromName,
+  orgKindLabel,
   profileItem,
 } from "@dingze/shared";
 
@@ -391,7 +393,7 @@ export default function MaterialsPage() {
         name: PROPOSE_TOOL,
         title: "建议写入企业画像或组织架构",
         description:
-          "把整理出的内容写入企业画像或组织架构，用户确认后才写入。企业画像：path 用 items.+ 新增（值为完整对象 {id, category: fact|assumption|unknown|todo, topic, content, source: 资料编号字符串或空, status: 'draft'}），或 items.<id>.content 修改。组织架构：path 用 org.+，值为 {name, parent?: 上级部门名称, kind?: company|department|team, head?: 负责人姓名, duty?: 职责}，上级排在下级前面；同名部门会更新。组织是企业级的，对本企业所有项目生效。",
+          "把整理出的内容写入企业画像或组织架构，用户确认后才写入。企业画像：path 用 items.+ 新增（值为完整对象 {id, category: fact|assumption|unknown|todo, topic, content, source: 资料编号字符串或空, status: 'draft'}），或 items.<id>.content 修改。组织架构：path 用 org.+，值为 {name, parent?: 上级部门名称, kind?: 层级名称，照企业自己的叫法写（如 集团、公司、事业部、中心、部门、科室、团队、班组）, head?: 负责人姓名, duty?: 职责}，上级排在下级前面；同名部门会更新。组织是企业级的，对本企业所有项目生效。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -416,7 +418,7 @@ export default function MaterialsPage() {
                 .map((v) => ({
                   name: String(v.name).trim(),
                   parent: typeof v.parent === "string" ? v.parent.trim() : undefined,
-                  kind: ["company", "department", "team"].includes(String(v.kind)) ? String(v.kind) : "department",
+                  ...orgKindFromName(v.kind),
                   head: typeof v.head === "string" ? v.head.trim() : undefined,
                   duty: typeof v.duty === "string" ? v.duty.trim() : undefined,
                 }));
@@ -452,7 +454,7 @@ export default function MaterialsPage() {
       enterprise: project.enterprise?.name,
       page: "资料：企业画像与组织架构",
       guide: `先用 ${SEARCH_MATERIALS_TOOL} 查阅资料。企业画像：能确认的写成“事实”，规划依赖但未验证的写成“假设”，不清楚的写成“未知”，需要企业补的写成“待补”；每条注明来源资料编号 source。组织架构：从组织架构图、部门职责说明里整理部门名称、上级、类型、负责人和职责，用 org.+ 提出；已有的同名部门只补缺的职责和负责人，不要臆造资料里没有的部门。`,
-      orgUnits: (overview.orgUnits ?? []).map((u) => ({ name: u.name, parent: overview.orgUnits?.find((p) => p.id === u.parentId)?.name ?? null, kind: u.kind, head: u.headName ?? null, duty: u.duty ?? null })),
+      orgUnits: (overview.orgUnits ?? []).map((u) => ({ name: u.name, parent: overview.orgUnits?.find((p) => p.id === u.parentId)?.name ?? null, kind: orgKindLabel(u), head: u.headName ?? null, duty: u.duty ?? null })),
       userCanEditOrg: latest.current.canEditOrg,
       materials: (materials.data ?? []).map((m) => ({ id: m.id, title: m.title, chars: m.chars })),
       profile: latest.current.items,

@@ -1,14 +1,12 @@
 import { Building2, Network, UserRound } from "lucide-react";
 import { Link } from "react-router";
 
-import { PROJECT_ROLE_LABELS } from "@dingze/shared";
+import { PROJECT_ROLE_LABELS, orgKindLabel } from "@dingze/shared";
 
 import { EmptyState } from "@/components/dingze/empty-state";
 import { Badge } from "@/components/ui/badge";
 import type { ProjectOrgUnit, ProjectTeamMember } from "@/lib/dingze/api";
 import { flattenOrgUnits } from "@/lib/dingze/org-units";
-
-const KIND = { company: "公司", department: "部门", team: "团队" } as const;
 
 /**
  * 组织与职责 (闭环第一批): the enterprise's departments as the project sees them — who heads each
@@ -45,7 +43,7 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
                 <span style={{ paddingLeft: `${node.depth * 1.5}rem` }} className="flex min-w-0 items-center gap-2">
                   {node.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : <Network className="size-4 text-muted-foreground" />}
                   <span className="font-medium">{node.name}</span>
-                  <Badge variant="outline">{KIND[node.kind]}</Badge>
+                  <Badge variant="outline">{orgKindLabel(node)}</Badge>
                 </span>
                 <span className="text-xs text-muted-foreground">
                   负责人：{head ?? (node.headId ? "（不在本项目）" : node.headName ? `${node.headName}（无账号）` : "未设")}
