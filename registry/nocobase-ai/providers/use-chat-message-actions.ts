@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { AIChatAction, AIChatState } from "./chat-reducer";
 import { findChatMessage, isAIToolPart } from "./chat-message-utils";
-import { getAIWorkContextToolScope } from "./page-context";
+import { getAIConversationToolScope } from "./page-context";
 import type { NocoBaseChatTransport } from "./chat-transport";
 import type { useAI } from "./ai-provider";
 import type { AIConversationRuntimeContext } from "./use-chat-runtime";
@@ -56,23 +56,17 @@ const getToolInvocationContext = ({
   toolCallId: string;
   toolName: string;
   automatic?: boolean;
-}): AIToolCallInvocationContext => {
-  const userContext = messages
-    .slice(0, rootIndex + 1)
-    .reverse()
-    .find((message) => message.role === "user")?.metadata?.workContext;
-  return {
-    sessionId: conversationId,
-    messageId,
-    toolCallId,
-    toolName,
-    automatic,
-    ...getAIWorkContextToolScope([
-      ...(runtimeContext.task?.workContext ?? []),
-      ...(userContext ?? []),
-    ]),
-  };
-};
+}): AIToolCallInvocationContext => ({
+  sessionId: conversationId,
+  messageId,
+  toolCallId,
+  toolName,
+  automatic,
+  ...getAIConversationToolScope(
+    messages.slice(0, rootIndex + 1),
+    runtimeContext.task?.workContext
+  ),
+});
 
 export function useChatMessageActions({
   ai,
@@ -82,6 +76,7 @@ export function useChatMessageActions({
   transportsRef,
   getRuntimeContext,
   refreshConversationMessages,
+  ensureConversationIdle,
   setHistoryError,
   editingSnapshotRef,
   setEditingMessageId,
@@ -101,6 +96,11 @@ export function useChatMessageActions({
     conversationId: string
   ) => AIConversationRuntimeContext;
   refreshConversationMessages: RefreshConversationMessages;
+  /** Resolves to `false` while the server is still running this conversation. */
+  ensureConversationIdle: (
+    conversationId: string,
+    targetChat: Chat<AIChatMessage>
+  ) => Promise<boolean>;
   setHistoryError: Dispatch<SetStateAction<Error | undefined>>;
   editingSnapshotRef: MutableRefObject<AIMessageEditingSnapshot | undefined>;
   setEditingMessageId: Dispatch<SetStateAction<string | undefined>>;
@@ -180,8 +180,15 @@ export function useChatMessageActions({
 
       setHistoryError(undefined);
       try {
+        const conversationId = stateRef.current.activeConversationId;
+        if (
+          !(await ensureConversationIdle(conversationId, activeChat)) ||
+          isChatRunning(activeChat)
+        ) {
+          return;
+        }
         const resolved = await resolveServerMessage(
-          stateRef.current.activeConversationId,
+          conversationId,
           activeChat,
           message
         );
@@ -207,6 +214,7 @@ export function useChatMessageActions({
     },
     [
       activeChat,
+      ensureConversationIdle,
       resolveServerMessage,
       setHistoryError,
       stateRef,
@@ -225,6 +233,12 @@ export function useChatMessageActions({
 
       setHistoryError(undefined);
       try {
+        if (
+          !(await ensureConversationIdle(conversationId, targetChat)) ||
+          isChatRunning(targetChat)
+        ) {
+          return;
+        }
         const message = findChatMessage(
           targetChat.messages,
           decision.messageId
@@ -424,6 +438,7 @@ export function useChatMessageActions({
     [
       ai,
       chatSurfaceOpenRef,
+      ensureConversationIdle,
       getRuntimeContext,
       refreshConversationMessages,
       resolveServerMessage,

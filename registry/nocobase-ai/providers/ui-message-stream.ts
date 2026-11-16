@@ -10,6 +10,7 @@ import {
   type NocoBaseToolCall,
 } from "./stream-event-utils";
 import { SubAgentStreamAccumulator } from "./sub-agent-stream";
+import { AIStreamInterruptedError } from "./conversation-run";
 import type { AIChatMessage } from "./types";
 
 const VISUAL_DELTA_FLUSH_INTERVAL = 50;
@@ -75,7 +76,15 @@ const mergeToolCallChunks = (
 export function createNocoBaseUIMessageStream(
   stream: ReadableStream<Uint8Array>,
   messageId: string | null = `assistant-${crypto.randomUUID()}`,
-  options: { waitForNewMessage?: boolean; seedMessage?: AIChatMessage } = {}
+  options: {
+    waitForNewMessage?: boolean;
+    seedMessage?: AIChatMessage;
+    /**
+     * A run the server completes always closes with `stream_end` (or `error`). A replay of a run in
+     * progress does not have to, so it opts out.
+     */
+    expectStreamEnd?: boolean;
+  } = {}
 ): ReadableStream<AIChatChunk> {
   return new ReadableStream<AIChatChunk>({
     async start(controller) {
@@ -85,6 +94,8 @@ export function createNocoBaseUIMessageStream(
       let reasoningStarted = false;
       let currentToolCallId: string | undefined;
       let responseStarted = options.waitForNewMessage !== true;
+      let serverStreamStarted = false;
+      let serverStreamClosed = false;
       const announcedToolCalls = new Set<string>();
       const toolCallNames = new Map<string, string>();
       const toolCallInputs = new Map<string, unknown>();
@@ -262,6 +273,11 @@ export function createNocoBaseUIMessageStream(
 
           flushSubAgentNarrativeEvents();
           subAgentToolEvents.flushAll();
+
+          if (event.type === "stream_start") serverStreamStarted = true;
+          if (event.type === "stream_end" || event.type === "error") {
+            serverStreamClosed = true;
+          }
 
           if (event.type === "new_message") {
             responseStarted = true;
@@ -449,6 +465,15 @@ export function createNocoBaseUIMessageStream(
         flushSubAgentNarrativeEvents();
         subAgentToolEvents.flushAll();
         finishActiveNarrative();
+        if (
+          options.expectStreamEnd !== false &&
+          serverStreamStarted &&
+          !serverStreamClosed
+        ) {
+          // The connection closed cleanly in the middle of a run: the server is still generating.
+          controller.error(new AIStreamInterruptedError());
+          return;
+        }
         controller.enqueue({ type: "finish" });
         controller.close();
       } catch (error) {
@@ -456,7 +481,13 @@ export function createNocoBaseUIMessageStream(
         visualDeltas.clear();
         subAgentNarrativeEvents.clear();
         subAgentToolEvents.clear();
-        controller.error(error);
+        // A stream the user stopped stays an abort; any other failure here means the connection
+        // was cut while the server was still sending.
+        controller.error(
+          (error as { name?: unknown } | null)?.name === "AbortError"
+            ? error
+            : new AIStreamInterruptedError(error)
+        );
       }
     },
   });

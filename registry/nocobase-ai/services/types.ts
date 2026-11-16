@@ -55,6 +55,11 @@ export interface AIService {
   getConversationActiveState(
     sessionId: string
   ): Promise<AIConversationActiveState | undefined>;
+  /**
+   * Stops the run the server is doing for this conversation. Closing the response stream does not
+   * stop it: the server keeps generating and saves the answer.
+   */
+  abortConversation(sessionId: string): Promise<void>;
   updateConversationTitle(sessionId: string, title: string): Promise<void>;
   destroyConversation(sessionId: string): Promise<void>;
   uploadFile(

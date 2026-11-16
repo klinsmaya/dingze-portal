@@ -48,6 +48,7 @@ const previewService: AIService = {
   listConversations: async () => [],
   getConversationMessages: async () => [],
   getConversationActiveState: async () => "idle",
+  abortConversation: async () => undefined,
   updateConversationTitle: async () => undefined,
   destroyConversation: async () => undefined,
   uploadFile: async (file) => ({

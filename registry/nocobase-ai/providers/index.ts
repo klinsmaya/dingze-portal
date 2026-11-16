@@ -51,6 +51,7 @@ export {
   AIPageContextResolverProvider,
   AIPageContextScope,
   createAIPageContextReference,
+  getAIConversationToolScope,
   getAIWorkContextRequiredTools,
   getAIWorkContextToolScope,
   mergeAIRequiredTools,
