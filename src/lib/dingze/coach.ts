@@ -7,6 +7,17 @@ export const COACH_BY_STAGE: Record<StageKey, string> = {
   action: "dingze-action-coach",
 };
 
+/**
+ * 门户里只有一种智能体身份：数字咨询师。账号还能用到别的 AI 员工时（NocoBase 自带的开发用员工），
+ * 项目外的全局入口会以另一个身份出现，和项目里的数字咨询师对不上（2026-11 测试反馈）。有数字咨询师
+ * 可用就只留它们，按阶段顺序排；一个都没有时原样返回，由各处自己提示“暂不可用”。
+ */
+export function portalEmployees<T extends { username: string }>(employees: T[]): T[] {
+  const order = Object.values(COACH_BY_STAGE);
+  const coaches = employees.filter((e) => order.includes(e.username));
+  return coaches.length ? coaches.sort((a, b) => order.indexOf(a.username) - order.indexOf(b.username)) : employees;
+}
+
 /** Frontend tool the consultants call to propose writing agreed content into the open artifact. */
 export const PROPOSE_TOOL = "dingzeProposeChanges";
 

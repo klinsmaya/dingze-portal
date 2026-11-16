@@ -1,4 +1,4 @@
-import { KeyRound, UserMinus, UserPlus, Users } from "lucide-react";
+import { KeyRound, UserMinus, UserPlus, Users, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,6 +19,8 @@ import { type DzUser, type EnterpriseDetail, SYSTEM_ROLE_LABELS, opsApi } from "
 import { useDzUsers, useOpsMutation } from "@/lib/dingze/ops-queries";
 
 import { AccountPasswordDialog, type IssuedPassword } from "./account-password-dialog";
+import { BulkAccountsDialog } from "./bulk-accounts-dialog";
+import { type IssuedRow, IssuedListDialog } from "./camp-dialogs";
 import { ConfirmAction } from "./confirm-action";
 import { CreateAccountDialog } from "./create-account-dialog";
 import { UserChecklist } from "./user-checklist";
@@ -28,6 +30,8 @@ export function MembersTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
   const enterpriseId = detail.enterprise.id;
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [bulk, setBulk] = useState(false);
+  const [issuedList, setIssuedList] = useState<IssuedRow[] | null>(null);
   const [issued, setIssued] = useState<IssuedPassword | null>(null);
   const reset = useOpsMutation(opsApi.resetPassword);
   const remove = useOpsMutation(opsApi.removeEnterpriseMember);
@@ -63,12 +67,15 @@ export function MembersTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
           <Users className="mr-1 inline size-4 align-text-bottom" />
           {detail.members.length} 个账号可以进入这家企业的空间；进入具体项目还需要在项目成员里添加。
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {asOps ? (
             <Button variant="outline" onClick={() => setAdding(true)}>
               加入已有账号
             </Button>
           ) : null}
+          <Button variant="outline" onClick={() => setBulk(true)}>
+            <UsersRound /> 批量开通
+          </Button>
           <Button onClick={() => setCreating(true)}>
             <UserPlus /> 开通成员账号
           </Button>
@@ -172,6 +179,8 @@ export function MembersTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
       {asOps ? (
         <AddExistingDialog open={adding} onOpenChange={setAdding} detail={detail} />
       ) : null}
+      <BulkAccountsDialog open={bulk} onClose={() => setBulk(false)} enterpriseId={enterpriseId} taken={detail.members.map((m) => m.username)} onIssued={setIssuedList} />
+      <IssuedListDialog title="批量开通结果" rows={issuedList} onClose={() => setIssuedList(null)} />
       <AccountPasswordDialog issued={issued} onClose={() => setIssued(null)} />
     </div>
   );

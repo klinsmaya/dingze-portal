@@ -1,19 +1,23 @@
-import { ArrowRight, Plus } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { PROJECT_ROLE_LABELS, STAGES } from "@dingze/shared";
 
+import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { EmptyState } from "@/components/dingze/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/lib/dingze/errors";
 import type { Enterprise } from "@/lib/dingze/ops-api";
 import { useEnterpriseDetail } from "@/lib/dingze/ops-queries";
 import { nextActionPath } from "@/lib/dingze/progress";
+import { PROJECT_PAGE_SIZE, filterProjects, pageOf, projectYears } from "@/lib/dingze/project-list";
 import { useMyProjects } from "@/lib/dingze/queries";
 import { samplePath } from "@/lib/dingze/sample";
 import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
@@ -49,8 +53,29 @@ export default function ProjectsPage() {
   const selfEnterprise = useSelfProjectEnterprise();
   // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。从项目里点「全部项目」「新建项目」
   // 过来的（?all=1 / ?new=1）留在列表，否则只有一个项目的企业管理员没有地方新建项目。
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const stay = params.has("all") || params.has("new");
+
+  // 查询条件和页码记在地址里：进项目再退回来，还停在原来那一页。界面读本地状态（中文输入法
+  // 拼写中不能被地址更新打断），地址只是跟着记。
+  const [query, setQuery] = useState(() => ({ q: params.get("q") ?? "", year: Number(params.get("year")) || null, page: Number(params.get("page")) || 1 }));
+  const { q, year } = query;
+  const [pageSize, setPageSize] = useState(PROJECT_PAGE_SIZE);
+  const update = (patch: Partial<typeof query>) => setQuery((prev) => ({ ...prev, page: 1, ...patch }));
+  useEffect(() => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of [["q", query.q], ["year", query.year], ["page", query.page > 1 ? query.page : null]] as const) {
+      if (value) next.set(key, String(value));
+      else next.delete(key);
+    }
+    if (next.toString() !== params.toString()) setParams(next, { replace: true });
+  }, [query, params, setParams]);
+  const years = useMemo(() => projectYears(projects ?? []), [projects]);
+  const found = useMemo(() => filterProjects(projects ?? [], { q, year }), [projects, q, year]);
+  const shown = pageOf(found, query.page, pageSize);
+  // 一页放得下就不出查询条和分页，绝大多数企业用户看到的还是原来的样子。
+  const searchable = (projects?.length ?? 0) > PROJECT_PAGE_SIZE;
+
   if (projects?.length === 1 && !stay) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
 
   return (
@@ -87,8 +112,46 @@ export default function ProjectsPage() {
           }
         />
       ) : (
+        <>
+        {searchable ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <InputGroup className="w-full bg-card sm:w-72">
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
+                type="search"
+                aria-label="搜索项目"
+                placeholder="搜项目或企业名称"
+                value={q}
+                onChange={(e) => update({ q: e.target.value })}
+              />
+            </InputGroup>
+            {years.length > 1 ? (
+              <NativeSelect aria-label="年度" className="bg-card" value={year ?? ""} onChange={(e) => update({ year: Number(e.target.value) || null })}>
+                <NativeSelectOption value="">全部年度</NativeSelectOption>
+                {years.map((y) => (
+                  <NativeSelectOption key={y} value={y}>
+                    {y} 年度
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            ) : null}
+          </div>
+        ) : null}
+        {found.length === 0 ? (
+          <EmptyState
+            className="bg-card"
+            text="没有符合条件的项目。"
+            action={
+              <Button variant="outline" onClick={() => update({ q: "", year: null })}>
+                清除条件
+              </Button>
+            }
+          />
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {projects.map((project) => (
+          {shown.items.map((project) => (
             <Link
               key={project.id}
               to={project.next ? nextActionPath(project.id, project.next) : `/projects/${project.id}/overview`}
@@ -138,6 +201,20 @@ export default function ProjectsPage() {
             </Link>
           ))}
         </div>
+        {searchable && found.length > 0 ? (
+          <DataTablePagination
+            currentPage={shown.page}
+            pageCount={shown.pages}
+            setCurrentPage={(page) => update({ page })}
+            pageSize={pageSize}
+            setPageSize={(size) => {
+              setPageSize(size);
+              update({});
+            }}
+            total={found.length}
+          />
+        ) : null}
+        </>
       )}
     </div>
   );

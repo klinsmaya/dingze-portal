@@ -1,5 +1,6 @@
 import {
   Suspense,
+  type ComponentType,
   type PropsWithChildren,
   type ReactNode,
 } from "react";
@@ -12,6 +13,7 @@ import {
   renderAppRoutes,
 } from "@nocobase/portal-sdk/routing";
 import { LoadingState } from "@/components/app-shell/loading-state";
+import { CoachAIProvider } from "@/components/dingze/coach-ai-provider";
 import { appRoutes, registryRoutesEnabled } from "@/routes";
 import { createDevelopmentRoute } from "./development";
 import { RouteAccessGuard } from "./route-access-guard";
@@ -49,10 +51,15 @@ export const extensionUserMenuItems = extensionContributions.userMenuItems;
 
 export const extensionAuthAdapters = extensionContributions.authAdapters;
 
+// Application-owned replacements for an extension's provider, by extension id.
+const providerOverrides: Record<string, ComponentType<PropsWithChildren>> = {
+  "nocobase-ai": CoachAIProvider,
+};
+
 export function AppExtensionProviders({ children }: PropsWithChildren) {
   return extensionContributions.providerExtensions.reduceRight<ReactNode>(
     (content, extension) => {
-      const Provider = extension.Provider;
+      const Provider = providerOverrides[extension.id] ?? extension.Provider;
       return Provider ? <Provider>{content}</Provider> : content;
     },
     children
