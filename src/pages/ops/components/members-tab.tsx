@@ -65,7 +65,7 @@ export function MembersTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           <Users className="mr-1 inline size-4 align-text-bottom" />
-          {detail.members.length} 个账号可以进入这家企业的空间；进入具体项目还需要在项目成员里添加。
+          {detail.members.length} 个账号可以进入这家企业的空间。企业管理员和企业成员能看到本企业的所有项目；要填表还需要加进项目成员。
         </p>
         <div className="flex flex-wrap gap-2">
           {asOps ? (
@@ -164,7 +164,7 @@ export function MembersTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
         open={creating}
         onOpenChange={setCreating}
         title={`为 ${detail.enterprise.shortName} 开通成员账号`}
-        description="账号会直接加入本企业空间。"
+        description="账号会直接加入本企业空间，能看到本企业的所有项目（只读）；要填表还需要加进项目成员。"
         roles={asOps ? ["dz_ent_member", "dz_ent_admin"] : ["dz_ent_member"]}
         enterpriseId={enterpriseId}
         onCreated={(account) =>

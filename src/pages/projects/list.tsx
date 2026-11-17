@@ -3,11 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
-import { PROJECT_ROLE_LABELS, STAGES } from "@dingze/shared";
+import { STAGES } from "@dingze/shared";
 
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { EmptyState } from "@/components/dingze/empty-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -17,11 +18,13 @@ import { errorMessage } from "@/lib/dingze/errors";
 import type { Enterprise } from "@/lib/dingze/ops-api";
 import { useEnterpriseDetail } from "@/lib/dingze/ops-queries";
 import { nextActionPath } from "@/lib/dingze/progress";
-import { PROJECT_PAGE_SIZE, filterProjects, pageOf, projectYears } from "@/lib/dingze/project-list";
+import { PROJECT_PAGE_SIZE, filterProjects, pageOf, projectRoleLabel, projectYears, splitArchived } from "@/lib/dingze/project-list";
 import { useMyProjects } from "@/lib/dingze/queries";
 import { samplePath } from "@/lib/dingze/sample";
 import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
 import { OwnProjectDialog } from "@/pages/ops/components/projects-tab";
+
+import { ProjectManageMenu } from "./components/project-manage";
 
 const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
 
@@ -58,23 +61,27 @@ export default function ProjectsPage() {
 
   // 查询条件和页码记在地址里：进项目再退回来，还停在原来那一页。界面读本地状态（中文输入法
   // 拼写中不能被地址更新打断），地址只是跟着记。
-  const [query, setQuery] = useState(() => ({ q: params.get("q") ?? "", year: Number(params.get("year")) || null, page: Number(params.get("page")) || 1 }));
+  const [query, setQuery] = useState(() => ({ q: params.get("q") ?? "", year: Number(params.get("year")) || null, page: Number(params.get("page")) || 1, archived: params.has("archived") }));
   const { q, year } = query;
   const [pageSize, setPageSize] = useState(PROJECT_PAGE_SIZE);
   const update = (patch: Partial<typeof query>) => setQuery((prev) => ({ ...prev, page: 1, ...patch }));
   useEffect(() => {
     const next = new URLSearchParams(params);
-    for (const [key, value] of [["q", query.q], ["year", query.year], ["page", query.page > 1 ? query.page : null]] as const) {
+    for (const [key, value] of [["q", query.q], ["year", query.year], ["page", query.page > 1 ? query.page : null], ["archived", query.archived ? 1 : null]] as const) {
       if (value) next.set(key, String(value));
       else next.delete(key);
     }
     if (next.toString() !== params.toString()) setParams(next, { replace: true });
   }, [query, params, setParams]);
-  const years = useMemo(() => projectYears(projects ?? []), [projects]);
-  const found = useMemo(() => filterProjects(projects ?? [], { q, year }), [projects, q, year]);
+  // 进行中和已归档分开放；没有进行中的项目时直接看已归档的。没有归档过项目的账号看到的还是原来的样子。
+  const { active, archived } = useMemo(() => splitArchived(projects ?? []), [projects]);
+  const showArchived = archived.length > 0 && (query.archived || active.length === 0);
+  const listed = showArchived ? archived : active;
+  const years = useMemo(() => projectYears(listed), [listed]);
+  const found = useMemo(() => filterProjects(listed, { q, year }), [listed, q, year]);
   const shown = pageOf(found, query.page, pageSize);
   // 一页放得下就不出查询条和分页，绝大多数企业用户看到的还是原来的样子。
-  const searchable = (projects?.length ?? 0) > PROJECT_PAGE_SIZE;
+  const searchable = listed.length > PROJECT_PAGE_SIZE;
 
   if (projects?.length === 1 && !stay) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
 
@@ -104,7 +111,7 @@ export default function ProjectsPage() {
       ) : !projects?.length ? (
         <EmptyState
           className="bg-card"
-          text="还没有加入任何项目，项目开通后会出现在这里。"
+          text="还没有项目，项目开通后会出现在这里。"
           action={
             <Button variant="outline" nativeButton={false} render={<Link to={samplePath()} />}>
               看看示例项目
@@ -113,6 +120,16 @@ export default function ProjectsPage() {
         />
       ) : (
         <>
+        {archived.length ? (
+          <div className="flex gap-1" role="group" aria-label="项目状态">
+            <Button size="sm" variant={showArchived ? "ghost" : "secondary"} aria-pressed={!showArchived} disabled={active.length === 0} onClick={() => update({ archived: false })}>
+              进行中 {active.length}
+            </Button>
+            <Button size="sm" variant={showArchived ? "secondary" : "ghost"} aria-pressed={showArchived} onClick={() => update({ archived: true })}>
+              已归档 {archived.length}
+            </Button>
+          </div>
+        ) : null}
         {searchable ? (
           <div className="flex flex-wrap items-center gap-2">
             <InputGroup className="w-full bg-card sm:w-72">
@@ -152,15 +169,19 @@ export default function ProjectsPage() {
         ) : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {shown.items.map((project) => (
+            // 「⋯」菜单和卡片链接并排放（不放进链接里），点菜单不会进项目。
+            <div key={project.id} className="relative min-w-0">
             <Link
-              key={project.id}
               to={project.next ? nextActionPath(project.id, project.next) : `/projects/${project.id}/overview`}
-              className="group rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="group block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <Card className="h-full transition-colors group-hover:border-primary">
-                <CardHeader>
+                <CardHeader className={project.manageable ? "pr-12" : undefined}>
                   <CardDescription>{project.enterprise?.name ?? "未命名企业"}</CardDescription>
-                  <CardTitle className="text-lg text-brand">{project.name}</CardTitle>
+                  <CardTitle className="flex flex-wrap items-center gap-2 text-lg text-brand">
+                    {project.name}
+                    {project.status === "archived" ? <Badge variant="outline">已归档</Badge> : null}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {project.progress ? (
@@ -187,7 +208,7 @@ export default function ProjectsPage() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>{project.year} 年度</span>
                   <span>{SCENE_LABELS[project.scene] ?? project.scene}</span>
-                  <span>{project.projectRole ? PROJECT_ROLE_LABELS[project.projectRole] : "管理员查看"}</span>
+                  <span>{projectRoleLabel(project)}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-2 rounded-lg bg-brand/5 px-3 py-2 group-hover:bg-brand/10">
                   <div className="min-w-0 flex-1">
@@ -199,6 +220,14 @@ export default function ProjectsPage() {
                 </CardContent>
               </Card>
             </Link>
+            {project.manageable ? (
+              <ProjectManageMenu
+                project={project}
+                lockedCount={Object.values(project.progress ?? {}).reduce((sum, stage) => sum + stage.locked, 0)}
+                className="absolute top-3 right-3"
+              />
+            ) : null}
+            </div>
           ))}
         </div>
         {searchable && found.length > 0 ? (

@@ -30,6 +30,7 @@ import { type EnterpriseDetail, type OpsProject, opsApi } from "@/lib/dingze/ops
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
 import { flattenOrgUnits, orgUnitPath } from "@/lib/dingze/org-units";
 import { type MemberRow, defaultOrgUnitId, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
+import { DeleteProjectDialog } from "@/pages/projects/components/project-manage";
 
 import { SCENE_LABELS, SCHEDULE_LABELS } from "./labels";
 
@@ -42,6 +43,7 @@ const CONSULTANT_PROJECT_ROLES: ProjectRole[] = ["lead_consultant", "co_consulta
 export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
   const [editing, setEditing] = useState<ProjectWithMembers | "new" | null>(null);
   const [staffing, setStaffing] = useState<ProjectWithMembers | null>(null);
+  const [deleting, setDeleting] = useState<ProjectWithMembers | null>(null);
   const allowSelf = selfProjectAllowed(detail.enterprise);
   const update = useOpsMutation(opsApi.updateEnterprise);
 
@@ -96,6 +98,9 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
                 <Button variant="ghost" size="sm" onClick={() => setStaffing(project)}>
                   <Users /> 成员
                 </Button>
+                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleting(project)}>
+                  <Trash2 /> 删除
+                </Button>
                 <Button variant="outline" size="sm" nativeButton={false} render={<Link to={`/projects/${project.id}/overview`} />}>
                   进入 <ArrowRight />
                 </Button>
@@ -122,6 +127,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
 
       <ProjectDialog target={editing} detail={detail} onClose={() => setEditing(null)} />
       <MembersDialog project={staffing} detail={detail} onClose={() => setStaffing(null)} />
+      <DeleteProjectDialog project={deleting} onClose={() => setDeleting(null)} />
     </div>
   );
 }
@@ -232,7 +238,7 @@ function ProjectDialog({
                   value={draft.status}
                   options={{ active: "进行中", archived: "已归档" }}
                   onChange={(v) => set("status", v)}
-                  description="归档后成员仍可查看，但项目不再出现在待办里。"
+                  description="归档后项目收进「已归档」，成员仍可打开，随时可以改回进行中。"
                 />
               ) : null}
             </FieldGroup>
