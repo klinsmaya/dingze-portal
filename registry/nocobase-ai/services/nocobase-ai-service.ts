@@ -340,6 +340,12 @@ export class NocoBaseAIService implements AIService {
       : undefined;
   }
 
+  async abortConversation(sessionId: string) {
+    await this.client.action("aiConversations", "abort", {
+      body: { sessionId },
+    });
+  }
+
   async updateConversationTitle(sessionId: string, title: string) {
     await this.client.action("aiConversations", "update", {
       method: "PUT",

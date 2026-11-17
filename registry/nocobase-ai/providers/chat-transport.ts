@@ -1,5 +1,6 @@
 import type { ChatTransport } from "ai";
 import type { AIService } from "../services";
+import { markStreamRequestFailure } from "./conversation-run";
 import type { AIChatMessage, AIChatRequestContext } from "./types";
 import { createNocoBaseUIMessageStream } from "./ui-message-stream";
 
@@ -18,6 +19,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     toolCallIds: string[];
     toolCallResults: Array<{ id: string; result: unknown }>;
   };
+  private reconnectAbort?: AbortController;
 
   constructor(
     private readonly options: {
@@ -65,7 +67,36 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     }
   }
 
-  async sendMessages({
+  /**
+   * Closes a stream opened by `reconnectToStream`. The chat only hands its abort signal to
+   * `sendMessages`, so stopping a resumed stream has to go through here.
+   */
+  abortReconnect() {
+    this.reconnectAbort?.abort();
+    this.reconnectAbort = undefined;
+  }
+
+  async sendMessages(
+    options: Parameters<ChatTransport<AIChatMessage>["sendMessages"]>[0]
+  ) {
+    try {
+      return await this.openMessageStream(options);
+    } catch (error) {
+      throw markStreamRequestFailure(error);
+    }
+  }
+
+  async reconnectToStream() {
+    const abort = new AbortController();
+    this.reconnectAbort = abort;
+    try {
+      return await this.openReconnectStream(abort.signal);
+    } catch (error) {
+      throw markStreamRequestFailure(error);
+    }
+  }
+
+  private async openMessageStream({
     messages,
     abortSignal,
   }: Parameters<ChatTransport<AIChatMessage>["sendMessages"]>[0]) {
@@ -144,7 +175,7 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
     return createNocoBaseUIMessageStream(stream);
   }
 
-  async reconnectToStream() {
+  private async openReconnectStream(signal: AbortSignal) {
     const pendingToolResume = this.pendingToolResume;
     this.pendingToolResume = undefined;
     const pendingConversationResume = this.pendingConversationResume;
@@ -156,23 +187,28 @@ export class NocoBaseChatTransport implements ChatTransport<AIChatMessage> {
 
     if (!pendingToolResume) {
       const stream = await this.options.service.resumeConversationStream(
-        context.sessionId
+        context.sessionId,
+        signal
       );
       return createNocoBaseUIMessageStream(stream, null, {
         seedMessage: pendingConversationResume?.message,
+        expectStreamEnd: false,
       });
     }
-    const stream = await this.options.service.resumeToolCallStream({
-      sessionId: context.sessionId,
-      messageId: pendingToolResume.messageId,
-      toolCallIds: pendingToolResume.toolCallIds,
-      toolCallResults: pendingToolResume.toolCallResults,
-      model: {
-        llmService: context.model.llmService,
-        model: context.model.value,
+    const stream = await this.options.service.resumeToolCallStream(
+      {
+        sessionId: context.sessionId,
+        messageId: pendingToolResume.messageId,
+        toolCallIds: pendingToolResume.toolCallIds,
+        toolCallResults: pendingToolResume.toolCallResults,
+        model: {
+          llmService: context.model.llmService,
+          model: context.model.value,
+        },
+        webSearch: context.task?.webSearch,
       },
-      webSearch: context.task?.webSearch,
-    });
+      signal
+    );
     return createNocoBaseUIMessageStream(
       stream,
       pendingToolResume.responseMessageId,

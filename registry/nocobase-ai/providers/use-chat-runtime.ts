@@ -30,6 +30,7 @@ export function useChatRuntime({
   taskRuntimeRef,
   webSearchRef,
   conversationFinishedHandlerRef,
+  conversationInterruptedHandlerRef,
   moveAttachments,
   moveWorkContext,
   dispatch,
@@ -41,6 +42,14 @@ export function useChatRuntime({
   webSearchRef: MutableRefObject<boolean>;
   conversationFinishedHandlerRef: MutableRefObject<
     | ((conversationId: string, chat: Chat<AIChatMessage>) => Promise<void>)
+    | undefined
+  >;
+  conversationInterruptedHandlerRef: MutableRefObject<
+    | ((
+        conversationId: string,
+        chat: Chat<AIChatMessage>,
+        error: Error
+      ) => void)
     | undefined
   >;
   moveAttachments: (from: string, to: string) => void;
@@ -167,6 +176,16 @@ export function useChatRuntime({
             );
           });
         },
+        // Not called when the stream is stopped on purpose, only when it fails.
+        onError: (error) => {
+          const interruptedConversationId = runtimeConversationId;
+          if (interruptedConversationId === AI_DRAFT_CONVERSATION_ID) return;
+          conversationInterruptedHandlerRef.current?.(
+            interruptedConversationId,
+            chat,
+            error
+          );
+        },
         transport,
       });
       chatsRef.current.set(conversationId, chat);
@@ -178,6 +197,7 @@ export function useChatRuntime({
     [
       ai,
       conversationFinishedHandlerRef,
+      conversationInterruptedHandlerRef,
       dispatch,
       getRuntimeContext,
       id,
@@ -192,6 +212,17 @@ export function useChatRuntime({
     []
   );
 
+  /**
+   * The id a chat is registered under right now. A draft gets its server id while its first request
+   * is in flight, before the provider state has caught up.
+   */
+  const getConversationId = useCallback((chat: Chat<AIChatMessage>) => {
+    for (const [conversationId, candidate] of chatsRef.current) {
+      if (candidate === chat) return conversationId;
+    }
+    return undefined;
+  }, []);
+
   const remove = useCallback((conversationId: string) => {
     chatsRef.current.delete(conversationId);
     transportsRef.current.delete(conversationId);
@@ -205,6 +236,7 @@ export function useChatRuntime({
     getRuntimeContext,
     getChat,
     getTransport,
+    getConversationId,
     remove,
   };
 }

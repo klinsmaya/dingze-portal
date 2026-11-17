@@ -56,6 +56,7 @@ type AIProviderValue = {
   listConversations: (keyword?: string) => Promise<AIConversation[]>;
   getConversationMessages: AIService["getConversationMessages"];
   getConversationActiveState: AIService["getConversationActiveState"];
+  abortConversation: AIService["abortConversation"];
   updateConversationTitle: (sessionId: string, title: string) => Promise<void>;
   destroyConversation: (sessionId: string) => Promise<void>;
   updateToolCallDecision: AIService["updateToolCallDecision"];
@@ -299,6 +300,7 @@ function AIProviderRuntime({
       getConversationMessages: service.getConversationMessages.bind(service),
       getConversationActiveState:
         service.getConversationActiveState.bind(service),
+      abortConversation: service.abortConversation.bind(service),
       updateConversationTitle: service.updateConversationTitle.bind(service),
       destroyConversation: service.destroyConversation.bind(service),
       updateToolCallDecision: service.updateToolCallDecision.bind(service),

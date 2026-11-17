@@ -5,6 +5,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import type {
+  AIChatMessage,
   AIEmployeeTask,
   AIWorkContextItem,
 } from "./types";
@@ -121,6 +122,38 @@ export function getAIWorkContextToolScope(items: AIWorkContextItem[]) {
   return {
     allowedFrontendToolIds: [...frontendToolIds],
     allowedFormIds: [...formIds],
+  };
+}
+
+/**
+ * What a tool call of this conversation may reach. `messages` are the conversation up to and
+ * including the message that carries the call.
+ *
+ * Frontend tools are scoped to the conversation, not to the latest message: the server binds a
+ * conversation's frontend tools from the first message that offers them and keeps offering them to
+ * the model afterwards. Scoping them to the latest message would turn a call the server allowed
+ * into "not available in this conversation context" whenever that message was sent without the
+ * page context — an error the model answers by doing the same step again. A tool still has to be
+ * registered by the page to run. Forms stay scoped to the latest user message.
+ */
+export function getAIConversationToolScope(
+  messages: Array<Pick<AIChatMessage, "role" | "metadata">>,
+  taskContext: AIWorkContextItem[] = []
+) {
+  const userContexts = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.metadata?.workContext ?? []);
+  const latest = getAIWorkContextToolScope([
+    ...taskContext,
+    ...(userContexts.at(-1) ?? []),
+  ]);
+  const conversation = getAIWorkContextToolScope([
+    ...taskContext,
+    ...userContexts.flat(),
+  ]);
+  return {
+    allowedFrontendToolIds: conversation.allowedFrontendToolIds,
+    allowedFormIds: latest.allowedFormIds,
   };
 }
 

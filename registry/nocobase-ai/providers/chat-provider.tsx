@@ -31,6 +31,12 @@ import {
   type AIChatController,
 } from "./chat-controller";
 import { useAI } from "./ai-provider";
+import {
+  AIStreamInterruptedError,
+  ConversationRunGuard,
+  isStreamRequestFailure,
+  type ConversationRunPort,
+} from "./conversation-run";
 import { findAIModel, getAIModelKey } from "./model";
 import { useChatAttachments } from "./use-chat-attachments";
 import {
@@ -69,6 +75,9 @@ const UNAVAILABLE_EMPLOYEE: AIEmployee = {
   position: "Not configured",
   greeting: "Configure an AI employee and model to start chatting.",
 };
+const isChatRunning = (chat: Chat<AIChatMessage>) =>
+  chat.status === "streaming" || chat.status === "submitted";
+
 const UNAVAILABLE_MODEL: AIModel = {
   value: "__unavailable__",
   label: "No enabled model",
@@ -116,6 +125,14 @@ export function AIChatProvider({
   const conversationFinishedHandlerRef =
     useRef<
       (conversationId: string, chat: Chat<AIChatMessage>) => Promise<void>
+    >(undefined);
+  const conversationInterruptedHandlerRef =
+    useRef<
+      (
+        conversationId: string,
+        chat: Chat<AIChatMessage>,
+        error: Error
+      ) => void
     >(undefined);
   const [historyError, setHistoryError] = useState<Error>();
   const [interactionError, setInteractionError] = useState<Error>();
@@ -198,6 +215,7 @@ export function AIChatProvider({
     getRuntimeContext,
     getChat,
     getTransport,
+    getConversationId,
     remove: removeChatRuntime,
   } = useChatRuntime({
     id,
@@ -206,6 +224,7 @@ export function AIChatProvider({
     taskRuntimeRef,
     webSearchRef,
     conversationFinishedHandlerRef,
+    conversationInterruptedHandlerRef,
     moveAttachments,
     moveWorkContext,
     dispatch,
@@ -250,6 +269,48 @@ export function AIChatProvider({
     onMarkRead: markConversationRead,
     onError: setHistoryError,
   });
+
+  // One run per conversation: see ConversationRunGuard. The port reads through a ref so the guard,
+  // and what it knows about interrupted streams, survives a reload of the AI configuration.
+  const runPort: ConversationRunPort<Chat<AIChatMessage>> = {
+    getActiveState: ai.getConversationActiveState,
+    abort: ai.abortConversation,
+    refresh: async (conversationId, targetChat) => {
+      if (isChatRunning(targetChat)) return;
+      await refreshConversationMessages(conversationId, targetChat, {
+        updateRead:
+          stateRef.current.activeConversationId === conversationId &&
+          chatSurfaceOpenRef.current,
+      });
+    },
+    reattach: async (conversationId, targetChat) => {
+      getTransport(conversationId)?.prepareConversationResume(
+        targetChat.messages
+      );
+      await targetChat.resumeStream();
+    },
+  };
+  const runPortRef = useRef(runPort);
+  runPortRef.current = runPort;
+  const [runGuard] = useState(
+    () =>
+      new ConversationRunGuard<Chat<AIChatMessage>>({
+        getActiveState: (conversationId) =>
+          runPortRef.current.getActiveState(conversationId),
+        abort: (conversationId) => runPortRef.current.abort(conversationId),
+        refresh: (conversationId, targetChat) =>
+          runPortRef.current.refresh(conversationId, targetChat),
+        reattach: (conversationId, targetChat) =>
+          runPortRef.current.reattach(conversationId, targetChat),
+      })
+  );
+  const ensureConversationIdle = useCallback(
+    (conversationId: string, targetChat: Chat<AIChatMessage>) =>
+      conversationId === AI_DRAFT_CONVERSATION_ID
+        ? Promise.resolve(true)
+        : runGuard.ensureIdle(conversationId, targetChat),
+    [runGuard]
+  );
 
   const activeChat = getChat(state.activeConversationId);
   const chat = useChatState(activeChat);
@@ -303,6 +364,20 @@ export function AIChatProvider({
         return;
 
       setInteractionError(undefined);
+      // The last stream of this conversation may have ended while the server was still answering.
+      // Sending now would start a second run next to it and save two answers.
+      try {
+        if (!(await ensureConversationIdle(currentId, activeChat))) return;
+      } catch (error) {
+        if (interactionVersionRef.current !== operationVersion) return;
+        setInteractionError(
+          error instanceof Error
+            ? error
+            : new Error("Unable to check the conversation state")
+        );
+        return;
+      }
+      if (interactionVersionRef.current !== operationVersion) return;
       let currentWorkContext = unresolvedWorkContext;
       try {
         currentWorkContext = resolvePageContext
@@ -324,7 +399,8 @@ export function AIChatProvider({
         latestState.selectedEmployeeUsername !== employee.username ||
         latestState.selectedModel !== getAIModelKey(model) ||
         getConversationAttachments(currentId) !== currentAttachments ||
-        getConversationWorkContext(currentId) !== unresolvedWorkContext
+        getConversationWorkContext(currentId) !== unresolvedWorkContext ||
+        isChatRunning(activeChat)
       ) {
         return;
       }
@@ -401,6 +477,7 @@ export function AIChatProvider({
       ai.models,
       activeChat,
       editingMessageId,
+      ensureConversationIdle,
       getConversationAttachments,
       getConversationWorkContext,
       resolvePageContext,
@@ -431,6 +508,7 @@ export function AIChatProvider({
     transportsRef,
     getRuntimeContext,
     refreshConversationMessages,
+    ensureConversationIdle,
     setHistoryError,
     editingSnapshotRef,
     setEditingMessageId,
@@ -444,6 +522,7 @@ export function AIChatProvider({
 
   const handleConversationFinished = useCallback(
     async (conversationId: string, targetChat: Chat<AIChatMessage>) => {
+      runGuard.markFinished(conversationId);
       try {
         const updateRead =
           stateRef.current.activeConversationId === conversationId &&
@@ -465,9 +544,66 @@ export function AIChatProvider({
       processAutomaticToolApprovals,
       refreshConversationCatalog,
       refreshConversationMessages,
+      runGuard,
     ]
   );
   conversationFinishedHandlerRef.current = handleConversationFinished;
+
+  const handleConversationInterrupted = useCallback(
+    (
+      conversationId: string,
+      targetChat: Chat<AIChatMessage>,
+      error: Error
+    ) => {
+      runGuard.markInterrupted(conversationId);
+      const delay = runGuard.nextRecoveryDelay(conversationId);
+      if (delay === undefined) return;
+      // The chat reports the failure right after this callback returns, hence the timer.
+      setTimeout(() => {
+        if (isChatRunning(targetChat)) return;
+        const keepLocalWhenIdle = isStreamRequestFailure(error);
+        void runGuard
+          .settle(conversationId, targetChat, { keepLocalWhenIdle })
+          .then(async (outcome) => {
+            if (outcome !== "idle" || keepLocalWhenIdle) return;
+            // The run finished on the server while the connection was down; the chat now shows
+            // what it saved, so a dropped connection is no longer worth an error.
+            if (
+              error instanceof AIStreamInterruptedError &&
+              targetChat.status === "error"
+            ) {
+              targetChat.clearError();
+            }
+            await refreshConversationCatalog();
+            await processAutomaticToolApprovals(conversationId, targetChat);
+          })
+          // Still unreachable: the conversation stays unsettled and is checked again before the
+          // next run starts.
+          .catch(() => undefined);
+      }, delay);
+    },
+    [processAutomaticToolApprovals, refreshConversationCatalog, runGuard]
+  );
+  conversationInterruptedHandlerRef.current = handleConversationInterrupted;
+
+  const stop = useCallback(async () => {
+    const conversationId =
+      getConversationId(activeChat) ?? stateRef.current.activeConversationId;
+    await activeChat.stop();
+    getTransport(conversationId)?.abortReconnect();
+    if (conversationId === AI_DRAFT_CONVERSATION_ID) return;
+    // Closing the stream does not stop the server. Left running, it would save an answer the user
+    // no longer sees, and a second one for the question they ask next.
+    try {
+      await runGuard.settle(conversationId, activeChat, { abort: true });
+    } catch (error) {
+      setHistoryError(
+        error instanceof Error
+          ? error
+          : new Error("Unable to stop the conversation")
+      );
+    }
+  }, [activeChat, getConversationId, getTransport, runGuard]);
 
   const startNewConversation = useCallback(() => {
     invalidatePendingInteraction();
@@ -662,6 +798,7 @@ export function AIChatProvider({
         throw resolvedError;
       }
       removeChatRuntime(conversationId);
+      runGuard.forget(conversationId);
       clearAutomaticToolApproval(conversationId);
       removeConversationAttachments(conversationId);
       removeConversationWorkContext(conversationId);
@@ -694,6 +831,7 @@ export function AIChatProvider({
       removeConversationAttachments,
       removeConversationWorkContext,
       removeChatRuntime,
+      runGuard,
       setConversationAttachments,
       setConversationWorkContext,
       updateConversationCatalog,
@@ -749,7 +887,7 @@ export function AIChatProvider({
       addWorkContext,
       removeWorkContext,
       send,
-      stop: () => activeChat.stop(),
+      stop,
       regenerate: () => activeChat.regenerate(),
       retryMessage,
       decideToolCall,
@@ -855,6 +993,7 @@ export function AIChatProvider({
       retryMessage,
       decideToolCall,
       send,
+      stop,
       setDraft,
       uploadFiles,
       startEditingMessage,

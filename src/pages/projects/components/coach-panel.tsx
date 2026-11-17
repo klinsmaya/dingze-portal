@@ -97,12 +97,22 @@ function readOutcome(part: AIToolRendererProps["part"]) {
   // A card left open when the user typed something else is closed by the server as “ignored”:
   // nothing was written, so it must not read as 已写入草稿.
   const ignored = typeof message === "string" && /ignored the application for tools usage/i.test(message);
+  // The user pressed 停止 before this card was confirmed: the server closes the call as aborted.
+  const stopped = typeof message === "string" && /interrupted because the conversation was aborted/i.test(message);
   const ok =
     state === "output-available" &&
     status !== "error" &&
     !invoke.startsWith("reject") &&
-    !ignored;
-  return { ok, message: ignored ? "这张卡没有确认，表里没有任何改动。" : message };
+    !ignored &&
+    !stopped;
+  return {
+    ok,
+    message: stopped
+      ? "这一轮已停止，表里没有任何改动。"
+      : ignored
+        ? "这张卡没有确认，表里没有任何改动。"
+        : message,
+  };
 }
 
 /**
