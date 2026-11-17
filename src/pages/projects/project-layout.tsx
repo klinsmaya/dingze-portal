@@ -18,9 +18,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, type ProjectRole, type StageKey } from "@dingze/shared";
 import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
+import { brandHome } from "@/lib/dingze/portal-role";
 import { stageBlockers, stageEntryCode, stageProgress } from "@/lib/dingze/progress";
 import { useProject, useProjectOverview } from "@/lib/dingze/queries";
 import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { cn } from "@/lib/utils";
 
 import type { ProjectContextValue } from "./project-context";
@@ -127,9 +129,10 @@ function ProjectTopbar({
   // 在填写页时，亮起当前这张表所在的阶段。
   const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
   const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;
+  const home = brandHome(useSystemRoles().roles, projectId);
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-gold px-3 text-band-foreground md:px-4" style={{ background: "var(--band)" }}>
-      <Link to="/projects" aria-label="返回我的项目" title="我的项目" className="flex shrink-0 items-center gap-2 rounded-lg pr-1 hover:bg-white/10">
+      <Link to={home.to} aria-label={`返回${home.label}`} title={home.label} className="flex shrink-0 items-center gap-2 rounded-lg pr-1 hover:bg-white/10">
         <span className="flex size-9 items-center justify-center rounded-lg border border-white/25 font-heading text-lg font-bold text-gold">责</span>
         <span className="hidden font-heading text-[15px] font-bold tracking-wide xl:inline">自驱战略</span>
       </Link>
