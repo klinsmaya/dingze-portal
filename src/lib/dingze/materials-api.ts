@@ -84,7 +84,7 @@ export function useAttachments(project: ProjectSummary, code?: string) {
 export function useAddMaterial(project: ProjectSummary) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (values: { title: string; kind: "file" | "note" | "attachment"; artifactCode?: string; fileName?: string; size?: number; text: string; fileId?: number }) =>
+    mutationFn: (values: { title: string; kind: "file" | "note" | "attachment"; artifactCode?: string; fileName?: string; size?: number; text: string; fileId?: number; shared?: boolean }) =>
       post<{ id: number; truncated: boolean; searchable: boolean }>(project, "addMaterial", values),
     onSuccess: (_, values) => {
       client.invalidateQueries({ queryKey: keys.materials(project.id) });

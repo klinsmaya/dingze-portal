@@ -25,6 +25,7 @@ import { AIPageContextScope, defineAIFrontendTool } from "@/extensions/nocobase-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -102,14 +103,17 @@ function MaterialLibrary({ materials, canEdit, canShare, canDeleteAny, currentUs
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [pasting, setPasting] = useState(false);
+  // 上传时就标成企业共用；传完自动取消勾选，免得后面的项目专属资料被顺手共用出去。
+  const [shareNew, setShareNew] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
 
   const uploadFiles = useMaterialUpload({ offerFill: true });
   const upload = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy(true);
-    await uploadFiles(files);
+    await uploadFiles(files, { shared: canShare && shareNew });
     setBusy(false);
+    setShareNew(false);
     if (fileRef.current) fileRef.current.value = "";
   };
   // 拖拽上传：拖到上传区松手即传（测试反馈 12）。
@@ -154,6 +158,12 @@ function MaterialLibrary({ materials, canEdit, canShare, canDeleteAny, currentUs
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
+            {canShare ? (
+              <label className="flex items-center gap-1.5 pr-1 text-sm" title="企业简介、组织架构这类每个项目都要用的资料：勾上再上传，本企业其他项目不用重传">
+                <Checkbox checked={shareNew} onCheckedChange={(next) => setShareNew(next === true)} />
+                企业共用
+              </label>
+            ) : null}
             <Button size={empty ? "lg" : "default"} disabled={busy} onClick={() => fileRef.current?.click()}>
               <FileUp /> {busy ? "上传中…" : "选择文件上传"}
             </Button>
@@ -230,10 +240,11 @@ function MaterialLibrary({ materials, canEdit, canShare, canDeleteAny, currentUs
         onClose={() => setPasting(false)}
         onSubmit={(title, text) =>
           add.mutate(
-            { title, kind: "note", text },
+            { title, kind: "note", text, ...(canShare && shareNew ? { shared: true } : {}) },
             {
               onSuccess: () => {
                 setPasting(false);
+                setShareNew(false);
                 toast.success("资料已保存");
               },
               onError: (e) => toast.error(errorMessage(e)),
