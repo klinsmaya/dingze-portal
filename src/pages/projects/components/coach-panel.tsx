@@ -36,6 +36,7 @@ import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { useMaterials } from "@/lib/dingze/materials-api";
 import { type ChangeOp, OP_LABELS, type ProposedChange, applyChanges, describeValue } from "@/lib/dingze/changes";
 import { COACH_BY_STAGE, PROPOSE_TOOL } from "@/lib/dingze/coach";
+import { isRepeatedResult, proposalNote } from "@/lib/dingze/proposal-save";
 import { ROLE_GUIDES } from "@/lib/dingze/guide";
 import { PORTAL_ROLE_LABELS, type PortalRole, portalRoleIn } from "@/lib/dingze/portal-role";
 import { useSystemRoles } from "@/lib/dingze/system-roles";
@@ -148,7 +149,9 @@ function SuggestionCard({
   if (decided) {
     const outcome = readOutcome(part);
     const ok = !rejected && outcome.ok;
-    const message = rejected && !outcome.message ? "表里没有任何改动。" : outcome.message;
+    if (ok && isRepeatedResult(outcome.message)) return <RepeatedNote />;
+    // A successful result goes on with instructions for the consultant: the user sees its first sentence.
+    const message = rejected && !outcome.message ? "表里没有任何改动。" : ok && outcome.message ? proposalNote(outcome.message) : outcome.message;
     return (
       <div className="rounded-xl border bg-card p-3 text-sm">
         <div
@@ -177,8 +180,25 @@ function SuggestionCard({
       action={disabled ? undefined : { label: "不采纳", onClick: () => reject("建议内容不完整，用户不采纳") }}
       resetKeys={[JSON.stringify(args)]}
     >
-      <PendingCard args={args} live={live.current} disabled={disabled} onApprove={onApprove} onReject={reject} onRevise={onRevise} />
+      <PendingCard
+        args={args}
+        callId={(part as { toolCallId?: string }).toolCallId ?? ""}
+        live={live.current}
+        disabled={disabled}
+        onApprove={onApprove}
+        onReject={reject}
+        onRevise={onRevise}
+      />
     </RegionErrorBoundary>
+  );
+}
+
+/** In place of a card that only repeats one already written: there is nothing to confirm. */
+function RepeatedNote() {
+  return (
+    <p className="rounded-xl border bg-card px-3 py-2 text-xs text-muted-foreground" role="status">
+      数字咨询师又出了一张同样的修改卡。这组修改已经在草稿里，已替你跳过，没有重复写入。
+    </p>
   );
 }
 
@@ -235,6 +255,7 @@ function cardRows(session: EditSession, changes: ProposedChange[]) {
  */
 function PendingCard({
   args,
+  callId,
   live,
   disabled,
   onApprove,
@@ -242,6 +263,7 @@ function PendingCard({
   onRevise,
 }: {
   args: ProposalArgs;
+  callId: string;
   /** Arrived in this session (not replayed history): preview on the canvas right away. */
   live: boolean;
   disabled?: boolean;
@@ -275,8 +297,25 @@ function PendingCard({
   // Once the confirmed change is in the draft the preview has done its job. Keeping it up until the
   // conversation finishes would leave the table read-only and show the change applied twice.
   const written = decided && session?.draft !== draftAtDecision.current;
-  // The same card issued again after it was already written (测试反馈 1): nothing left to preview.
-  const repeated = !decided && !!session?.proposalWritten(changes);
+  // The same card issued again after it was already written (测试反馈 1): nothing left to preview,
+  // and nothing left to confirm. It is answered for the user (the consultant is told it is already
+  // written) and shows as a one-line note; only a consultant that keeps issuing it gets the card,
+  // with a hint, in front of the user.
+  const alreadyWritten = !!session?.proposalWritten(changes);
+  const answered = !!session?.repeats.repeatAnswered(callId);
+  const answering = alreadyWritten && !decided && !!session?.repeats.canAnswerRepeat(changes, callId);
+  const repeated = answered || (!decided && alreadyWritten);
+  useEffect(() => {
+    if (!session || !answering || disabled) return;
+    if (!session.repeats.answerRepeat(changes, callId)) return;
+    decide(() => {
+      Promise.resolve(onApprove()).catch(() => {
+        session.repeats.repeatFailed(callId);
+        setDecided(false);
+      });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answering, disabled]);
   // 改一下 is not a decision: the card stays open, can be cancelled, and 确认修改 stays available.
   const [revising, setRevising] = useState(false);
   const key = JSON.stringify(built?.items ?? []);
@@ -329,6 +368,7 @@ function PendingCard({
     if (anchor) locateAnchor(anchor);
   };
 
+  if (answered || answering) return <RepeatedNote />;
   return (
     <div className={cn("flex flex-col gap-2 rounded-xl border-2 border-dashed p-3 text-sm", related && "ring-2 ring-offset-1 ring-[color:var(--dz-ai)]")} style={{ borderColor: "var(--dz-ai)", background: "var(--dz-ai-soft)" }}>
       <div className="flex items-center justify-between gap-2 text-xs font-bold" style={{ color: "var(--dz-ai)" }}>
@@ -398,7 +438,9 @@ function PendingCard({
           ))}
           {impact && (impact.before || impact.after) ? (
             <span className="text-muted-foreground">
-              必须改的问题 {impact.before} → {impact.after}
+              {impact.before === impact.after && !impact.fixed.length && !impact.added.length
+                ? `必须改的问题仍有 ${impact.after} 处（这张卡不涉及）`
+                : `必须改的问题 ${impact.before} → ${impact.after}`}
               {impact.fixed.length ? <span className="text-status-done-foreground">，解决：{impact.fixed.slice(0, 2).map((x) => x.message).join("；")}</span> : null}
               {impact.added.length ? <span className="text-destructive">，新增：{impact.added.slice(0, 2).map((x) => x.message).join("；")}</span> : null}
             </span>
@@ -442,7 +484,7 @@ function PendingCard({
           正在改这条建议：请在下面的对话框说明怎么改，数字咨询师会重出修改卡。不改了就点“取消改一下”，仍可直接“确认修改”。
         </p>
       ) : null}
-      <p className="text-[11px] text-muted-foreground">确认后写入草稿、记入“修改”，可撤销；稍后自动保存。</p>
+      <p className="text-[11px] text-muted-foreground">确认后写入草稿并保存，记入“修改”，可撤销。</p>
     </div>
   );
 }
@@ -457,7 +499,7 @@ function NoBadge({ no }: { no: number }) {
   );
 }
 
-function ProposalRenderer(props: AIToolRendererProps) {
+export function ProposalRenderer(props: AIToolRendererProps) {
   const { toolId } = readProposal(props.part);
   if (toolId?.endsWith(`:${PROPOSE_TOOL}`))
     return <SuggestionCard {...props} />;
