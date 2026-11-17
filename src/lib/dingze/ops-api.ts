@@ -62,6 +62,8 @@ export type OrgUnit = {
   id: number;
   name: string;
   kind: "company" | "department" | "team";
+  /** 企业自己的层级叫法（事业部、中心…）；用内置叫法时为空。 */
+  kindName?: string | null;
   sort: number;
   parentId: number | null;
   headId: number | null;
@@ -173,13 +175,14 @@ export const opsApi = {
     id?: number;
     name: string;
     kind?: OrgUnit["kind"];
+    kindName?: string | null;
     parentId?: number | null;
     headId?: number | null;
     headName?: string | null;
     duty?: string | null;
     sort?: number;
   }) => post<OrgUnit>("saveOrgUnit", values),
-  importOrgUnits: (values: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] }) =>
+  importOrgUnits: (values: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; kindName?: string | null; head?: string; duty?: string }[] }) =>
     post<{ created: number; updated: number; changes: number }>("importOrgUnits", values),
   setMemberDepartment: (values: { enterpriseId: number; userId: number; orgUnitId: number | null }) => post<{ updated: number }>("setMemberDepartment", values),
   deleteOrgUnit: (values: { enterpriseId: number; projectId?: number; id: number }) => post("deleteOrgUnit", values),

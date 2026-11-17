@@ -2,6 +2,8 @@ import { ClipboardPaste, Network, Pencil, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { ORG_KIND_LABELS, ORG_KIND_NAME_LIMIT, ORG_KIND_SUGGESTIONS, orgKindFromName, orgKindLabel } from "@dingze/shared";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,13 +23,17 @@ import { ImportSource } from "@/components/dingze/import-source";
 import { ORG_TEMPLATE } from "@/lib/dingze/import-templates";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type EnterpriseDetail, type OrgUnit, opsApi } from "@/lib/dingze/ops-api";
-import { type OrgNode, flattenOrgUnits, parseOrgTable } from "@/lib/dingze/org-units";
+import { type OrgNode, flattenOrgUnits, orgSubtreeIds, parseOrgTable } from "@/lib/dingze/org-units";
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
 
 import { ConfirmAction } from "./confirm-action";
-import { ORG_KIND_LABELS } from "./labels";
 
-type Draft = { id?: number; name: string; kind: OrgUnit["kind"]; parentId: number | null; headId: number | null; headName: string; duty: string };
+// kind 是层级名称，企业自己定（事业部、中心、科室…）；保存时由 orgKindFromName 得出用途和要记的叫法。
+// customKind：名称不在备选里，或用户选了“自定义…”，这时显示输入框。
+type Draft = { id?: number; name: string; kind: string; customKind: boolean; parentId: number | null; headId: number | null; headName: string; duty: string };
+
+const CUSTOM_KIND = "__custom";
+const draftKind = (label: string) => ({ kind: label, customKind: !ORG_KIND_SUGGESTIONS.includes(label) });
 
 export type OrgPerson = { id: number; name: string; username?: string };
 /** Where the org is edited: 「本企业」 (enterpriseId) or a project's 资料 page (projectId too). */
@@ -87,7 +93,7 @@ export function OrgUnitsEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {intro ?? (
           <p className="text-sm text-muted-foreground">
-            部门用于成员归属、责任分工、部门承接与计分卡；可按“公司 › 部门 › 团队”分层。
+            部门用于成员归属、责任分工、部门承接与计分卡；层级名称按贵公司的叫法填，上下级不限层数。
           </p>
         )}
         <span className="flex flex-wrap gap-2">
@@ -95,7 +101,7 @@ export function OrgUnitsEditor({
           <Button variant="outline" onClick={() => setImporting(true)}>
             <ClipboardPaste /> 从 Excel 粘贴
           </Button>
-          <Button onClick={() => setDraft({ name: "", kind: "department", parentId: null, headId: null, headName: "", duty: "" })}>
+          <Button onClick={() => setDraft({ name: "", ...draftKind(ORG_KIND_LABELS.department), parentId: null, headId: null, headName: "", duty: "" })}>
             <Plus /> 新增部门
           </Button>
         </span>
@@ -120,7 +126,7 @@ export function OrgUnitsEditor({
                   {node.depth > 0 ? <span className="text-muted-foreground">└</span> : null}
                   <span className="truncate font-medium">{node.name}</span>
                   <Badge variant="outline" className="shrink-0">
-                    {ORG_KIND_LABELS[node.kind] ?? node.kind}
+                    {orgKindLabel(node)}
                   </Badge>
                   {node.headId || node.headName ? (
                     <span className="truncate text-xs text-muted-foreground">
@@ -134,7 +140,7 @@ export function OrgUnitsEditor({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setDraft({ name: "", kind: "team", parentId: node.id, headId: null, headName: "", duty: "" })}
+                onClick={() => setDraft({ name: "", ...draftKind(node.kind === "company" ? ORG_KIND_LABELS.department : ORG_KIND_LABELS.team), parentId: node.id, headId: null, headName: "", duty: "" })}
               >
                 <Plus /> 下级
               </Button>
@@ -142,7 +148,7 @@ export function OrgUnitsEditor({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={`编辑 ${node.name}`}
-                onClick={() => setDraft({ id: node.id, name: node.name, kind: node.kind, parentId: node.parentId, headId: node.headId, headName: node.headName ?? "", duty: node.duty ?? "" })}
+                onClick={() => setDraft({ id: node.id, name: node.name, ...draftKind(orgKindLabel(node)), parentId: node.parentId, headId: node.headId, headName: node.headName ?? "", duty: node.duty ?? "" })}
               >
                 <Pencil />
               </Button>
@@ -198,12 +204,14 @@ function OrgUnitDialog({
     setValue(draft);
   }
   const save = useOpsMutation(opsApi.saveOrgUnit);
+  const blocked = value?.id ? orgSubtreeIds(nodes, value.id) : new Set<number>();
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!value) return;
+    const unit = { id: value.id, name: value.name, parentId: value.parentId, headId: value.headId };
     save.mutate(
-      { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}), ...value, name: value.name.trim(), headName: value.headId ? null : value.headName.trim() || null, duty: value.duty.trim() || null },
+      { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}), ...unit, ...orgKindFromName(value.kind), name: value.name.trim(), headName: value.headId ? null : value.headName.trim() || null, duty: value.duty.trim() || null },
       {
         onSuccess: () => {
           toast.success(value.id ? "已保存" : "已新增");
@@ -231,17 +239,19 @@ function OrgUnitDialog({
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="org-kind">类型</FieldLabel>
+                  {/* 备选之外选“自定义…”，按贵公司自己的叫法填；上下级由右边的“上级”定，不限层数。 */}
                   <NativeSelect
                     id="org-kind"
                     className="w-full"
-                    value={value.kind}
-                    onChange={(e) => setValue({ ...value, kind: e.target.value as OrgUnit["kind"] })}
+                    value={value.customKind ? CUSTOM_KIND : value.kind}
+                    onChange={(e) => setValue(e.target.value === CUSTOM_KIND ? { ...value, kind: "", customKind: true } : { ...value, kind: e.target.value, customKind: false })}
                   >
-                    {Object.entries(ORG_KIND_LABELS).map(([k, label]) => (
-                      <NativeSelectOption key={k} value={k}>
+                    {ORG_KIND_SUGGESTIONS.map((label) => (
+                      <NativeSelectOption key={label} value={label}>
                         {label}
                       </NativeSelectOption>
                     ))}
+                    <NativeSelectOption value={CUSTOM_KIND}>自定义…</NativeSelectOption>
                   </NativeSelect>
                 </Field>
                 <Field>
@@ -253,8 +263,9 @@ function OrgUnitDialog({
                     onChange={(e) => setValue({ ...value, parentId: e.target.value ? Number(e.target.value) : null })}
                   >
                     <NativeSelectOption value="">（无）</NativeSelectOption>
+                    {/* 自己和自己的下级不能当上级，否则组织树绕成圈。 */}
                     {nodes
-                      .filter((n) => n.id !== value.id)
+                      .filter((n) => !blocked.has(n.id))
                       .map((n) => (
                         <NativeSelectOption key={n.id} value={n.id}>
                           {"　".repeat(n.depth)}
@@ -264,6 +275,20 @@ function OrgUnitDialog({
                   </NativeSelect>
                 </Field>
               </div>
+              {value.customKind ? (
+                <Field>
+                  <FieldLabel htmlFor="org-kind-name">自定义类型</FieldLabel>
+                  <Input
+                    id="org-kind-name"
+                    value={value.kind}
+                    maxLength={ORG_KIND_NAME_LIMIT}
+                    placeholder="按贵公司的叫法填，如 大区、分公司、工段"
+                    autoFocus
+                    required
+                    onChange={(e) => setValue({ ...value, kind: e.target.value })}
+                  />
+                </Field>
+              ) : null}
               <Field>
                 <FieldLabel htmlFor="org-head">负责人</FieldLabel>
                 <NativeSelect
@@ -396,7 +421,7 @@ function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boo
           <DialogDescription>列依次是：名称、上级、类型、负责人、职责。</DialogDescription>
         </DialogHeader>
         <ImportSource template={ORG_TEMPLATE} onText={setText} />
-        <Textarea autoFocus aria-label="组织表内容" className="min-h-40 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"市场营销部\t\t部门\t赵部长\t工商业与居民用户开发、客户服务\n大客户组\t市场营销部\t团队\t\t重点工业用户维护"} />
+        <Textarea autoFocus aria-label="组织表内容" className="min-h-40 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"市场营销部\t\t部门\t赵部长\t工商业与居民用户开发、客户服务\n大客户组\t市场营销部\t班组\t\t重点工业用户维护"} />
         {rows.length ? (
           <ul className="max-h-48 overflow-y-auto rounded-lg border text-xs">
             {rows.map((r) => (
@@ -404,7 +429,7 @@ function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boo
                 <Badge variant={existing.has(r.name) ? "secondary" : "default"}>{existing.has(r.name) ? "更新" : "新增"}</Badge>
                 <span className="font-medium">{r.name}</span>
                 <span className="text-muted-foreground">
-                  {[r.parent && `上级 ${r.parent}`, ORG_KIND_LABELS[r.kind], r.head && `负责人 ${r.head}${personId(r.head) ? "" : "（无账号）"}`].filter(Boolean).join(" · ")}
+                  {[r.parent && `上级 ${r.parent}`, orgKindLabel(r), r.head && `负责人 ${r.head}${personId(r.head) ? "" : "（无账号）"}`].filter(Boolean).join(" · ")}
                 </span>
               </li>
             ))}

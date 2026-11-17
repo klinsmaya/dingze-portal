@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ORG_DEPENDENT_CODES, type OrgUnitFacts, appendOrgNotice, describeOrgChange, getArtifactDef } from '../../shared';
+import { ORG_DEPENDENT_CODES, type OrgUnitFacts, appendOrgNotice, describeOrgChange, getArtifactDef, orgKindFromName } from '../../shared';
 import { HttpError, SYSTEM_ROLES, currentUserId, loadProjectContext, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
 import { notify, projectMemberIds } from './notify';
 
@@ -249,6 +249,7 @@ export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
         id: json.id,
         name: json.name,
         kind: json.kind,
+        kindName: json.kindName ?? null,
         sort: json.sort,
         parentId: json.parentId ?? null,
         headId: json.headId ?? null,
@@ -312,6 +313,7 @@ export async function removeEnterpriseMember(ctx: Context, input: { enterpriseId
 const orgFacts = (u: any): OrgUnitFacts => ({
   name: u.get('name'),
   kind: u.get('kind'),
+  kindName: u.get('kindName') ?? null,
   parentId: u.get('parentId') ?? null,
   headId: u.get('headId') ?? null,
   headName: u.get('headName') ?? null,
@@ -349,6 +351,10 @@ async function flagOrgChange(ctx: Context, enterpriseId: number, line: string | 
  * 组织在哪维护：运营和企业管理员在「本企业」；项目里的企业项目负责人、主咨询师在项目「资料」页
  * （带 projectId，2026-10-16 资料页调整）。组织是企业级的，改了对本企业所有项目生效。
  */
+/** 层级：企业自己的叫法（kindName）优先，由它定用途；没有就按传来的 kind，都没有按部门。 */
+const orgKindValues = (input: { kind?: unknown; kindName?: unknown }) =>
+  orgKindFromName(String(input.kindName ?? '').trim() || input.kind);
+
 async function loadOrgScope(ctx: Context, input: { enterpriseId: number; projectId?: number }) {
   if (!input.projectId) return loadEnterpriseScope(ctx, input.enterpriseId, true);
   const pc = await loadProjectContext(ctx, input.projectId);
@@ -368,6 +374,7 @@ export async function saveOrgUnit(
     id?: number;
     name: string;
     kind?: string;
+    kindName?: string | null;
     parentId?: number | null;
     headId?: number | null;
     headName?: string | null;
@@ -382,11 +389,17 @@ export async function saveOrgUnit(
   if (parentId) {
     const parent = await repo.findOne({ filter: { id: parentId, enterpriseId } });
     if (!parent) throw new HttpError(400, '上级部门不属于本企业');
-    if (input.id && parentId === Number(input.id)) throw new HttpError(400, '上级部门不能是自己');
+    // 层级不限深度，所以要防绕圈：从新上级一路往上，不能碰到自己。
+    let cursor: any = parent;
+    for (let hops = 0; input.id && cursor && hops < 50; hops++) {
+      if (Number(cursor.get('id')) === Number(input.id)) throw new HttpError(400, '上级部门不能是自己或自己的下级');
+      const upper = cursor.get('parentId');
+      cursor = upper ? await repo.findOne({ filter: { id: upper, enterpriseId } }) : null;
+    }
   }
   const values = {
     name: text(input.name, '部门名称', 50),
-    kind: ['company', 'department', 'team'].includes(String(input.kind)) ? input.kind : 'department',
+    ...orgKindValues(input),
     parentId,
     headId: input.headId ? positiveId(input.headId, '负责人') : null,
     headName: input.headId ? null : String(input.headName ?? '').trim().slice(0, 30) || null,
@@ -412,7 +425,7 @@ export async function saveOrgUnit(
  */
 export async function importOrgUnits(
   ctx: Context,
-  input: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; head?: string; duty?: string }[] },
+  input: { enterpriseId: number; projectId?: number; rows: { name: string; parent?: string; kind?: string; kindName?: string | null; head?: string; duty?: string }[] },
 ) {
   const { enterprise, spaceName } = await loadOrgScope(ctx, input);
   const enterpriseId = enterprise.get('id') as number;
@@ -435,7 +448,7 @@ export async function importOrgUnits(
       const existing = byName.get(name);
       const values: Record<string, unknown> = {
         name,
-        kind: ['company', 'department', 'team'].includes(String(row.kind)) ? row.kind : 'department',
+        ...orgKindValues(row),
         parentId: parent && parent !== existing ? parent.get('id') : null,
         ...(head ? { headId, headName: headId ? null : head.slice(0, 30) } : {}),
         ...(String(row.duty ?? '').trim() ? { duty: String(row.duty).trim().slice(0, 500) } : {}),

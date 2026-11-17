@@ -1,5 +1,5 @@
 import { samePayload } from "@/lib/dingze/stable-json";
-import { ArrowRight, CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, Building2, CheckCheck, ClipboardPaste, Download, Eye, FileCheck2, FileUp, Save, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,8 @@ import {
   canSetProfileStatus,
   getArtifactDef,
   isArtifactCode,
+  orgKindFromName,
+  orgKindLabel,
   profileItem,
 } from "@dingze/shared";
 
@@ -23,6 +25,7 @@ import { AIPageContextScope, defineAIFrontendTool } from "@/extensions/nocobase-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -33,7 +36,7 @@ import { PROPOSE_TOOL } from "@/lib/dingze/coach";
 import { errorMessage } from "@/lib/dingze/errors";
 import { MATERIAL_ACCEPT } from "@/lib/dingze/extract-text";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
-import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useMaterials, useProfile, useSaveProfile, useSetMaterialLibrary } from "@/lib/dingze/materials-api";
+import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useMaterials, useProfile, useSaveProfile, useSetMaterialLibrary, useSetMaterialShared } from "@/lib/dingze/materials-api";
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
 import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
@@ -92,21 +95,25 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { materials: MaterialSummary[]; canEdit: boolean; canDeleteAny: boolean; currentUserId: number | null }) {
+function MaterialLibrary({ materials, canEdit, canShare, canDeleteAny, currentUserId }: { materials: MaterialSummary[]; canEdit: boolean; canShare: boolean; canDeleteAny: boolean; currentUserId: number | null }) {
   const { project } = useProjectContext();
   const add = useAddMaterial(project);
   const remove = useDeleteMaterial(project);
+  const share = useSetMaterialShared(project);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [pasting, setPasting] = useState(false);
+  // 上传时就标成企业共用；传完自动取消勾选，免得后面的项目专属资料被顺手共用出去。
+  const [shareNew, setShareNew] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
 
   const uploadFiles = useMaterialUpload({ offerFill: true });
   const upload = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy(true);
-    await uploadFiles(files);
+    await uploadFiles(files, { shared: canShare && shareNew });
     setBusy(false);
+    setShareNew(false);
     if (fileRef.current) fileRef.current.value = "";
   };
   // 拖拽上传：拖到上传区松手即传（测试反馈 12）。
@@ -119,7 +126,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         <h2 id="library" className="font-heading text-lg font-bold text-brand">
           ① 上传资料
         </h2>
-        <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载</span>
+        <span className="text-xs text-muted-foreground">保存原件，并提取文字供数字咨询师检索、注明出处；只有本项目成员能查看和下载，设为「企业共用」的本企业其他项目也能用</span>
       </div>
       {canEdit ? (
         <div
@@ -151,6 +158,12 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
+            {canShare ? (
+              <label className="flex items-center gap-1.5 pr-1 text-sm" title="企业简介、组织架构这类每个项目都要用的资料：勾上再上传，本企业其他项目不用重传">
+                <Checkbox checked={shareNew} onCheckedChange={(next) => setShareNew(next === true)} />
+                企业共用
+              </label>
+            ) : null}
             <Button size={empty ? "lg" : "default"} disabled={busy} onClick={() => fileRef.current?.click()}>
               <FileUp /> {busy ? "上传中…" : "选择文件上传"}
             </Button>
@@ -169,6 +182,11 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
               <span className="w-10 text-xs text-muted-foreground tabular-nums">#{m.id}</span>
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{m.title}</span>
+                {m.shared ? (
+                  <Badge variant="secondary" className="ml-2">
+                    企业共用{m.fromProject ? ` · 来自《${m.fromProject}》` : ""}
+                  </Badge>
+                ) : null}
                 <span className="block text-xs text-muted-foreground">
                   {m.kind === "note" ? "粘贴的文字" : m.fileName}
                   {[m.hasFile ? `原件 ${formatSize(m.size)}` : "", m.chars ? `可检索 ${m.chars} 字` : "无可检索文字", m.by, formatTime(m.at)].filter(Boolean).join(" · ")}
@@ -182,7 +200,18 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
               <Button variant="ghost" size="sm" disabled={!m.chars} onClick={() => setViewing(m.id)}>
                 <Eye /> 文字
               </Button>
-              {canEdit && (canDeleteAny || m.byId === currentUserId) ? (
+              {canShare && !m.fromProject ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={share.isPending}
+                  title={m.shared ? "取消后，本企业其他项目不再能用这份资料" : "企业简介、组织架构这类每个项目都要用的资料：设为共用后，本企业其他项目不用重传"}
+                  onClick={() => share.mutate({ id: m.id, shared: !m.shared }, { onError: (e) => toast.error(errorMessage(e)) })}
+                >
+                  <Building2 /> {m.shared ? "取消共用" : "设为企业共用"}
+                </Button>
+              ) : null}
+              {canEdit && !m.fromProject && (canDeleteAny || m.byId === currentUserId) ? (
                 <ConfirmAction
                   trigger={
                     <Button variant="ghost" size="sm" aria-label={`删除资料《${m.title}》`}>
@@ -190,7 +219,7 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
                     </Button>
                   }
                   title={`删除资料《${m.title}》？`}
-                  description="原件和提取的文字一起删除，数字咨询师不再能检索到它。"
+                  description={`原件和提取的文字一起删除，数字咨询师不再能检索到它。${m.shared ? "这是企业共用资料，本企业其他项目也不再能用。" : ""}`}
                   confirmLabel="删除"
                   destructive
                   onConfirm={() =>
@@ -211,10 +240,11 @@ function MaterialLibrary({ materials, canEdit, canDeleteAny, currentUserId }: { 
         onClose={() => setPasting(false)}
         onSubmit={(title, text) =>
           add.mutate(
-            { title, kind: "note", text },
+            { title, kind: "note", text, ...(canShare && shareNew ? { shared: true } : {}) },
             {
               onSuccess: () => {
                 setPasting(false);
+                setShareNew(false);
                 toast.success("资料已保存");
               },
               onError: (e) => toast.error(errorMessage(e)),
@@ -391,7 +421,7 @@ export default function MaterialsPage() {
         name: PROPOSE_TOOL,
         title: "建议写入企业画像或组织架构",
         description:
-          "把整理出的内容写入企业画像或组织架构，用户确认后才写入。企业画像：path 用 items.+ 新增（值为完整对象 {id, category: fact|assumption|unknown|todo, topic, content, source: 资料编号字符串或空, status: 'draft'}），或 items.<id>.content 修改。组织架构：path 用 org.+，值为 {name, parent?: 上级部门名称, kind?: company|department|team, head?: 负责人姓名, duty?: 职责}，上级排在下级前面；同名部门会更新。组织是企业级的，对本企业所有项目生效。",
+          "把整理出的内容写入企业画像或组织架构，用户确认后才写入。企业画像：path 用 items.+ 新增（值为完整对象 {id, category: fact|assumption|unknown|todo, topic, content, source: 资料编号字符串或空, status: 'draft'}），或 items.<id>.content 修改。组织架构：path 用 org.+，值为 {name, parent?: 上级部门名称, kind?: 层级名称，照企业自己的叫法写（如 集团、公司、事业部、中心、部门、科室、团队、班组）, head?: 负责人姓名, duty?: 职责}，上级排在下级前面；同名部门会更新。组织是企业级的，对本企业所有项目生效。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -416,7 +446,7 @@ export default function MaterialsPage() {
                 .map((v) => ({
                   name: String(v.name).trim(),
                   parent: typeof v.parent === "string" ? v.parent.trim() : undefined,
-                  kind: ["company", "department", "team"].includes(String(v.kind)) ? String(v.kind) : "department",
+                  ...orgKindFromName(v.kind),
                   head: typeof v.head === "string" ? v.head.trim() : undefined,
                   duty: typeof v.duty === "string" ? v.duty.trim() : undefined,
                 }));
@@ -452,7 +482,7 @@ export default function MaterialsPage() {
       enterprise: project.enterprise?.name,
       page: "资料：企业画像与组织架构",
       guide: `先用 ${SEARCH_MATERIALS_TOOL} 查阅资料。企业画像：能确认的写成“事实”，规划依赖但未验证的写成“假设”，不清楚的写成“未知”，需要企业补的写成“待补”；每条注明来源资料编号 source。组织架构：从组织架构图、部门职责说明里整理部门名称、上级、类型、负责人和职责，用 org.+ 提出；已有的同名部门只补缺的职责和负责人，不要臆造资料里没有的部门。`,
-      orgUnits: (overview.orgUnits ?? []).map((u) => ({ name: u.name, parent: overview.orgUnits?.find((p) => p.id === u.parentId)?.name ?? null, kind: u.kind, head: u.headName ?? null, duty: u.duty ?? null })),
+      orgUnits: (overview.orgUnits ?? []).map((u) => ({ name: u.name, parent: overview.orgUnits?.find((p) => p.id === u.parentId)?.name ?? null, kind: orgKindLabel(u), head: u.headName ?? null, duty: u.duty ?? null })),
       userCanEditOrg: latest.current.canEditOrg,
       materials: (materials.data ?? []).map((m) => ({ id: m.id, title: m.title, chars: m.chars })),
       profile: latest.current.items,
@@ -625,7 +655,7 @@ export default function MaterialsPage() {
               <Skeleton className="h-32" />
             ) : (
               <>
-                <MaterialLibrary materials={materialList} canEdit={canEdit} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canManageLibrary(role, isAdmin)} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
                 {canManageLibrary(role, isAdmin) ? <MemberUploads /> : null}
               </>
             )

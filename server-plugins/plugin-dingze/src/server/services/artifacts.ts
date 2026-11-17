@@ -473,6 +473,7 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
       id: o.get('id'),
       name: o.get('name'),
       kind: o.get('kind'),
+      kindName: o.get('kindName') ?? null,
       parentId: o.get('parentId') ?? null,
       headId: o.get('headId') ?? null,
       headName: o.get('headName') ?? null,

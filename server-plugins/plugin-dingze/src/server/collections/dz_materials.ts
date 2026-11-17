@@ -15,6 +15,8 @@ export default defineCollection({
     { type: 'string', name: 'kind', defaultValue: 'file' },
     { type: 'string', name: 'artifactCode' },
     { type: 'boolean', name: 'inLibrary', defaultValue: true },
+    // 企业共用：同一企业的其他项目也能看到、检索、下载这份资料库资料（仍归本项目管）。
+    { type: 'boolean', name: 'shared', defaultValue: false },
     { type: 'string', name: 'fileName' },
     { type: 'integer', name: 'size' },
     { type: 'text', name: 'text' },

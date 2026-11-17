@@ -80,6 +80,8 @@ export type ProjectOrgUnit = {
   id: number;
   name: string;
   kind: "company" | "department" | "team";
+  /** 企业自己的层级叫法（事业部、中心…）；用内置叫法时为空。 */
+  kindName?: string | null;
   parentId: number | null;
   headId: number | null;
   headName?: string | null;
