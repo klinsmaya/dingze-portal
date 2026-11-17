@@ -19,6 +19,7 @@ import { ChatSurface } from "./components/surfaces/chat-surface";
 import { ChatSurfaceActions } from "./components/surfaces/chat-surface-actions";
 import {
   AIChatProvider,
+  type AIProviderProps,
   type AIToolInvokerMap,
   useAI,
   useAIChatBase,
@@ -33,10 +34,15 @@ const DEFAULT_SIDE_PANEL_WIDTH = 450;
 export function NocoBaseAIExtensionProvider({
   children,
   toolInvokers,
-}: PropsWithChildren<{ toolInvokers?: AIToolInvokerMap }>) {
+  service = nocobaseAIService,
+}: PropsWithChildren<{
+  toolInvokers?: AIToolInvokerMap;
+  /** Swap the service to narrow or reorder what the application offers, e.g. its AI employees. */
+  service?: AIProviderProps["service"];
+}>) {
   return (
     <NocoBaseAIRootProvider
-      service={nocobaseAIService}
+      service={service}
       toolInvokers={toolInvokers}
     >
       <NocoBaseAIGlobalEntry>{children}</NocoBaseAIGlobalEntry>

@@ -1,3 +1,5 @@
+import { orgKindFromName } from "@dingze/shared";
+
 import type { OrgUnit } from "./ops-api";
 
 export type OrgNode = OrgUnit & { depth: number };
@@ -27,6 +29,21 @@ export function flattenOrgUnits(units: OrgUnit[]): OrgNode[] {
   return out;
 }
 
+/** A unit and everything under it: none of these can become its parent. */
+export function orgSubtreeIds(units: Pick<OrgUnit, "id" | "parentId">[], id: number): Set<number> {
+  const out = new Set([id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const u of units) {
+      if (u.parentId && out.has(u.parentId) && !out.has(u.id)) {
+        out.add(u.id);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
 /** “燃气运营部 › 调度中心” */
 export function orgUnitPath(units: OrgUnit[], id: number | null | undefined): string {
   const byId = new Map(units.map((u) => [u.id, u]));
@@ -39,9 +56,7 @@ export function orgUnitPath(units: OrgUnit[], id: number | null | undefined): st
   return names.join(" › ");
 }
 
-export type OrgRow = { name: string; parent: string; kind: OrgUnit["kind"]; head: string; duty: string };
-
-const KIND_WORDS: Record<string, OrgUnit["kind"]> = { 公司: "company", 部门: "department", 团队: "team", 中心: "department", 小组: "team", 班组: "team" };
+export type OrgRow = { name: string; parent: string; kind: OrgUnit["kind"]; kindName: string | null; head: string; duty: string };
 
 /**
  * 从 Excel 粘贴组织表：每行“名称 | 上级 | 类型 | 负责人 | 职责”（后几列可省），可带表头。
@@ -62,7 +77,8 @@ export function parseOrgTable(text: string): { rows: OrgRow[]; problems: string[
       problems.push(`「${name}」重复，只取第一行`);
       continue;
     }
-    rows.push({ name: name.slice(0, 50), parent, kind: KIND_WORDS[kind] ?? "department", head: head.slice(0, 30), duty: duty.slice(0, 500) });
+    // 类型可以是企业自己的叫法（事业部、中心、科室…）：照原样记下来。
+    rows.push({ name: name.slice(0, 50), parent, ...orgKindFromName(kind), head: head.slice(0, 30), duty: duty.slice(0, 500) });
   }
   const names = new Set(rows.map((r) => r.name));
   const ordered: OrgRow[] = [];

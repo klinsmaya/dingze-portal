@@ -560,7 +560,12 @@ function StarterPrompts({ host, starters }: { host: RefObject<HTMLDivElement | n
     ["结合企业资料起草", "结合我们企业的资料，建议这张表怎么填；先给思路，我同意后再出修改卡。"],
   ];
   return (
-    <div className="absolute inset-x-3 z-10 flex flex-col gap-1.5 rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur" style={{ bottom }} aria-label="可以这样开始">
+    // 面板再矮也不顶出对话区：最多长到右上角菜单下面，放不下就在卡片里滚（字号「大」时曾盖住上面的使用指南）。
+    <div
+      className="absolute inset-x-3 z-10 flex flex-col gap-1.5 overflow-y-auto rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur"
+      style={{ bottom, maxHeight: `calc(100% - ${bottom}px - 2.75rem)` }}
+      aria-label="可以这样开始"
+    >
       <span className="text-xs text-muted-foreground">
         {def ? (
           <>
@@ -694,7 +699,8 @@ function RoleGuide({ role, code }: { role: PortalRole; code: string | null }) {
       `我是${PORTAL_ROLE_LABELS[role]}${table ? `，正在看《${table}》，它现在是「${STATUS_LABELS[status ?? "not_started"]}」` : ""}。按我的角色和现在的状态，下一步该做什么？只说要做的事。`,
     );
   return (
-    <section aria-label="怎么用" className="shrink-0 border-b bg-muted/30 px-3 py-1.5 text-xs">
+    // 指南可以被压矮（自己滚动），把高度让给对话区；对话区的最小高度见 CoachPanel。
+    <section aria-label="怎么用" className="min-h-8 shrink overflow-y-auto border-b bg-muted/30 px-3 py-1.5 text-xs">
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setCollapsed(open)} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-1 py-0.5 font-semibold">
           <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")} />
@@ -768,7 +774,8 @@ export function CoachPanel({
         <div
           ref={host}
           data-dingze-chat
-          className="relative flex min-h-0 flex-1 flex-col"
+          // 最小高度按 rem 留够“开场句卡片 + 输入框”，字号放大时一起变大，上面的指南让出地方。
+          className="relative flex min-h-[min(25rem,calc(100%-2.5rem))] flex-1 flex-col"
           onKeyDownCapture={(e) => {
             if (e.key === "Enter" && !e.shiftKey && (e.target as HTMLElement).closest("textarea")) lastSendAt = Date.now();
           }}

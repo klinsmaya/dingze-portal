@@ -6,6 +6,9 @@ import { HttpError, type ProjectContext, currentUserId } from './access';
 // 资料与企业画像. A material keeps the original upload (dz_material_files on local storage) and
 // the text extracted from it in the browser, which the digital consultants search. Every read,
 // including the original file, goes through the project check.
+//
+// 企业共用：资料库里的资料可以标成「企业共用」（企业简介、组织架构这类每个项目都要用的），同一企业的
+// 其他项目就能看到、检索、下载，不用重传。资料仍归上传它的项目管：只有那个项目能取消共用或删除。
 
 const who = (user: any) => (user ? user.get('nickname') || user.get('username') || '' : '');
 
@@ -20,14 +23,39 @@ function requireLibraryManager(pc: ProjectContext) {
   if (!canManageLibrary(pc.projectRole, pc.access.isConsultAdmin)) throw new HttpError(403, '只有企业管理员和咨询师可以管理项目资料库和企业画像');
 }
 
-const inLibrary = (m: any) => m.get('inLibrary') !== false && m.get('kind') !== 'attachment';
+// 表下附件建的时候 inLibrary 就是 false，「加入资料库」后变 true；资料库的资料一直是 true（老数据为空也算）。
+const inLibrary = (m: any) => m.get('inLibrary') !== false;
 
-const summary = (m: any) => ({
+/** 本项目读得到的资料：自己的，加上同一企业其他项目标了「企业共用」的。`from` 给出别的项目的名字。 */
+export async function materialScope(ctx: Context, pc: ProjectContext) {
+  const projectId = pc.project.get('id');
+  const enterpriseId = pc.project.get('enterpriseId');
+  const others: any[] = enterpriseId
+    ? await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId, id: { $ne: projectId } }, fields: ['id', 'name'] })
+    : [];
+  const from = new Map<number, string>(others.map((p) => [Number(p.get('id')), String(p.get('name') ?? '')]));
+  const filter = from.size ? { $or: [{ projectId }, { shared: true, projectId: { $in: [...from.keys()] } }] } : { projectId };
+  return { filter, from };
+}
+
+/** 一份本项目读得到的资料（含别的项目共用过来的）。 */
+async function findReadable(ctx: Context, pc: ProjectContext, id: unknown) {
+  const { filter } = await materialScope(ctx, pc);
+  const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { $and: [{ id: Number(id) }, filter] } });
+  // 共用过来的只算资料库里的；本项目自己的附件照旧能读。
+  if (!m || (Number(m.get('projectId')) !== Number(pc.project.get('id')) && !inLibrary(m))) throw new HttpError(404, '资料不存在');
+  return m;
+}
+
+const summary = (m: any, from?: Map<number, string>) => ({
   id: Number(m.get('id')),
   title: m.get('title'),
   kind: m.get('kind'),
   artifactCode: m.get('artifactCode') ?? null,
   inLibrary: inLibrary(m),
+  shared: !!m.get('shared'),
+  /** 别的项目共用过来的：那个项目的名字；本项目自己的为 null。 */
+  fromProject: from?.get(Number(m.get('projectId'))) ?? null,
   fileName: m.get('fileName') ?? '',
   size: m.get('size') ?? 0,
   chars: m.get('chars') ?? 0,
@@ -37,17 +65,18 @@ const summary = (m: any) => ({
   byId: m.get('createdById'),
 });
 
-const SUMMARY_FIELDS = ['id', 'title', 'kind', 'artifactCode', 'inLibrary', 'fileName', 'size', 'chars', 'fileId', 'createdAt', 'createdById'];
+const SUMMARY_FIELDS = ['id', 'projectId', 'title', 'kind', 'artifactCode', 'inLibrary', 'shared', 'fileName', 'size', 'chars', 'fileId', 'createdAt', 'createdById'];
 
 /** The project library: what the digital consultants search. Attachments show here only once added to it. */
 export async function listMaterials(ctx: Context, pc: ProjectContext) {
+  const { filter, from } = await materialScope(ctx, pc);
   const rows = await ctx.db.getRepository('dz_materials').find({
-    filter: { projectId: pc.project.get('id') },
+    filter,
     fields: SUMMARY_FIELDS,
     appends: ['createdBy'],
     sort: ['-createdAt'],
   });
-  return rows.filter(inLibrary).map(summary);
+  return rows.filter(inLibrary).map((m: any) => summary(m, from));
 }
 
 /** Files attached to one table while filling it (not in the library unless added). */
@@ -70,13 +99,24 @@ export async function setMaterialLibrary(ctx: Context, pc: ProjectContext, id: u
   const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
   if (!m) throw new HttpError(404, '资料不存在');
   if (m.get('kind') !== 'attachment') throw new HttpError(400, '只有表下附件需要加入资料库');
-  await m.update({ inLibrary: on !== false && on !== 'false' });
+  const next = on !== false && on !== 'false';
+  // 移出资料库的附件不再共用。
+  await m.update(next ? { inLibrary: true } : { inLibrary: false, shared: false });
+  return summary(m);
+}
+
+/** 把资料库里的一份资料设为「企业共用」（本企业其他项目也能用），或取消。只能在上传它的项目里改。 */
+export async function setMaterialShared(ctx: Context, pc: ProjectContext, id: unknown, on: unknown) {
+  requireLibraryManager(pc);
+  const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
+  if (!m) throw new HttpError(404, '资料不存在，或是别的项目共用过来的（请到上传它的项目里改）');
+  if (!inLibrary(m)) throw new HttpError(400, '先把这份附件加入资料库，才能设为企业共用');
+  await m.update({ shared: on !== false && on !== 'false' });
   return summary(m);
 }
 
 export async function getMaterial(ctx: Context, pc: ProjectContext, id: unknown, offset: unknown) {
-  const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
-  if (!m) throw new HttpError(404, '资料不存在');
+  const m = await findReadable(ctx, pc, id);
   const text = (m.get('text') as string) ?? '';
   const from = Math.max(0, Number(offset) || 0);
   return { id: Number(m.get('id')), title: m.get('title'), fileName: m.get('fileName') ?? '', hasFile: !!m.get('fileId'), chars: text.length, offset: from, text: text.slice(from, from + 20_000) };
@@ -85,7 +125,7 @@ export async function getMaterial(ctx: Context, pc: ProjectContext, id: unknown,
 export async function addMaterial(
   ctx: Context,
   pc: ProjectContext,
-  input: { title?: unknown; kind?: unknown; fileName?: unknown; size?: unknown; text?: unknown; fileId?: unknown; artifactCode?: unknown },
+  input: { title?: unknown; kind?: unknown; fileName?: unknown; size?: unknown; text?: unknown; fileId?: unknown; artifactCode?: unknown; shared?: unknown },
 ) {
   const attachment = input.kind === 'attachment';
   if (attachment) {
@@ -113,6 +153,7 @@ export async function addMaterial(
         kind: attachment ? 'attachment' : input.kind === 'note' ? 'note' : 'file',
         artifactCode: attachment ? String(input.artifactCode) : null,
         inLibrary: !attachment,
+        shared: !attachment && input.shared === true,
         fileName: String(input.fileName ?? file?.get('title') ?? '').slice(0, 200),
         size: Number(input.size) || Number(file?.get('size')) || 0,
         mimetype: file?.get('mimetype') ?? null,
@@ -128,12 +169,12 @@ export async function addMaterial(
   });
 }
 
-/** Streams the original upload of a material to a member of its project. */
+/** Streams the original upload of a material to a member of its project (or, for a shared one, of a project of the same enterprise). */
 export async function downloadMaterial(ctx: Context, pc: ProjectContext, id: unknown) {
-  const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
-  if (!m) throw new HttpError(404, '资料不存在');
+  const m = await findReadable(ctx, pc, id);
   if (!m.get('fileId')) throw new HttpError(404, '这份资料没有保存原件（是直接粘贴的文字）');
-  const file: any = await ctx.db.getRepository('dz_material_files').findOne({ filterByTk: m.get('fileId'), filter: { projectId: pc.project.get('id') } });
+  // 原件挂在上传它的项目下（共用过来的资料也是）。
+  const file: any = await ctx.db.getRepository('dz_material_files').findOne({ filterByTk: m.get('fileId'), filter: { projectId: m.get('projectId') } });
   if (!file) throw new HttpError(404, '原件已不存在');
   const fileManager: any = ctx.app.pm.get('file-manager');
   const { stream, contentType } = await fileManager.getFileStream(file);
@@ -148,7 +189,7 @@ export async function downloadMaterial(ctx: Context, pc: ProjectContext, id: unk
 export async function deleteMaterial(ctx: Context, pc: ProjectContext, id: unknown) {
   requireEditor(pc);
   const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
-  if (!m) throw new HttpError(404, '资料不存在');
+  if (!m) throw new HttpError(404, '资料不存在，或是别的项目共用过来的（请到上传它的项目里删）');
   const mine = m.get('createdById') === currentUserId(ctx);
   // An attachment: its uploader or a library manager; a library material: library managers only.
   if (m.get('kind') === 'attachment' ? !mine && !canManageLibrary(pc.projectRole, pc.access.isConsultAdmin) : !canManageLibrary(pc.projectRole, pc.access.isConsultAdmin)) {
@@ -162,7 +203,8 @@ export async function deleteMaterial(ctx: Context, pc: ProjectContext, id: unkno
 }
 
 export async function searchMaterials(ctx: Context, pc: ProjectContext, query: unknown) {
-  const rows = await ctx.db.getRepository('dz_materials').find({ filter: { projectId: pc.project.get('id') }, fields: ['id', 'title', 'text', 'kind', 'inLibrary'] });
+  const { filter } = await materialScope(ctx, pc);
+  const rows = await ctx.db.getRepository('dz_materials').find({ filter, fields: ['id', 'title', 'text', 'kind', 'inLibrary'] });
   return searchSnippets(
     rows.filter(inLibrary).map((m: any) => ({ id: m.get('id'), title: m.get('title'), text: m.get('text') ?? '' })),
     String(query ?? ''),

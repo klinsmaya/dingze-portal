@@ -19,6 +19,7 @@ import { useProjectContext } from "../project-context";
 /**
  * Upload files as project materials: the text is read in the browser for the digital
  * consultants and the original is stored as well. Returns the new materials.
+ * `shared`：上传时就标成企业共用（本企业其他项目也能用）。
  */
 export function useMaterialUpload({ offerFill = false }: { offerFill?: boolean } = {}) {
   const { project, overview } = useProjectContext();
@@ -30,7 +31,7 @@ export function useMaterialUpload({ offerFill = false }: { offerFill?: boolean }
     return nextActionPath(project.id, nextAction(progressOf(overview.artifacts), overview.projectRole, service));
   };
   return useCallback(
-    async (files: FileList | File[] | null) => {
+    async (files: FileList | File[] | null, { shared = false }: { shared?: boolean } = {}) => {
       const added: { id: number; title: string }[] = [];
       const extracted: string[] = [];
       for (const file of Array.from(files ?? [])) {
@@ -41,7 +42,7 @@ export function useMaterialUpload({ offerFill = false }: { offerFill?: boolean }
           });
           const original = await uploadOriginal(file);
           const title = file.name.replace(/\.[^.]+$/, "");
-          const result = await add.mutateAsync({ title, kind: "file", fileName: file.name, size: file.size, text, fileId: original.id });
+          const result = await add.mutateAsync({ title, kind: "file", fileName: file.name, size: file.size, text, fileId: original.id, ...(shared ? { shared } : {}) });
           added.push({ id: (result as { id?: number }).id ?? 0, title });
           if (!result.searchable) {
             toast.warning(

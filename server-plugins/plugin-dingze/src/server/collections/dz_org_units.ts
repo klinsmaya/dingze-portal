@@ -11,6 +11,8 @@ export default defineCollection({
     { type: 'belongsTo', name: 'enterprise', target: 'dz_enterprises', foreignKey: 'enterpriseId' },
     { type: 'string', name: 'name', allowNull: false },
     { type: 'string', name: 'kind', defaultValue: 'department' },
+    // 企业自己的层级叫法（事业部、中心、科室…）；用内置叫法（公司 / 部门 / 团队）时为空 (0.38.0)。
+    { type: 'string', name: 'kindName' },
     { type: 'belongsTo', name: 'parent', target: 'dz_org_units', foreignKey: 'parentId' },
     { type: 'belongsTo', name: 'head', target: 'users', foreignKey: 'headId' },
     // 负责人没有账号时只记姓名；职责供 RACI 等表参考 (闭环第二批)。

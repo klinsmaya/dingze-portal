@@ -3,10 +3,12 @@ import { defineTools } from '@nocobase/ai';
 
 import { searchSnippets } from '../../../../shared';
 import { loadProjectContext } from '../../../../server/services/access';
+import { materialScope } from '../../../../server/services/materials';
 
 // Read the enterprise's own materials for the digital consultant: keyword search returns cited
 // snippets, an id returns the full text page by page. Access follows the chatting user's
-// project membership, so another enterprise's materials are never reachable.
+// project membership, so another enterprise's materials are never reachable. Materials another
+// project of the same enterprise marked 企业共用 are included.
 export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
@@ -34,9 +36,9 @@ export default defineTools({
     try {
       const pc = await loadProjectContext(ctx, args.projectId);
       const repo = ctx.db.getRepository('dz_materials');
-      const projectId = pc.project.get('id');
+      const { filter } = await materialScope(ctx, pc);
       if (args.id) {
-        const m = await repo.findOne({ filter: { id: Number(args.id), projectId } });
+        const m = await repo.findOne({ filter: { $and: [{ id: Number(args.id) }, filter] } });
         if (!m) return { status: 'error', content: `资料 ${args.id} 不存在` };
         const text = (m.get('text') as string) ?? '';
         const from = Math.max(0, Number(args.offset) || 0);
@@ -44,7 +46,7 @@ export default defineTools({
         const more = from + page.length < text.length ? `（共 ${text.length} 字，下一段 offset=${from + page.length}）` : '';
         return { status: 'success', content: `[资料 ${m.get('id')}《${m.get('title')}》]${more}\n${page}` };
       }
-      const rows = await repo.find({ filter: { projectId }, fields: ['id', 'title', 'text', 'chars'] });
+      const rows = await repo.find({ filter, fields: ['id', 'title', 'text', 'chars'] });
       if (!args.query?.trim()) {
         if (!rows.length) return { status: 'success', content: '企业还没有上传资料。' };
         return { status: 'success', content: `企业资料清单：\n${rows.map((m: any) => `[资料 ${m.get('id')}]《${m.get('title')}》${m.get('chars') ?? 0} 字`).join('\n')}\n传 id 读全文，或传 query 检索。` };

@@ -38,10 +38,11 @@ export const ACCOUNT_TEMPLATE: ImportTemplate = {
 export type EnterpriseRow = { name: string; shortName: string; size: "large" | "sme"; adminNickname: string; adminUsername: string; adminPhone?: string };
 export type AccountRow = { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string };
 
-const USERNAME = /^[A-Za-z0-9_.@-]{3,50}$/;
+export const USERNAME = /^[A-Za-z0-9_.@-]{3,50}$/;
 const ENTERPRISE_ROLES: ProjectRole[] = ["ent_lead", "dept_head", "member", "readonly"];
 
-function lines(text: string, header: string): string[][] {
+/** Pasted rows as trimmed cells; blank lines and the template's header row are dropped. */
+export function tableLines(text: string, header: string): string[][] {
   return text
     .split(/\r?\n/)
     .map((line) => line.split("\t").map((cell) => cell.trim()))
@@ -53,7 +54,7 @@ export function parseEnterpriseTable(text: string): { rows: EnterpriseRow[]; pro
   const rows: EnterpriseRow[] = [];
   const problems: string[] = [];
   const seen = new Set<string>();
-  lines(text, "企业全称").forEach(([name = "", shortName = "", size = "", adminNickname = "", adminUsername = "", adminPhone = ""], i) => {
+  tableLines(text, "企业全称").forEach(([name = "", shortName = "", size = "", adminNickname = "", adminUsername = "", adminPhone = ""], i) => {
     const at = `第 ${i + 1} 行`;
     if (!name || !shortName) return void problems.push(`${at}缺企业全称或简称`);
     if (shortName.length > 20) return void problems.push(`${at}简称超过 20 个字`);
@@ -77,7 +78,7 @@ export function parseAccountTable(text: string): { rows: AccountRow[]; problems:
   const rows: AccountRow[] = [];
   const problems: string[] = [];
   const seen = new Set<string>();
-  lines(text, "姓名").forEach(([nickname = "", username = "", phone = "", email = "", role = "", dept = ""], i) => {
+  tableLines(text, "姓名").forEach(([nickname = "", username = "", phone = "", email = "", role = "", dept = ""], i) => {
     const at = `第 ${i + 1} 行`;
     if (!nickname || !username) return void problems.push(`${at}缺姓名或登录名`);
     if (!USERNAME.test(username)) return void problems.push(`${at}登录名 ${username} 只能用字母、数字和 _ . @ -，至少 3 位`);

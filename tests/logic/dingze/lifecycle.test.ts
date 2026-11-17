@@ -8,6 +8,7 @@ import {
   getArtifactDef,
   isStageOpen,
   nextStatus,
+  stageGateCodes,
   staleTargets,
   unlockInfo,
   canPerform,
@@ -89,16 +90,21 @@ describe("unlocking", () => {
     expect(unlockInfo(getArtifactDef("S1-02"), states).unlocked).toBe(true);
   });
 
-  it("opens the 使命 / 愿景 worksheets once the strategy page has been saved, before it is finished", () => {
-    const locked = unlockInfo(getArtifactDef("M-MISSION"), {});
-    expect(locked.unlocked).toBe(false);
-    expect(locked.waitingFor).toContain("战略一页纸");
-    expect(unlockInfo(getArtifactDef("M-VISION"), { "S1-01": { status: "not_started" } }).unlocked).toBe(false);
-    const drafted: StateMap = { "S1-01": { status: "in_progress" } };
-    expect(unlockInfo(getArtifactDef("M-MISSION"), drafted).unlocked).toBe(true);
-    expect(unlockInfo(getArtifactDef("M-VISION"), drafted).unlocked).toBe(true);
+  it("opens the 使命 / 愿景 worksheets from the start, without waiting for 六分法", () => {
+    // 2026-11 客户反馈：这两张底稿是填六分法时对“目的”“方向”有争议才用的，不能等六分法填完。
+    expect(unlockInfo(getArtifactDef("M-MISSION"), {})).toEqual({ unlocked: true });
+    expect(unlockInfo(getArtifactDef("M-VISION"), { "S1-01": { status: "not_started" } })).toEqual({ unlocked: true });
+    expect(unlockInfo(getArtifactDef("M-VISION"), { "S1-01": { status: "in_progress" } }).unlocked).toBe(true);
     // Worksheets never hold back the next P0 table.
     expect(unlockInfo(getArtifactDef("S1-02"), { "S1-01": { status: "step_done" } }).unlocked).toBe(true);
+  });
+
+  it("keeps 经营预算 behind a first save of the table it belongs to", () => {
+    const stageOpen: StateMap = Object.fromEntries(stageGateCodes("strategy").map((c) => [c, { status: "locked" as const }]));
+    const waiting = unlockInfo(getArtifactDef("M-BUDGET"), stageOpen);
+    expect(waiting.unlocked).toBe(false);
+    expect(waiting.waitingFor).toContain("公司级年度目标");
+    expect(unlockInfo(getArtifactDef("M-BUDGET"), { ...stageOpen, "S2-03": { status: "in_progress" } }).unlocked).toBe(true);
   });
 
   it("does not let optional P1 worksheets block the strategy KPI table", () => {

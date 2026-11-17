@@ -76,10 +76,13 @@ export async function campDetail(ctx: Context, campId: unknown) {
   const projects = await campProjects(ctx, camp.get('id'));
   const ids = projects.map((p: any) => p.get('id'));
   const enterpriseIds = [...new Set(projects.map((p: any) => p.get('enterpriseId')))];
+  // 这些企业的全部项目（含不在本批的）：别的项目标了「企业共用」的资料也算这家企业有资料。
+  const siblings: any[] = enterpriseIds.length ? await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId: { $in: enterpriseIds } }, fields: ['id', 'enterpriseId'] }) : [];
+  const enterpriseOf = new Map<number, unknown>(siblings.map((s) => [Number(s.get('id')), s.get('enterpriseId')]));
   const [artifacts, units, materials, profiles, exportsRows, usage] = await Promise.all([
     ids.length ? ctx.db.getRepository('dz_artifacts').find({ filter: { projectId: { $in: ids } }, fields: ['projectId', 'code', 'status', 'stale', 'updatedAt'] }) : [],
     enterpriseIds.length ? ctx.db.getRepository('dz_org_units').find({ filter: { enterpriseId: { $in: enterpriseIds } } }) : [],
-    ids.length ? ctx.db.getRepository('dz_materials').find({ filter: { projectId: { $in: ids } }, fields: ['id', 'projectId'] }) : [],
+    ids.length ? ctx.db.getRepository('dz_materials').find({ filter: { $or: [{ projectId: { $in: ids } }, { shared: true, projectId: { $in: [...enterpriseOf.keys()] } }] }, fields: ['id', 'projectId', 'shared'] }) : [],
     ids.length ? ctx.db.getRepository('dz_profiles').find({ filter: { projectId: { $in: ids } } }) : [],
     ids.length ? ctx.db.getRepository('dz_exports').find({ filter: { projectId: { $in: ids }, draft: { $ne: true } }, fields: ['projectId', 'code'] }) : [],
     usageByProject(ctx),
@@ -99,7 +102,7 @@ export async function campDetail(ctx: Context, campId: unknown) {
     const startup = startupChecklist({
       orgUnits: (units as any[]).filter((u) => u.get('enterpriseId') === p.get('enterpriseId')).map((u) => ({ name: u.get('name'), kind: u.get('kind'), headId: u.get('headId'), headName: u.get('headName') })),
       team: members,
-      materialCount: (materials as any[]).filter((m) => m.get('projectId') === id).length,
+      materialCount: (materials as any[]).filter((m) => m.get('projectId') === id || (m.get('shared') && enterpriseOf.get(Number(m.get('projectId'))) === p.get('enterpriseId'))).length,
       profileItems: ((profiles as any[]).find((r) => r.get('projectId') === id)?.get('items') as { status: 'draft' | 'reviewed' | 'confirmed' }[]) ?? [],
     });
     const lastAt = own.reduce<string | null>((latest, a) => {

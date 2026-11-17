@@ -40,7 +40,7 @@ const ROUTE: Record<StageKey, TaskDef[]> = {
       label: "内容共识：纷繁战略简约化",
       steps: [
         { key: "s1-content", label: "战略简约六分法 / 战略屋", short: "内容共识", codes: ["S1-01"], subs: "sixfold" },
-        // 使命 / 愿景工具跟在六分法后面：填完六分法就能调出来校准，再定稿（2026-11 会议纪要）。
+        // 使命 / 愿景共识不依赖六分法：填六分法时对“目的”“方向”有争议就拿来用，随时能打开（2026-11 客户反馈）。
         { key: "s1-mission", label: "使命共识", short: "使命共识", codes: ["M-MISSION"], method: true },
         { key: "s1-vision", label: "愿景共识", short: "愿景共识", codes: ["M-VISION"], method: true },
       ],
