@@ -63,6 +63,7 @@ import { workflowContext } from "@/lib/dingze/coach-context";
 import { usePersistentFlag } from "@/lib/dingze/view-prefs";
 import { samePayload } from "@/lib/dingze/stable-json";
 import { PROPOSE_TOOL } from "@/lib/dingze/coach";
+import { proposalResultContent, useFlushSave } from "@/lib/dingze/proposal-save";
 import { errorMessage } from "@/lib/dingze/errors";
 import { importantToast } from "@/lib/dingze/toasts";
 
@@ -332,25 +333,30 @@ function Workspace({ code }: { code: string }) {
   const addComment = useAddComment(project, code);
   // 保存方式（产品走查拍板 1）：自动保存，停笔 2.5 秒后写一版；Ctrl / ⌘ + S 立刻保存。
   // 自动保存不弹提示，只改标题旁的状态字；手动保存才弹。
-  const onSave = (manual = true) => {
+  // Resolves with the saved revision, or `null` when the save failed (the error is shown here).
+  const onSave = async (manual = true): Promise<{ rev: number } | null> => {
     const log = edit.log;
     savingLog.current = log;
-    save.mutate(
-      { payload: draft, baseRev, changes: log.map(toSaved), aiSuggested: log.some((c) => c.via === "chat") || undefined },
-      {
-        onSuccess: (result) => {
-          if (manual) toast.success(`已保存 v${result.rev}`);
-          // Edits made 按批注 answer their comment thread.
-          const byComment = new Map<number, string[]>();
-          for (const c of log) if (c.commentId) byComment.set(c.commentId, [...(byComment.get(c.commentId) ?? []), c.label]);
-          for (const [id, labels] of byComment) {
-            addComment.mutate({ parentId: id, content: `已按批注修改（v${result.rev}）：${labels.slice(0, 5).join("；")}${labels.length > 5 ? ` 等 ${labels.length} 处` : ""}`, mentions: [] });
-          }
-          if (byComment.size) setActiveComment(null);
-        },
-        onError: (error) => toast.error(errorMessage(error)),
-      },
-    );
+    try {
+      const result = await save.mutateAsync({
+        payload: draft,
+        baseRev,
+        changes: log.map(toSaved),
+        aiSuggested: log.some((c) => c.via === "chat") || undefined,
+      });
+      if (manual) toast.success(`已保存 v${result.rev}`);
+      // Edits made 按批注 answer their comment thread.
+      const byComment = new Map<number, string[]>();
+      for (const c of log) if (c.commentId) byComment.set(c.commentId, [...(byComment.get(c.commentId) ?? []), c.label]);
+      for (const [id, labels] of byComment) {
+        addComment.mutate({ parentId: id, content: `已按批注修改（v${result.rev}）：${labels.slice(0, 5).join("；")}${labels.length > 5 ? ` 等 ${labels.length} 处` : ""}`, mentions: [] });
+      }
+      if (byComment.size) setActiveComment(null);
+      return result;
+    } catch (error) {
+      toast.error(errorMessage(error));
+      return null;
+    }
   };
   const canSave = !readOnly && EDITABLE_CODES.has(code);
   const saveShortcut = useRef(onSave);
@@ -433,6 +439,16 @@ function Workspace({ code }: { code: string }) {
     const timer = window.setTimeout(() => saveShortcut.current(false), AUTOSAVE_MS);
     return () => window.clearTimeout(timer);
   }, [autosaveOk, draft]);
+  // 确认修改卡之后不等自动保存，立刻存一版再把结果交回数字咨询师：它读表读的是服务端已保存的版本，
+  // 只写在页面草稿里的修改它读不到，会以为没写进去而把同一张卡再出一遍。
+  const flushSave = useFlushSave({
+    dirty,
+    saving: save.isPending,
+    canSave: canSave && !viewRev,
+    inSync: serverRev === baseRev,
+    rev: baseRev,
+    save: () => saveShortcut.current(false),
+  });
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   // 就地批注 (design 10 画面 5): the composer at the cell / node, its draft listed in the 批注 tab.
@@ -478,6 +494,7 @@ function Workspace({ code }: { code: string }) {
       previewDraft,
       setPreviewDraft,
       proposalWritten: (changes) => applied.has(changes, draft),
+      repeats: applied,
       revisionCell: (key: string) => {
         const data = revisionRef.current;
         if (!data) return null;
@@ -610,22 +627,18 @@ function Workspace({ code }: { code: string }) {
 
   // The digital consultant reads the live draft and proposes changes through a frontend
   // tool; the change is written (as an AI-suggested version) only after the user approves.
-  const latest = useRef({
+  const latestValues = {
     draft,
     baseRev,
     readOnly,
     editable: EDITABLE_CODES.has(code),
     commit,
     applied,
-  });
-  latest.current = {
-    draft,
-    baseRev,
-    readOnly,
-    editable: EDITABLE_CODES.has(code),
-    commit,
-    applied,
+    flushSave,
+    blocking: issues.filter((i) => i.level === "error").map((i) => i.message),
   };
+  const latest = useRef(latestValues);
+  latest.current = latestValues;
   const profile = useProfile(project);
   const tools = useMemo(
     () => [
@@ -633,7 +646,7 @@ function Workspace({ code }: { code: string }) {
         name: PROPOSE_TOOL,
         title: "建议写入成果表",
         description:
-          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、nodes.+）；label 是给用户看的格子名称。调结构用 op：set（默认，改一格或追加一条）、remove（删掉 path 指向的一条，路径/WBS 里连同下级）、split（把一条拆成几条同级，value 是每条的字段列表，如 [{path, metric, value}, …]，原来的下级跟第一条）、move（value 为 {parentId, goalId}，整枝移到新上级，层级自动调整）。路径的指标值要让下级合计推得回上级。卡片会给用户看原值→新值→合计核对，并在导图/表格里用琥珀色虚线预览，用户确认后才写入草稿，系统随后自动保存。同一张修改卡用户确认过就不要再出第二遍。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
+          "出一张修改卡：把与用户在对话中达成一致的内容写入当前成果表的草稿。每条 change 的 path 用点号分隔，数组条目用 id 定位，追加用 +（如 goals.y3、battlefields.b1.mustWin、nodes.+）；label 是给用户看的格子名称。调结构用 op：set（默认，改一格或追加一条）、remove（删掉 path 指向的一条，路径/WBS 里连同下级）、split（把一条拆成几条同级，value 是每条的字段列表，如 [{path, metric, value}, …]，原来的下级跟第一条）、move（value 为 {parentId, goalId}，整枝移到新上级，层级自动调整）。路径的指标值要让下级合计推得回上级。卡片会给用户看原值→新值→合计核对，并在导图/表格里用琥珀色虚线预览，用户确认后才写入草稿并保存，工具结果里会写明保存成了第几版、还剩哪些必须改的问题。工具返回成功就是已经写入，同一张修改卡不要再出第二遍。不要改用户没同意改的格子；已有内容只能通过修改卡替换。",
         permission: "ASK",
         inputSchema: {
           type: "object",
@@ -666,6 +679,7 @@ function Workspace({ code }: { code: string }) {
             editable,
             commit: write,
             applied: done,
+            flushSave: save,
           } = latest.current;
           if (!editable)
             return {
@@ -680,27 +694,33 @@ function Workspace({ code }: { code: string }) {
           const changes = (args as { changes?: ProposedChange[] })?.changes;
           if (!Array.isArray(changes) || changes.length === 0)
             return { status: "error", content: "没有要写入的内容。" };
-          // 同一张修改卡被重出（上一轮确认后对话中断）：内容已经在草稿里，不再写第二遍。
-          if (done.has(changes, current)) {
-            toast.info("这组修改已经在草稿里，没有重复写入");
-            return {
-              status: "success",
-              content: "这组修改此前已经写入草稿，本次没有重复写入。不要再出同样的修改卡，直接继续下一步。",
-            };
-          }
+          // 同一张修改卡被重出：内容已经在草稿里，不再写第二遍。
+          const repeated = done.has(changes, current);
           try {
-            const next = applyChanges(current, changes);
-            const summary = (args as { summary?: string })?.summary;
-            write(next, { via: "chat", label: summary ? `数字咨询师：${summary}` : undefined });
-            done.record(changes, next);
-            toast.success("已写入草稿，稍后自动保存", { description: "在右侧“修改”里可以看到并撤销这条修改" });
-            return {
-              status: "success",
-              content: "用户已确认，内容已写入草稿（系统会自动保存）。",
-            };
+            if (!repeated) {
+              const next = applyChanges(current, changes);
+              const summary = (args as { summary?: string })?.summary;
+              write(next, { via: "chat", label: summary ? `数字咨询师：${summary}` : undefined });
+              done.record(changes, next);
+            }
           } catch (error) {
             return { status: "error", content: errorMessage(error) };
           }
+          // The result goes back only once the write is saved (or clearly will not be in time), and
+          // says which version holds it: see `proposal-save.ts`.
+          const flush = await save();
+          const after = latest.current;
+          // Nothing was left to save: either the content was saved already, or the draft was replaced
+          // meanwhile (undone, or somebody else's version adopted). Only then is it checked again.
+          const kept = !flush.saved || flush.wrote || after.applied.has(changes, after.draft);
+          if (!repeated && kept) {
+            if (flush.saved) toast.success(`已写入草稿并保存 v${flush.rev}`, { description: "在右侧“修改”里可以看到并撤销这条修改" });
+            else toast.success("已写入草稿，稍后自动保存", { description: "在右侧“修改”里可以看到并撤销这条修改" });
+          }
+          return {
+            status: "success",
+            content: proposalResultContent({ repeated, kept, flush, blocking: after.blocking }),
+          };
         },
       }),
     ],

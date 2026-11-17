@@ -205,18 +205,46 @@ function present(payload: unknown, change: ProposedChange): boolean {
  * after 确认修改, the model issues the same card again, and writing it a second time would append
  * the same rows twice. A card counts as written only if this session wrote it and the draft still
  * holds what it wrote.
+ *
+ * Such a repeated card is answered for the user instead of being shown (`answerRepeat`): there is
+ * nothing left to confirm. Each call is answered once, and only a few times per card, so a
+ * consultant that keeps issuing it ends up in front of the user rather than going round unseen.
  */
+const MAX_REPEAT_ANSWERS = 2;
+
 export function createAppliedProposals() {
   const written = new Map<string, string>();
+  const answers = new Map<string, number>();
+  const calls = new Map<string, "answered" | "failed">();
   const keyOf = (changes: ProposedChange[]) => stableStringify(changes.map((c) => ({ path: c.path, op: c.op ?? "set", value: c.value })));
+  const canAnswerRepeat = (changes: ProposedChange[], callId: string) =>
+    !!callId && !calls.has(callId) && (answers.get(keyOf(changes)) ?? 0) < MAX_REPEAT_ANSWERS;
   return {
     record(changes: ProposedChange[], result: unknown) {
-      written.set(keyOf(changes), stableStringify(result));
+      const key = keyOf(changes);
+      written.set(key, stableStringify(result));
+      answers.delete(key);
     },
     has(changes: ProposedChange[], current: unknown): boolean {
       const result = written.get(keyOf(changes));
       if (result === undefined) return false;
       return result === stableStringify(current) || changes.every((change) => present(current, change));
+    },
+    /** Whether this call, a repeat of a written card, may be answered without asking the user. */
+    canAnswerRepeat,
+    /** Takes this call to answer it for the user; `false` when it may not be (see `canAnswerRepeat`). */
+    answerRepeat(changes: ProposedChange[], callId: string): boolean {
+      if (!canAnswerRepeat(changes, callId)) return false;
+      const key = keyOf(changes);
+      answers.set(key, (answers.get(key) ?? 0) + 1);
+      calls.set(callId, "answered");
+      return true;
+    },
+    /** This call was answered for the user. */
+    repeatAnswered: (callId: string) => calls.get(callId) === "answered",
+    /** The answer did not get through: the card goes back to the user and is not answered again. */
+    repeatFailed(callId: string) {
+      if (calls.has(callId)) calls.set(callId, "failed");
     },
   };
 }
