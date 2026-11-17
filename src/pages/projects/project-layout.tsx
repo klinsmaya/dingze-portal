@@ -15,10 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, type ProjectRole, type StageKey } from "@dingze/shared";
+import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, isArchivedProject, type ProjectRole, type StageKey } from "@dingze/shared";
 import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
 import { brandHome } from "@/lib/dingze/portal-role";
+import { projectRoleLabel } from "@/lib/dingze/project-list";
 import { stageBlockers, stageEntryCode, stageProgress } from "@/lib/dingze/progress";
 import { useProject, useProjectOverview } from "@/lib/dingze/queries";
 import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
@@ -78,7 +79,8 @@ function ProjectSwitcher({ projectId, projects, section }: { projectId: number; 
       <DropdownMenuContent align="start" className="w-72">
         <DropdownMenuGroup>
           <DropdownMenuLabel>切换项目</DropdownMenuLabel>
-          {projects.map((p) => (
+          {/* 已归档的不列（正开着的除外），去「全部项目 › 已归档」找。 */}
+          {projects.filter((p) => p.id === projectId || !isArchivedProject(p)).map((p) => (
             <DropdownMenuItem
               key={p.id}
               onClick={() => navigate(`/projects/${p.id}/${p.id === projectId || section !== "expert" ? section : "overview"}`)}
@@ -86,7 +88,7 @@ function ProjectSwitcher({ projectId, projects, section }: { projectId: number; 
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{p.enterprise?.shortName ?? p.enterprise?.name ?? ""} · {p.name}</span>
-                <span className="block text-xs text-muted-foreground">{p.projectRole ? PROJECT_ROLE_LABELS[p.projectRole] : ""}</span>
+                <span className="block text-xs text-muted-foreground">{p.projectRole ? projectRoleLabel(p) : ""}</span>
               </span>
               {p.id === projectId ? <Check className="size-4 shrink-0" /> : null}
             </DropdownMenuItem>
@@ -241,7 +243,7 @@ export default function ProjectLayout() {
                 <Alert>
                   <AlertTitle>找不到这个项目</AlertTitle>
                   <AlertDescription>
-                    项目不存在，或者你不是它的成员。<Link to="/projects" className="underline">返回我的项目</Link>
+                    项目不存在或已被删除，或者你无权查看。<Link to="/projects" className="underline">返回我的项目</Link>
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -275,7 +277,7 @@ export default function ProjectLayout() {
             <Alert>
               <AlertTitle>找不到这个项目</AlertTitle>
               <AlertDescription>
-                项目不存在，或者你不是它的成员。<Link to="/projects" className="underline">返回我的项目</Link>
+                项目不存在或已被删除，或者你无权查看。<Link to="/projects" className="underline">返回我的项目</Link>
               </AlertDescription>
             </Alert>
           </div>

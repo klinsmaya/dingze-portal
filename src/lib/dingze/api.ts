@@ -44,6 +44,10 @@ export type ProjectSummary = {
   spaceName: string;
   enterprise?: { id: number; name: string; shortName: string };
   projectRole: ProjectRole | null;
+  /** 已被加进项目成员。本企业账号没加进来也能看（按只读成员），这时是 false。 */
+  joined?: boolean;
+  /** 当前账号能归档、恢复、删除这个项目（运营，和本企业的企业管理员）。 */
+  manageable?: boolean;
   /** P0 tables locked per stage, for the project cards. */
   progress?: Record<string, { locked: number; total: number }>;
   /** The concrete next step for the caller (继续填：…, 去定版：…). */

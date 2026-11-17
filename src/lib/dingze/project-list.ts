@@ -1,3 +1,5 @@
+import { PROJECT_ROLE_LABELS, isArchivedProject } from "@dingze/shared";
+
 import type { ProjectSummary } from "./api";
 
 // 「我的项目」的分页查询（2026-11 测试反馈）：咨询师手上的项目很多，按名称 / 企业搜、按年度筛，再分页。
@@ -8,6 +10,18 @@ export const PROJECT_PAGE_SIZE = 12;
 export type ProjectQuery = { q: string; year: number | null };
 
 type Listed = Pick<ProjectSummary, "name" | "year" | "enterprise">;
+
+/** 进行中和已归档分开放：列表默认只看进行中的，已归档的收在另一个页签里。 */
+export function splitArchived<T extends Pick<ProjectSummary, "status">>(projects: T[]): { active: T[]; archived: T[] } {
+  return { active: projects.filter((p) => !isArchivedProject(p)), archived: projects.filter(isArchivedProject) };
+}
+
+/** 卡片上的身份：加进项目的显示项目角色；本企业账号没加进来的是只读查看；运营、咨询管理员是管理员查看。 */
+export function projectRoleLabel(project: Pick<ProjectSummary, "projectRole" | "joined">): string {
+  if (!project.projectRole) return "管理员查看";
+  if (project.joined === false) return "只读查看（未加入项目）";
+  return PROJECT_ROLE_LABELS[project.projectRole];
+}
 
 /** 项目里出现过的年度，新的在前。 */
 export function projectYears(projects: Pick<ProjectSummary, "year">[]): number[] {

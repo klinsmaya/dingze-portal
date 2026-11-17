@@ -206,6 +206,11 @@ export const opsApi = {
   setProjectMembers: (values: { projectId: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
     post("setProjectMembers", values),
   removeProjectMember: (values: { projectId: number; userId: number }) => post("removeProjectMember", values),
+  /** 归档 / 恢复：运营，和本企业的企业管理员。 */
+  setProjectArchived: (values: { projectId: number; archived: boolean }) => post<OpsProject>("setProjectArchived", values),
+  /** 删除项目，不可恢复；confirmName 要和项目名称一致。 */
+  deleteProject: (values: { projectId: number; confirmName: string }) =>
+    post<{ ok: boolean; removed: Record<string, number>; files: number; filesFailed: number }>("deleteProject", values),
   listCamps: () => get<Camp[]>("listCamps"),
   campDetail: (campId: number) => get<CampDetail>("campDetail", { campId }),
   saveCamp: (values: Partial<Camp> & { name: string }) => post<Camp>("saveCamp", values),

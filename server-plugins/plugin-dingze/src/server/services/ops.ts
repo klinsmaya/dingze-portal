@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ORG_DEPENDENT_CODES, type OrgUnitFacts, appendOrgNotice, describeOrgChange, getArtifactDef, orgKindFromName } from '../../shared';
+import { ORG_DEPENDENT_CODES, type OrgUnitFacts, PROJECT_FILE_COLLECTION, PROJECT_OWNED_COLLECTIONS, appendOrgNotice, deleteConfirmed, describeOrgChange, getArtifactDef, orgKindFromName } from '../../shared';
 import { HttpError, SYSTEM_ROLES, currentUserId, loadProjectContext, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
 import { notify, projectMemberIds } from './notify';
 
@@ -567,4 +567,83 @@ export async function removeProjectMember(ctx: Context, input: { projectId: numb
   await member.destroy();
   await audit(ctx, spaceName, 'project.removeMember', { projectId: project.get('id'), userId });
   return { ok: true };
+}
+
+// ── 归档与删除（运营，和本企业的企业管理员）──────────────────────────
+
+/** 运营能管所在空间的任何项目；企业管理员只能管本企业的（一家企业一个空间，按空间成员核对）。 */
+async function loadManagedProject(ctx: Context, projectId: unknown) {
+  const access = await systemAccess(ctx);
+  const project = await ctx.db.getRepository('dz_projects').findOne({ filterByTk: positiveId(projectId, '项目') });
+  if (!project) throw new HttpError(404, '项目不存在');
+  const spaceName = project.get('spaceName') as string;
+  if (!(await userSpaceNames(ctx)).includes(spaceName)) throw new HttpError(404, '项目不存在');
+  if (!access.isOps && !access.isEntAdmin) throw new HttpError(403, '只有本企业管理员或运营管理员可以归档、删除项目');
+  if (!access.isOps) {
+    const enterprise = await ctx.db.getRepository('dz_enterprises').findOne({ filterByTk: project.get('enterpriseId') });
+    if (enterprise?.get('status') === 'suspended') throw new HttpError(403, '该企业已停用，请联系咨询机构', 'ENTERPRISE_SUSPENDED');
+  }
+  return { project, spaceName };
+}
+
+/** 归档 / 恢复：归档的项目收进「已归档」，不出现在咨询师工作台和邀请码的可选项目里；内容不锁，随时可以恢复。 */
+export async function setProjectArchived(ctx: Context, input: { projectId: number; archived: boolean }) {
+  const { project, spaceName } = await loadManagedProject(ctx, input.projectId);
+  const status = input.archived === true ? 'archived' : 'active';
+  if (project.get('status') !== status) {
+    await project.update({ status });
+    await audit(ctx, spaceName, status === 'archived' ? 'project.archive' : 'project.restore', { projectId: project.get('id'), name: project.get('name') });
+  }
+  return project.toJSON();
+}
+
+/**
+ * 删除项目，不可恢复。调用方要原样传回项目名称（confirmName）。一个事务里删掉项目和它名下的数据
+ * （PROJECT_OWNED_COLLECTIONS），绑定它的邀请码停用并解绑；提交后再删资料原件。审计事件留着。
+ */
+export async function deleteProject(ctx: Context, input: { projectId: number; confirmName?: unknown }) {
+  const { project, spaceName } = await loadManagedProject(ctx, input.projectId);
+  const projectId = project.get('id') as number;
+  const name = String(project.get('name') ?? '');
+  if (!deleteConfirmed(name, input.confirmName)) throw new HttpError(400, '请原样输入项目名称来确认删除', 'CONFIRM_NAME_MISMATCH');
+
+  const memberIds = await projectMemberIds(ctx, projectId);
+  const materials = await ctx.db.getRepository('dz_materials').find({ filter: { projectId }, fields: ['id', 'fileId'] });
+  const claimed = await ctx.db.getRepository(PROJECT_FILE_COLLECTION).find({ filter: { projectId }, fields: ['id'] });
+  const fileIds = [...new Set([...materials.map((m: any) => m.get('fileId')), ...claimed.map((f: any) => f.get('id'))].filter(Boolean).map(Number))];
+
+  const removed: Record<string, number> = {};
+  await ctx.db.sequelize.transaction(async (transaction: any) => {
+    for (const collection of PROJECT_OWNED_COLLECTIONS) {
+      removed[collection] = await ctx.db.getRepository(collection).model.destroy({ where: { projectId }, transaction });
+    }
+    const invites = await ctx.db.getRepository('dz_invites').find({ filter: { projectId }, transaction });
+    for (const invite of invites) await invite.update({ status: 'disabled', projectId: null, projectRole: null }, { transaction });
+    await project.destroy({ transaction });
+    await audit(ctx, spaceName, 'project.delete', { projectId, name, enterpriseId: project.get('enterpriseId'), removed, invitesDisabled: invites.length, files: fileIds.length }, transaction);
+  });
+
+  // 以下都在提交之后，失败只记日志，不影响已经完成的删除。
+  // 告诉原来的项目成员（通知不挂在已经不存在的项目上）。
+  await notify(ctx, {
+    projectId: null as unknown as number,
+    spaceName,
+    userIds: memberIds,
+    kind: 'projectDeleted',
+    title: `项目「${name}」已被删除`,
+    content: '项目和它的表、版本、批注、资料都已删除，无法恢复。',
+    link: '/projects',
+  }).catch((error: any) => ctx.app.logger.warn(`dingze: notifying the deletion of project ${projectId} failed: ${error?.message ?? error}`));
+
+  // 资料原件不在事务里：逐个删文件记录（file-manager 的钩子连同存储里的文件一起删）。
+  let filesFailed = 0;
+  for (const fileId of fileIds) {
+    try {
+      await ctx.db.getRepository(PROJECT_FILE_COLLECTION).destroy({ filterByTk: fileId });
+    } catch (error: any) {
+      filesFailed++;
+      ctx.app.logger.warn(`dingze: deleting material file ${fileId} of project ${projectId} failed: ${error?.message ?? error}`);
+    }
+  }
+  return { ok: true, removed, files: fileIds.length, filesFailed };
 }

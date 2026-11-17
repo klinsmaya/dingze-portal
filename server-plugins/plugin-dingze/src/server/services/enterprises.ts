@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, nextAction, selfProjectAllowed, stageGateCodes } from '../../shared';
+import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, canManageProjects, effectiveProjectRole, nextAction, selfProjectAllowed, stageGateCodes } from '../../shared';
 import { projectProgress } from './artifacts';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames } from './access';
 import { notifyAssignment } from './notify';
@@ -206,7 +206,10 @@ export async function setProjectMembers(ctx: Context, projectId: number, input: 
   return { ok: true };
 }
 
-/** Projects the current user belongs to, across all of their spaces. */
+/**
+ * 「我的项目」：运营和咨询管理员看所在空间的全部项目；本企业账号（企业管理员、企业成员）看本企业的
+ * 全部项目，没被加进去的按只读成员；其余（咨询师）只看自己参与的。
+ */
 export async function myProjects(ctx: Context) {
   const userId = currentUserId(ctx);
   const access = await systemAccess(ctx);
@@ -216,7 +219,8 @@ export async function myProjects(ctx: Context) {
     filter: { userId, spaceName: { $in: spaces } },
   });
   const roleByProject = new Map(memberships.map((m: any) => [m.get('projectId'), m.get('projectRole')]));
-  const filter = access.isConsultAdmin || access.isOps
+  // 一家企业一个空间，所以企业侧账号所在空间里的项目就是本企业的项目。
+  const filter = access.isConsultAdmin || access.isOps || access.isEnterpriseAccount
     ? { spaceName: { $in: spaces } }
     : { id: { $in: [...roleByProject.keys()] } };
   const projects = await ctx.db.getRepository('dz_projects').find({ filter, appends: ['enterprise'], sort: ['-createdAt'] });
@@ -236,9 +240,18 @@ export async function myProjects(ctx: Context) {
   // The concrete next step on each card (“继续填：…”, “去定版：…”) instead of a bare “进入”.
   const out = [];
   for (const p of projects as any[]) {
-    const role = (roleByProject.get(p.get('id')) as ProjectRole | undefined) ?? null;
+    const joined = roleByProject.has(p.get('id'));
+    const role = effectiveProjectRole(roleByProject.get(p.get('id')) as ProjectRole | undefined, access.roles);
     const steps = await projectProgress(ctx, p.get('id'));
-    out.push({ ...p.toJSON(), projectRole: role, progress: progress(p.get('id')), next: nextAction(steps, role, p.get('service') === 'self' ? 'self' : 'guided') });
+    out.push({
+      ...p.toJSON(),
+      projectRole: role,
+      joined,
+      // 归档、恢复、删除：运营，和本企业的企业管理员（接口里再核对一次）。
+      manageable: canManageProjects(access.roles),
+      progress: progress(p.get('id')),
+      next: nextAction(steps, role, p.get('service') === 'self' ? 'self' : 'guided'),
+    });
   }
   return out;
 }

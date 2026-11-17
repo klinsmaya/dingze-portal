@@ -1,6 +1,6 @@
 import type { Context } from '@nocobase/actions';
 
-import { type Actor, type ProjectRole } from '../../shared';
+import { type Actor, type ProjectRole, effectiveProjectRole, isEnterpriseAccount } from '../../shared';
 
 export const SYSTEM_ROLES = {
   consultAdmin: 'dz_consult_admin',
@@ -48,6 +48,10 @@ export interface SystemAccess {
   isRoot: boolean;
   isConsultAdmin: boolean;
   isOps: boolean;
+  /** 企业管理员（系统角色）。管哪家企业由空间成员关系决定，调用处自己核对。 */
+  isEntAdmin: boolean;
+  /** 企业侧账号：企业管理员或企业成员。 */
+  isEnterpriseAccount: boolean;
 }
 
 export async function systemAccess(ctx: Context): Promise<SystemAccess> {
@@ -58,6 +62,8 @@ export async function systemAccess(ctx: Context): Promise<SystemAccess> {
     isRoot,
     isConsultAdmin: isRoot || roles.includes(SYSTEM_ROLES.consultAdmin),
     isOps: isRoot || roles.includes(SYSTEM_ROLES.ops) || roles.includes(SYSTEM_ROLES.consultAdmin),
+    isEntAdmin: roles.includes(SYSTEM_ROLES.entAdmin),
+    isEnterpriseAccount: isEnterpriseAccount(roles),
   };
 }
 
@@ -69,13 +75,16 @@ export interface ProjectContext {
   project: any;
   spaceName: string;
   projectRole: ProjectRole | null;
+  /** 已被加进项目成员。本企业账号没加进来也能看（projectRole 为只读），这时是 false。 */
+  joined: boolean;
   access: SystemAccess;
   actor: Actor;
 }
 
 /**
  * Load a project the current user may see: they must belong to the project's space and
- * either be a project member or a consulting admin / ops admin.
+ * be a project member, an account of the enterprise itself (企业管理员、企业成员：没加进项目的
+ * 按只读成员), or a consulting admin / ops admin.
  */
 export async function loadProjectContext(ctx: Context, projectId: unknown): Promise<ProjectContext> {
   const id = Number(projectId);
@@ -95,7 +104,8 @@ export async function loadProjectContext(ctx: Context, projectId: unknown): Prom
   const membership = await ctx.db.getRepository('dz_project_members').findOne({
     filter: { projectId: id, userId: currentUserId(ctx) },
   });
-  const projectRole = (membership?.get('projectRole') as ProjectRole | undefined) ?? null;
+  // 一家企业一个空间：上面已经核对过空间，所以这里的企业侧账号就是本企业的人。
+  const projectRole = effectiveProjectRole(membership?.get('projectRole') as ProjectRole | undefined, access.roles);
   if (!projectRole && !access.isConsultAdmin && !access.isOps) {
     throw new HttpError(404, '项目不存在或无权访问');
   }
@@ -103,6 +113,7 @@ export async function loadProjectContext(ctx: Context, projectId: unknown): Prom
     project,
     spaceName,
     projectRole,
+    joined: !!membership,
     access,
     actor: { projectRole, isConsultAdmin: access.isConsultAdmin, service: project.get('service') === 'self' ? 'self' : 'guided' },
   };
