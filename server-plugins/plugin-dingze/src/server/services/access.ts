@@ -1,6 +1,6 @@
 import type { Context } from '@nocobase/actions';
 
-import { type Actor, type ProjectRole, effectiveProjectRole, isEnterpriseAccount } from '../../shared';
+import { type Actor, type ProjectRole, effectiveProjectRole, isEnterpriseAccount, normalizeProjectRole } from '../../shared';
 
 export const SYSTEM_ROLES = {
   consultAdmin: 'dz_consult_admin',
@@ -84,7 +84,7 @@ export interface ProjectContext {
 /**
  * Load a project the current user may see: they must belong to the project's space and
  * be a project member, an account of the enterprise itself (企业管理员、企业成员：没加进项目的
- * 按只读成员), or a consulting admin / ops admin.
+ * 只读查看), or a consulting admin / ops admin.
  */
 export async function loadProjectContext(ctx: Context, projectId: unknown): Promise<ProjectContext> {
   const id = Number(projectId);
@@ -105,7 +105,9 @@ export async function loadProjectContext(ctx: Context, projectId: unknown): Prom
     filter: { projectId: id, userId: currentUserId(ctx) },
   });
   // 一家企业一个空间：上面已经核对过空间，所以这里的企业侧账号就是本企业的人。
-  const projectRole = effectiveProjectRole(membership?.get('projectRole') as ProjectRole | undefined, access.roles);
+  // 旧数据里的角色按三种对齐；对不上的（旧的只读成员）当作没加进项目。
+  const memberRole = normalizeProjectRole(membership?.get('projectRole'));
+  const projectRole = effectiveProjectRole(memberRole, access.roles);
   if (!projectRole && !access.isConsultAdmin && !access.isOps) {
     throw new HttpError(404, '项目不存在或无权访问');
   }
@@ -113,7 +115,7 @@ export async function loadProjectContext(ctx: Context, projectId: unknown): Prom
     project,
     spaceName,
     projectRole,
-    joined: !!membership,
+    joined: !!memberRole,
     access,
     actor: { projectRole, isConsultAdmin: access.isConsultAdmin, service: project.get('service') === 'self' ? 'self' : 'guided' },
   };

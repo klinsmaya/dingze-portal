@@ -11,7 +11,7 @@ describe("expert requests", () => {
     expect(canExpertAct("schedule", "submitted", { ...none, isExpert: true })).toBe(false);
     expect(canExpertAct("schedule", "accepted", { ...none, isExpert: true })).toBe(true);
     expect(canExpertAct("answer", "scheduled", { ...none, isExpert: true })).toBe(true);
-    expect(canExpertAct("answer", "scheduled", { ...none, projectRole: "lead_consultant" })).toBe(false);
+    expect(canExpertAct("answer", "scheduled", { ...none, projectRole: "consultant" })).toBe(false);
     expect(canExpertAct("answer", "closed", { ...none, isAdmin: true })).toBe(false);
   });
 

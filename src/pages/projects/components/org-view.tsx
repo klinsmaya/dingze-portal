@@ -1,5 +1,4 @@
 import { Building2, Network, UserRound } from "lucide-react";
-import { Link } from "react-router";
 
 import { PROJECT_ROLE_LABELS, orgKindLabel } from "@dingze/shared";
 
@@ -10,13 +9,13 @@ import { flattenOrgUnits } from "@/lib/dingze/org-units";
 
 /**
  * 组织与职责 (闭环第一批): the enterprise's departments as the project sees them — who heads each
- * one and which project members sit in it. Maintained by the enterprise admin in 「本企业」; the
+ * one and which project members sit in it. Maintained on this page by those who may edit it; the
  * tables that use departments (RACI, 部门承接, 部门计划书) keep their own copy once filled.
  */
 export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: ProjectTeamMember[] }) {
   const nodes = flattenOrgUnits(orgUnits);
   const name = (id: number | null) => (id ? (team.find((m) => m.userId === id)?.nickname ?? null) : null);
-  const unplaced = team.filter((m) => !m.orgUnitId && m.projectRole !== "lead_consultant" && m.projectRole !== "co_consultant");
+  const unplaced = team.filter((m) => !m.orgUnitId && m.projectRole !== "consultant");
   return (
     <section aria-labelledby="org" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-2">
@@ -24,11 +23,7 @@ export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: 
           ③ 组织与职责
         </h2>
         <span className="text-xs text-muted-foreground">
-          由企业项目负责人、主咨询师在这里维护，或企业管理员在
-          <Link to="/enterprise" className="mx-1 text-primary hover:underline">
-            「本企业 › 组织部门」
-          </Link>
-          维护。责任分工矩阵、部门承接、部门计划书会用到这里的部门；表定版后保留当时的部门，组织再变只提示、不自动改。
+          由企业管理员、企业项目负责人、咨询师在这里维护。责任分工矩阵、部门承接、部门计划书会用到这里的部门；表定版后保留当时的部门，组织再变只提示、不自动改。
         </span>
       </div>
       {nodes.length === 0 ? (

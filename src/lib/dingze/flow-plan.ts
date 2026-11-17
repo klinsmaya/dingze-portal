@@ -1,7 +1,7 @@
 import { type Actor, type ArtifactStatus, CONSULTANTS, type LifecycleAction, canPerform } from "@dingze/shared";
 
 // 表头流程按钮（开营前 UX 改版 F1–F5、F11）：每种状态一个主动作；当前角色不能做时，
-// 待复核写“等主咨询师复核”，其余显示灰按钮并说明谁可以点。
+// 待复核写“等咨询师复核”，其余显示灰按钮并说明谁可以点。
 // 咨询师端（会议纪要 2026-11）：定版、解锁重开、强制定版都不渲染，轮到企业时只写一句在等谁。
 
 export type FlowAction = Exclude<LifecycleAction, "save">;
@@ -26,7 +26,7 @@ const LABELS: Partial<Record<FlowAction, string>> = {
   reopen: "解锁重开",
 };
 
-const ENTERPRISE_SIDE = ["ent_lead", "dept_head", "member", "readonly"];
+const ENTERPRISE_SIDE = ["ent_lead", "member"];
 
 export function flowLabel(action: FlowAction, status: ArtifactStatus, actor: Actor): string {
   // 企业在待复核时把表拉回来叫“撤回修改”，免得和顾问的“退回修改”混淆（F2）。
@@ -60,9 +60,9 @@ export function whoCan(action: FlowAction, actor: Actor): string {
     case "selfReview":
       return "企业项目负责人做自查复核";
     case "approve":
-      return "主咨询师复核通过";
+      return "咨询师复核通过";
     case "returnToEdit":
-      return "主咨询师（待复核时）或企业项目负责人可以退回 / 撤回，要写原因";
+      return "咨询师（待复核时）或企业项目负责人可以退回 / 撤回，要写原因";
     case "confirm":
       return "仅企业项目负责人可以确认定版";
     case "reopen":
@@ -89,7 +89,7 @@ export function flowPlan(status: ArtifactStatus, actor: Actor): FlowPlan {
   const primary = main && allowed.includes(main) ? main : null;
   const others = allowed.filter((a) => a !== primary);
   if (primary || !main) return { primary, others, blocked: null, waiting: null };
-  if (status === "in_review") return { primary: null, others, blocked: null, waiting: "等主咨询师复核" };
+  if (status === "in_review") return { primary: null, others, blocked: null, waiting: "等咨询师复核" };
   // 咨询师看不到灰按钮：轮到企业的事只写一句，已定版的表什么都不显示。
   if (actor.isConsultAdmin || (actor.projectRole && CONSULTANTS.includes(actor.projectRole))) {
     const waiting = status === "in_progress" ? "等企业填写并点“本步完成”" : status === "step_done" ? "等企业提交复核" : status === "pending_confirm" ? "等企业项目负责人定版" : null;

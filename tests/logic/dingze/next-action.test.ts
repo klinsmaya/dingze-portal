@@ -15,12 +15,12 @@ describe("next action", () => {
   it("puts 定版 first for the enterprise lead and review first for the lead consultant", () => {
     const steps = all({ "S1-01": { status: "pending_confirm" }, "S1-02": { status: "in_review" } });
     expect(nextAction(steps, "ent_lead")).toMatchObject({ kind: "confirm", code: "S1-01" });
-    expect(nextAction(steps, "lead_consultant")).toMatchObject({ kind: "review", code: "S1-02" });
+    expect(nextAction(steps, "consultant")).toMatchObject({ kind: "review", code: "S1-02" });
   });
 
   it("brings a returned table back with the reason", () => {
     const steps = all({ "S1-01": { status: "in_progress", lastEvent: { action: "returnToEdit", reason: "战略目标没写年份" } } });
-    const a = nextAction(steps, "dept_head");
+    const a = nextAction(steps, "member");
     expect(a).toMatchObject({ kind: "returned", code: "S1-01" });
     expect(a.hint).toContain("战略目标没写年份");
   });
@@ -40,11 +40,11 @@ describe("next action", () => {
 describe("collaboration status", () => {
   const base: ArtifactProgress = { code: "S1-01", status: "in_review", stale: false, unlocked: true, lastEvent: null };
   it("shows enterprise members where the table is", () => {
-    expect(collaborationStatus(base, "ent_lead")?.text).toBe("等主咨询师复核，审完会通知你");
+    expect(collaborationStatus(base, "ent_lead")?.text).toBe("等咨询师复核，审完会通知你");
     expect(collaborationStatus({ ...base, status: "pending_confirm" }, "ent_lead")?.text).toBe("顾问已审过，待你定版");
     // Who moved it there, and when.
     expect(collaborationStatus({ ...base, lastEvent: { action: "submitReview", by: "孙经理", at: "2026-10-11T08:00:00Z" } }, "ent_lead")?.text).toBe(
-      "等主咨询师复核（孙经理 10-11 提交），审完会通知你",
+      "等咨询师复核（孙经理 10-11 提交），审完会通知你",
     );
     expect(collaborationStatus({ ...base, status: "in_progress", lastEvent: { action: "returnToEdit", reason: "补年份" } }, "member")?.text).toBe("已退回修改：补年份");
     expect(collaborationStatus({ ...base, status: "locked" }, "member")?.tone).toBe("done");

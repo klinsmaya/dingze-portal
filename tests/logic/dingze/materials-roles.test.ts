@@ -5,11 +5,11 @@ import { ATTACHMENT_PROMPT_CHARS, attachmentPrompt, canManageLibrary } from "@di
 describe("资料库权限", () => {
   it("企业项目负责人、咨询师、咨询管理员能管资料库，普通员工不能", () => {
     expect(canManageLibrary("ent_lead", false)).toBe(true);
-    expect(canManageLibrary("lead_consultant", false)).toBe(true);
-    expect(canManageLibrary("co_consultant", false)).toBe(true);
+    expect(canManageLibrary("consultant", false)).toBe(true);
+    expect(canManageLibrary("consultant", false)).toBe(true);
     expect(canManageLibrary(null, true)).toBe(true);
     expect(canManageLibrary("member", false)).toBe(false);
-    expect(canManageLibrary("dept_head", false)).toBe(false);
+    expect(canManageLibrary("member", false)).toBe(false);
     expect(canManageLibrary("readonly", false)).toBe(false);
     expect(canManageLibrary(null, false)).toBe(false);
   });

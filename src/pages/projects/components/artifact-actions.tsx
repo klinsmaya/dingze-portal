@@ -101,7 +101,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
     const spec = ACTIONS.find((a) => a.action === action)!;
     const label = flowLabel(action, status, actor);
     return label === "撤回修改"
-      ? { ...spec, label, reason: { title: "撤回修改", description: "把已提交复核的表拉回来继续改，主咨询师的复核会中止。写一句为什么撤回。" } }
+      ? { ...spec, label, reason: { title: "撤回修改", description: "把已提交复核的表拉回来继续改，咨询师的复核会中止。写一句为什么撤回。" } }
       : { ...spec, label };
   };
   const primary = plan.primary ? specOf(plan.primary) : null;
@@ -216,7 +216,7 @@ export function ArtifactActions({ project, code, title, detail, actor, dirty, bl
         title={title}
         warnings={warnings}
         openComments={openComments}
-        reopener={actor.service === "self" ? "企业项目负责人" : "企业项目负责人或主咨询师"}
+        reopener={actor.service === "self" ? "企业项目负责人" : "企业项目负责人或咨询师"}
         detail={detail}
         project={project}
         code={code}
@@ -250,7 +250,7 @@ const FLOW = [
   ["本步完成", "你这边填完了。表格仍可修改，下一步把它提交给顾问。"],
   ["顾问复核", "顾问看过后，要么通过，要么写明原因退回给你改。"],
   ["企业定版", "顾问通过后，由企业项目负责人确认定版。"],
-  ["锁定", "定版后只读，作为后面各表的依据；要改由企业项目负责人或主咨询师解锁重开（写原因，咨询师会收到通知）。"],
+  ["锁定", "定版后只读，作为后面各表的依据；要改由企业项目负责人或咨询师解锁重开（写原因，咨询师会收到通知）。"],
 ] as const;
 
 /** First “本步完成”: explain what happens after it, once per browser (usability #7). */
@@ -350,7 +350,7 @@ function ConfirmDialog({
   title: string;
   warnings: string[];
   openComments: number;
-  /** Who may reopen it later: 主咨询师, or the enterprise lead on a self-service project. */
+  /** Who may reopen it later: 咨询师, or the enterprise lead on a self-service project. */
   reopener: string;
   detail: ArtifactDetail;
   project: ProjectSummary;
@@ -420,7 +420,7 @@ export function DissentList({ detail, project, code }: { detail: ArtifactDetail;
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
   const record = useRecordDissent(project, code);
-  const canRecord = detail.projectRole === "ent_lead" || detail.projectRole === "dept_head" || detail.projectRole === "member";
+  const canRecord = detail.projectRole === "ent_lead" || detail.projectRole === "member";
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-book-border bg-book p-3 text-sm text-book-foreground">

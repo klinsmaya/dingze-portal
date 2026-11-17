@@ -9,19 +9,19 @@ describe("表头流程按钮（开营前 UX 改版 F1–F5、F11）", () => {
     expect(flowPlan("in_progress", as("ent_lead")).primary).toBe("stepDone");
     expect(flowPlan("step_done", as("ent_lead")).primary).toBe("submitReview");
     expect(flowPlan("step_done", as("ent_lead", "self")).primary).toBe("selfReview");
-    expect(flowPlan("in_review", as("lead_consultant"))).toMatchObject({ primary: "approve", others: ["returnToEdit"] });
+    expect(flowPlan("in_review", as("consultant"))).toMatchObject({ primary: "approve", others: ["returnToEdit"] });
     expect(flowPlan("pending_confirm", as("ent_lead"))).toMatchObject({ primary: "confirm", others: ["returnToEdit"] });
   });
 
   it("lets the enterprise lead reopen a locked table and greys it out for others", () => {
     expect(flowPlan("locked", as("ent_lead")).primary).toBe("reopen");
-    expect(flowPlan("locked", as("dept_head"))).toMatchObject({ primary: null, blocked: "reopen" });
+    expect(flowPlan("locked", as("member"))).toMatchObject({ primary: null, blocked: "reopen" });
   });
 
   it("shows the enterprise a waiting note while the consultant reviews, with 撤回修改 beside it", () => {
-    expect(flowPlan("in_review", as("ent_lead"))).toMatchObject({ primary: null, waiting: "等主咨询师复核", others: ["returnToEdit"] });
+    expect(flowPlan("in_review", as("ent_lead"))).toMatchObject({ primary: null, waiting: "等咨询师复核", others: ["returnToEdit"] });
     expect(flowLabel("returnToEdit", "in_review", as("ent_lead"))).toBe("撤回修改");
-    expect(flowLabel("returnToEdit", "in_review", as("lead_consultant"))).toBe("退回修改");
+    expect(flowLabel("returnToEdit", "in_review", as("consultant"))).toBe("退回修改");
     expect(flowLabel("returnToEdit", "pending_confirm", as("ent_lead"))).toBe("退回修改");
   });
 
@@ -30,9 +30,9 @@ describe("表头流程按钮（开营前 UX 改版 F1–F5、F11）", () => {
   });
 
   it("shows consultants a waiting note instead of a grey button, and nothing on a locked table", () => {
-    expect(flowPlan("pending_confirm", as("lead_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业项目负责人定版", others: ["returnToEdit"] });
-    expect(flowPlan("in_progress", as("co_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业填写并点“本步完成”" });
-    expect(flowPlan("locked", as("lead_consultant"))).toMatchObject({ primary: null, blocked: null, waiting: null, others: [] });
+    expect(flowPlan("pending_confirm", as("consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业项目负责人定版", others: ["returnToEdit"] });
+    expect(flowPlan("in_progress", as("consultant"))).toMatchObject({ primary: null, blocked: null, waiting: "等企业填写并点“本步完成”" });
+    expect(flowPlan("locked", as("consultant"))).toMatchObject({ primary: null, blocked: null, waiting: null, others: [] });
     expect(flowPlan("locked", as("ent_lead")).primary).toBe("reopen");
   });
 });

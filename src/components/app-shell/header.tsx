@@ -27,7 +27,8 @@ import { UserAvatar } from "@/components/app-shell/user-avatar";
 import { UserInfo } from "@/components/app-shell/user-info";
 import { CanAccess } from "@/components/access-control/can-access";
 import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
-import { ALargeSmall, Keyboard, LogOutIcon, SettingsIcon } from "lucide-react";
+import { ALargeSmall, Keyboard, KeyRound, LogOutIcon, SettingsIcon } from "lucide-react";
+import { Link } from "react-router";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Brand } from "@/components/app-shell/brand";
@@ -188,6 +189,9 @@ export const UserDropdown = () => {
         </DropdownMenuSub>
         <DropdownMenuItem className="min-h-9 cursor-pointer gap-2 px-2" onClick={() => setShortcuts(true)}>
           <Keyboard /> 快捷键
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-9 cursor-pointer gap-2 px-2" render={<Link to="/settings#password" />}>
+          <KeyRound /> 修改密码
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

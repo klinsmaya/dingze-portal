@@ -5,6 +5,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { AclBootstrap } from "@/components/access-control/acl-bootstrap";
 import { NavigateToAccessibleResource } from "@/components/access-control/navigate-to-accessible-resource";
 import { ErrorComponent } from "@/components/app-shell/error-component";
+import { AccountGate } from "@/components/auth/account-gate";
 import { LoginSideGuard } from "@/components/auth/login-side-guard";
 import { Layout } from "@/components/app-shell/layout";
 import { ForgotPassword } from "@/pages/forgot-password";
@@ -35,9 +36,12 @@ export function AppRoutes() {
           >
             <AclBootstrap>
               <LoginSideGuard>
-                <AppExtensionProviders>
-                  <Outlet />
-                </AppExtensionProviders>
+                {/* 停用的账号、还没改初始密码的账号先挡在这里（登录页一侧不挡，免得退不出去）。 */}
+                <AccountGate>
+                  <AppExtensionProviders>
+                    <Outlet />
+                  </AppExtensionProviders>
+                </AccountGate>
               </LoginSideGuard>
             </AclBootstrap>
           </Authenticated>

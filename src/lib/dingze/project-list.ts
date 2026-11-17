@@ -19,7 +19,7 @@ export function splitArchived<T extends Pick<ProjectSummary, "status">>(projects
 /** 卡片上的身份：加进项目的显示项目角色；本企业账号没加进来的是只读查看；运营、咨询管理员是管理员查看。 */
 export function projectRoleLabel(project: Pick<ProjectSummary, "projectRole" | "joined">): string {
   if (!project.projectRole) return "管理员查看";
-  if (project.joined === false) return "只读查看（未加入项目）";
+  if (project.joined === false || project.projectRole === "readonly") return "只读查看（未加入项目）";
   return PROJECT_ROLE_LABELS[project.projectRole];
 }
 

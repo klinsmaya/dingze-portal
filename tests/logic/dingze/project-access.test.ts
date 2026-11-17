@@ -17,7 +17,7 @@ import {
 import { projectRoleLabel, splitArchived } from "@/lib/dingze/project-list";
 
 describe("本企业账号默认能看到本企业的项目", () => {
-  it("treats an enterprise account that was never added to the project as a read-only member", () => {
+  it("treats an enterprise account that was never added to the project as read-only (a state, not a role)", () => {
     // 企业管理员直接开通的账号：只进了企业空间，没有项目成员记录。
     expect(effectiveProjectRole(null, ["dz_ent_member"])).toBe("readonly");
     expect(effectiveProjectRole(undefined, ["member", "dz_ent_admin"])).toBe("readonly");
@@ -26,7 +26,7 @@ describe("本企业账号默认能看到本企业的项目", () => {
   it("keeps the role set in the project members (邀请码、运营分派的)", () => {
     expect(effectiveProjectRole("member", ["dz_ent_member"])).toBe("member");
     expect(effectiveProjectRole("ent_lead", ["dz_ent_admin"])).toBe("ent_lead");
-    expect(effectiveProjectRole("lead_consultant", ["dz_consultant"])).toBe("lead_consultant");
+    expect(effectiveProjectRole("consultant", ["dz_consultant"])).toBe("consultant");
   });
 
   it("gives accounts outside the enterprise no role: consultants still need to be assigned", () => {
@@ -44,7 +44,6 @@ describe("本企业账号默认能看到本企业的项目", () => {
 
   it("labels the card by how the account got to see the project", () => {
     expect(projectRoleLabel({ projectRole: "member", joined: true })).toBe("项目成员");
-    expect(projectRoleLabel({ projectRole: "readonly", joined: true })).toBe("只读成员");
     expect(projectRoleLabel({ projectRole: "readonly", joined: false })).toBe("只读查看（未加入项目）");
     expect(projectRoleLabel({ projectRole: null })).toBe("管理员查看");
     // 老版本的服务端不返回 joined：照项目角色显示。

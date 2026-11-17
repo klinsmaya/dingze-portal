@@ -1,6 +1,6 @@
 import { Building2, Plus } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,7 +19,6 @@ import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet 
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AccountFields, accountPayload, emptyAccount } from "@/lib/dingze/accounts";
 import { errorMessage } from "@/lib/dingze/errors";
@@ -34,7 +33,9 @@ import { OpsPageHeader } from "./components/page-header";
 
 export default function EnterprisesPage() {
   const enterprises = useEnterprises();
-  const [provisioning, setProvisioning] = useState(false);
+  // 从运营看板的「开通企业」过来（?open=new）直接打开开通窗口。
+  const [params] = useSearchParams();
+  const [provisioning, setProvisioning] = useState(params.get("open") === "new");
   const [issued, setIssued] = useState<IssuedPassword | null>(null);
   const [nextPath, setNextPath] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function EnterprisesPage() {
               <Building2 />
             </EmptyMedia>
             <EmptyTitle>还没有开通企业</EmptyTitle>
-            <EmptyDescription>开通企业会建立它的独立空间，并可同时开通企业管理员账号。</EmptyDescription>
+            <EmptyDescription>开通企业会建立它的独立空间，并开通企业管理员账号。</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -88,6 +89,8 @@ export default function EnterprisesPage() {
                     <div className="text-xs text-muted-foreground">
                       {e.shortName}
                       {e.trial ? <Badge variant="secondary" className="ml-2">自助试用</Badge> : null}
+                      {e.adminCount === 0 ? <Badge variant="destructive" className="ml-2">没有企业管理员</Badge> : null}
+                      {e.pendingRegistrations ? <Badge className="ml-2">{e.pendingRegistrations} 条待审核</Badge> : null}
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{SIZE_LABELS[e.size]}</TableCell>
@@ -150,12 +153,11 @@ function ProvisionDialog({
   const [shortName, setShortName] = useState("");
   const [size, setSize] = useState<"sme" | "large">("sme");
   const [consultantIds, setConsultantIds] = useState<number[]>([]);
-  const [withAdmin, setWithAdmin] = useState(true);
   const [admin, setAdmin] = useState<AccountFields>(emptyAccount);
   const consultants = useDzUsers(undefined, undefined, open);
   const provision = useOpsMutation(opsApi.provisionEnterprise);
   const team: DzUser[] = (consultants.data ?? []).filter((u) =>
-    u.roles.some((r) => r === "dz_consultant" || r === "dz_consult_admin")
+    u.roles.includes("dz_consultant")
   );
 
   const reset = () => {
@@ -163,7 +165,6 @@ function ProvisionDialog({
     setShortName("");
     setSize("sme");
     setConsultantIds([]);
-    setWithAdmin(true);
     setAdmin(emptyAccount);
   };
 
@@ -175,7 +176,7 @@ function ProvisionDialog({
         shortName: shortName.trim(),
         size,
         consultantIds,
-        admin: withAdmin ? accountPayload(admin) : undefined,
+        admin: accountPayload(admin),
       },
       {
         onSuccess: (result) => {
@@ -205,7 +206,7 @@ function ProvisionDialog({
         <form onSubmit={submit} className="flex flex-col gap-5">
           <DialogHeader>
             <DialogTitle>开通企业</DialogTitle>
-            <DialogDescription>建立企业的独立空间和档案；你和选中的咨询师会自动加入这个空间。</DialogDescription>
+            <DialogDescription>建立企业的独立空间和档案。运营管理员、咨询管理员自动进入每一家企业。</DialogDescription>
           </DialogHeader>
 
           <FieldGroup>
@@ -233,7 +234,7 @@ function ProvisionDialog({
             </FieldSet>
             <FieldSet>
               <FieldLegend variant="label">咨询师</FieldLegend>
-              <FieldDescription>选中的咨询师会加入这家企业的空间；具体项目里的主咨询师在“项目”中指定。</FieldDescription>
+              <FieldDescription>选中的咨询师分派到这家企业；具体进哪个项目在项目“成员”里指定。</FieldDescription>
               {consultants.isLoading ? (
                 <Skeleton className="h-24" />
               ) : (
@@ -241,14 +242,9 @@ function ProvisionDialog({
               )}
             </FieldSet>
             <FieldSet>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <FieldLegend variant="label">同时开通企业管理员</FieldLegend>
-                  <FieldDescription>企业管理员负责维护本企业的成员和组织部门。</FieldDescription>
-                </div>
-                <Switch checked={withAdmin} onCheckedChange={setWithAdmin} aria-label="同时开通企业管理员" />
-              </div>
-              {withAdmin ? <AccountFieldsEditor value={admin} onChange={setAdmin} idPrefix="ent-admin" /> : null}
+              <FieldLegend variant="label">企业管理员</FieldLegend>
+              <FieldDescription>企业至少要有一位管理员：管本企业的成员、邀请和项目成员，新建项目默认由他做企业项目负责人。</FieldDescription>
+              <AccountFieldsEditor value={admin} onChange={setAdmin} idPrefix="ent-admin" />
             </FieldSet>
           </FieldGroup>
 

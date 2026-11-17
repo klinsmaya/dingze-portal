@@ -2,7 +2,7 @@ import type { Context } from '@nocobase/actions';
 
 import { HttpError, currentUserId, systemAccess, userSpaceNames } from './access';
 
-const CONSULTANT_ROLES = ['lead_consultant', 'co_consultant'];
+const CONSULTANT_ROLES = ['consultant'];
 
 /**
  * 咨询师工作台: every project the caller consults on (consulting admins: every project in

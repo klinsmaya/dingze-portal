@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAccountTable, parseEnterpriseTable, toCsv } from "@/lib/dingze/camp-import";
+import { parseEnterpriseTable, toCsv } from "@/lib/dingze/camp-import";
 
 describe("parseEnterpriseTable", () => {
   it("skips the template header and reads size", () => {
@@ -19,24 +19,6 @@ describe("parseEnterpriseTable", () => {
     expect(rows).toHaveLength(1);
     expect(problems).toHaveLength(3);
     expect(problems[2]).toContain("重复");
-  });
-});
-
-describe("parseAccountTable", () => {
-  it("maps role labels and defaults to 项目成员", () => {
-    const { rows, problems } = parseAccountTable("姓名\t登录名\t手机\t邮箱\t项目角色\t部门\n赵部长\thc_zhao\t\t\t部门负责人\t市场营销部\n李专员\thc_li\t\t\t\t\n钱\thc_q\t\t\t只读\t");
-    expect(problems).toEqual([]);
-    expect(rows.map((r) => [r.username, r.role, r.dept])).toEqual([
-      ["hc_zhao", "dept_head", "市场营销部"],
-      ["hc_li", "member", undefined],
-      ["hc_q", "readonly", undefined],
-    ]);
-  });
-
-  it("rejects consultant roles and unknown labels", () => {
-    const { rows, problems } = parseAccountTable("甲\tjia_1\t\t\t主咨询师\t\n乙\tyi_1\t\t\t老板\t");
-    expect(rows).toEqual([]);
-    expect(problems).toHaveLength(2);
   });
 });
 

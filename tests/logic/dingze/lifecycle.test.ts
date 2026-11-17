@@ -16,10 +16,8 @@ import {
 } from "@dingze/shared";
 
 const lead: Actor = { projectRole: "ent_lead", isConsultAdmin: false };
-const dept: Actor = { projectRole: "dept_head", isConsultAdmin: false };
 const member: Actor = { projectRole: "member", isConsultAdmin: false };
-const consultant: Actor = { projectRole: "lead_consultant", isConsultAdmin: false };
-const coConsultant: Actor = { projectRole: "co_consultant", isConsultAdmin: false };
+const consultant: Actor = { projectRole: "consultant", isConsultAdmin: false };
 const admin: Actor = { projectRole: null, isConsultAdmin: true };
 
 const lockedStage = (stage: "strategy" | "goal"): StateMap =>
@@ -31,7 +29,7 @@ describe("artifact lifecycle", () => {
   it("walks the normal path from draft to locked", () => {
     let status = nextStatus("save", "not_started", member);
     expect(status).toBe("in_progress");
-    // 2026-11 起只有企业项目负责人能点“这步做完了”，部门负责人和普通员工只保存。
+    // 2026-11 起只有企业项目负责人能点“这步做完了”，项目成员只保存。
     status = nextStatus("stepDone", status, lead);
     expect(status).toBe("step_done");
     status = nextStatus("submitReview", status, lead);
@@ -43,13 +41,14 @@ describe("artifact lifecycle", () => {
   });
 
   it("only lets the enterprise project lead confirm", () => {
-    expect(() => nextStatus("confirm", "pending_confirm", dept)).toThrow(LifecycleError);
+    expect(() => nextStatus("confirm", "pending_confirm", member)).toThrow(LifecycleError);
     expect(() => nextStatus("confirm", "pending_confirm", consultant)).toThrow(LifecycleError);
   });
 
-  it("does not let members finish a step or co-consultants approve", () => {
+  it("does not let members finish a step or approve, and any consultant on the project can approve", () => {
     expect(() => nextStatus("stepDone", "in_progress", member)).toThrow(/当前角色/);
-    expect(() => nextStatus("approve", "in_review", coConsultant)).toThrow(/当前角色/);
+    expect(() => nextStatus("approve", "in_review", member)).toThrow(/当前角色/);
+    expect(nextStatus("approve", "in_review", consultant)).toBe("pending_confirm");
   });
 
   it("refuses edits to a locked artifact until it is reopened with a reason", () => {
@@ -185,8 +184,8 @@ describe("step exceptions", () => {
 
 describe("普通员工不点流转（会议纪要 2026-11）", () => {
   const member: Actor = { projectRole: "member", isConsultAdmin: false };
-  it("member and dept_head can save but not move the flow", () => {
-    for (const actor of [member, dept]) {
+  it("member can save but not move the flow", () => {
+    for (const actor of [member]) {
       expect(canPerform("save", actor)).toBe(true);
       expect(canPerform("stepDone", actor)).toBe(false);
       expect(canPerform("submitReview", actor)).toBe(false);
@@ -194,7 +193,6 @@ describe("普通员工不点流转（会议纪要 2026-11）", () => {
       expect(canPerform("reopen", actor)).toBe(false);
     }
     expect(isEmployee("member")).toBe(true);
-    expect(isEmployee("dept_head")).toBe(true);
     expect(isEmployee("ent_lead")).toBe(false);
     expect(isEmployee(null)).toBe(false);
   });

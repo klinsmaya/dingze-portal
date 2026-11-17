@@ -15,7 +15,7 @@ const who = (user: any) => (user ? user.get('nickname') || user.get('username') 
 /** Anyone who can fill tables may attach a file to one; 只读 cannot. */
 function requireEditor(pc: ProjectContext) {
   if (pc.access.isConsultAdmin) return;
-  if (!pc.projectRole || pc.projectRole === 'readonly') throw new HttpError(403, '只读成员不能修改资料与画像');
+  if (!pc.projectRole || pc.projectRole === 'readonly') throw new HttpError(403, '你还没加入这个项目，不能修改资料与画像');
 }
 
 /** The project library and the profile: 企业项目负责人、咨询师、咨询管理员 (普通员工只能传表下附件). */

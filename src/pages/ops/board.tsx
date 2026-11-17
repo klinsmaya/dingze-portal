@@ -1,9 +1,10 @@
-import { Activity, Bot, Building2, FolderKanban, MessageSquareText } from "lucide-react";
+import { Activity, Bot, Building2, FolderKanban, MessageSquareText, Plus, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage } from "@/lib/dingze/errors";
 import type { OpsBoardProject } from "@/lib/dingze/ops-api";
-import { useCamps, useOpsBoard } from "@/lib/dingze/ops-queries";
+import { useCamps, useEnterprises, useOpsBoard } from "@/lib/dingze/ops-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,11 @@ function Backlog({ backlog }: { backlog: OpsBoardProject["backlog"] }) {
 export default function OpsBoardPage() {
   const board = useOpsBoard();
   const camps = useCamps();
+  // 常用入口：开通企业、开通咨询师账号，以及各企业攒下的待审核申请、没有管理员的企业。
+  const owned = useEnterprises();
+  const pending = (owned.data ?? []).filter((e) => e.pendingRegistrations);
+  const pendingTotal = pending.reduce((n, e) => n + (e.pendingRegistrations ?? 0), 0);
+  const adminless = (owned.data ?? []).filter((e) => e.status !== "suspended" && e.adminCount === 0);
   const [enterpriseId, setEnterpriseId] = useState("");
   const [campId, setCampId] = useState("");
   const [onlyBacklog, setOnlyBacklog] = useState(false);
@@ -77,7 +83,29 @@ export default function OpsBoardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <OpsPageHeader title="运营看板" />
+      <OpsPageHeader
+        title="运营看板"
+        actions={
+          <>
+            {pendingTotal ? (
+              <Button variant="outline" nativeButton={false} render={<Link to={pending.length === 1 ? `/ops/enterprises/${pending[0].id}?tab=invites` : "/ops/enterprises"} />}>
+                待审核 <Badge>{pendingTotal}</Badge>
+              </Button>
+            ) : null}
+            {adminless.length ? (
+              <Button variant="outline" nativeButton={false} render={<Link to={adminless.length === 1 ? `/ops/enterprises/${adminless[0].id}?tab=staff` : "/ops/enterprises"} />}>
+                没有管理员的企业 <Badge variant="destructive">{adminless.length}</Badge>
+              </Button>
+            ) : null}
+            <Button variant="outline" nativeButton={false} render={<Link to="/ops/team?open=create" />}>
+              <UserPlus /> 开通咨询师账号
+            </Button>
+            <Button nativeButton={false} render={<Link to="/ops/enterprises?open=new" />}>
+              <Plus /> 开通企业
+            </Button>
+          </>
+        }
+      />
 
       {board.error ? (
         <Alert variant="destructive">

@@ -101,8 +101,8 @@ type EditState = { payload: unknown; log: Command[]; redo: Command[]; saved: Com
 const freshEdit = (payload: unknown): EditState => ({ payload, log: [], redo: [], saved: [], base: payload });
 
 
-const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member"];
-const CONSULTANT_ROLES = ["lead_consultant", "co_consultant"];
+const ENTERPRISE_ROLES = ["ent_lead", "member"];
+const CONSULTANT_ROLES = ["consultant"];
 /** 停笔多久后自动保存。 */
 const AUTOSAVE_MS = 2500;
 
@@ -791,7 +791,7 @@ function Workspace({ code }: { code: string }) {
   }, [highlightComment, narrowPanel]);
   const chrome = chromeRef.current;
   const isEnterprise = !!role && ENTERPRISE_ROLES.includes(role) && !overview.isConsultAdmin;
-  // 普通员工（含这一轮的部门负责人）：只填表和保存，流转按钮不渲染；右栏不放“修改”记录。
+  // 项目成员：只填表和保存，流转按钮不渲染；右栏不放“修改”记录。
   const employee = isEmployee(role) && !overview.isConsultAdmin;
   const base = `/projects/${project.id}`;
   // 三阶段条与本阶段进度（参考稿左栏）：入口取每阶段第一张表，进度与待办页同口径（必做表定版数）。
@@ -825,7 +825,7 @@ function Workspace({ code }: { code: string }) {
   const returned = progress?.status === "in_progress" && progress.lastEvent && ["returnToEdit", "forceReturn"].includes(progress.lastEvent.action);
   const headerStates: HeaderState[] = [];
   if (returned) headerStates.push({ tone: "warn", text: "已退回", detail: progress?.lastEvent?.reason || "顾问退回了这张表，请按批注修改后重新提交。" });
-  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由企业项目负责人或主咨询师解锁重开（写原因），项目成员和咨询师都会收到通知，下游会标“上游已变更”。", detailLabel: "说明" });
+  else if (status === "locked") headerStates.push({ tone: "done", text: `已定版 v${artifact?.lockedVersion?.rev ?? ""} · 只读`, detail: service === "self" ? "修改需由企业项目负责人解锁重开（写原因），下游会标“上游已变更”。" : "修改需由企业项目负责人或咨询师解锁重开（写原因），项目成员和咨询师都会收到通知，下游会标“上游已变更”。", detailLabel: "说明" });
   // 上游已变更只说一次（下面那枚带原因的标签），不再和协作状态各写一遍。
   else if (collab && !artifact?.stale) headerStates.push({ tone: collab.tone === "act" ? "act" : collab.tone === "done" ? "done" : collab.tone === "warn" ? "warn" : "wait", text: collab.text });
   else if (status === "in_progress") headerStates.push({ tone: "act", text: isEnterprise ? "企业共创中" : "进行中" });
@@ -833,14 +833,14 @@ function Workspace({ code }: { code: string }) {
   const impact = impactList(code, overview.artifacts);
   const impactWaiting = impact.filter((r) => r.stale).length;
   if (status === "pending_confirm" && !readOnly) headerStates.push({ tone: "wait", text: "现在修改需重新复核" });
-  // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由主咨询师判断是否重开。
-  const canJudgeOrg = overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead";
+  // 组织已变更（闭环第二批）：定版的部门表保留当时的部门，由咨询师判断是否重开。
+  const canJudgeOrg = overview.isConsultAdmin || role === "consultant" || role === "ent_lead";
   if (progress?.orgNotice && status === "locked") {
     headerStates.push({
       tone: "warn",
       text: "组织已变更",
       detailLabel: "看变化",
-      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : service === "self" ? "由企业项目负责人判断是否需要重开。" : "由企业项目负责人或主咨询师判断是否需要重开。"}`,
+      detail: `${progress.orgNotice}\n\n表里保留定版时的部门，不会自动改。${canJudgeOrg ? "需要按新组织调整就点“解锁重开”；不影响就点“不需要重开”。" : service === "self" ? "由企业项目负责人判断是否需要重开。" : "由企业项目负责人或咨询师判断是否需要重开。"}`,
       actions: canJudgeOrg ? (
         <Button
           size="sm"
@@ -1370,7 +1370,7 @@ function Workspace({ code }: { code: string }) {
             rows={impactList(code, overview.artifacts)}
             open={impactOpen}
             onClose={() => setImpactOpen(false)}
-            canReopen={overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead"}
+            canReopen={overview.isConsultAdmin || role === "consultant" || role === "ent_lead"}
           />
           <UpstreamChangesDialog
             project={project}
@@ -1378,7 +1378,7 @@ function Workspace({ code }: { code: string }) {
             open={upstreamOpen}
             onClose={() => setUpstreamOpen(false)}
             locked={status === "locked"}
-            canAcknowledge={status === "locked" ? overview.isConsultAdmin || role === "lead_consultant" || role === "ent_lead" : canPerform("save", actor)}
+            canAcknowledge={status === "locked" ? overview.isConsultAdmin || role === "consultant" || role === "ent_lead" : canPerform("save", actor)}
           />
         </div>
 
@@ -1423,7 +1423,7 @@ function Workspace({ code }: { code: string }) {
               code={code}
               team={overview.team ?? []}
               canComment={canComment}
-              canResolveAny={overview.isConsultAdmin || role === "ent_lead" || role === "lead_consultant"}
+              canResolveAny={overview.isConsultAdmin || role === "ent_lead" || role === "consultant"}
               currentUserId={identity.data?.id ?? null}
               highlightId={justAdded ?? highlightComment}
               numberOf={numberOf}

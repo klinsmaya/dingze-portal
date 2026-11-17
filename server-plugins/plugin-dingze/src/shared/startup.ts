@@ -11,7 +11,7 @@ export type StartupState = 'done' | 'partial' | 'todo';
 /** `problems` keep an item from being ready; `notes` are worth knowing but do not. */
 export type StartupItem = { key: 'org' | 'materials' | 'team'; title: string; state: StartupState; detail: string; problems: string[]; notes: string[] };
 
-const CONSULTANTS: ProjectRole[] = ['lead_consultant', 'co_consultant'];
+const CONSULTANTS: ProjectRole[] = ['consultant'];
 
 export function startupChecklist(input: {
   orgUnits: StartupUnit[];
@@ -24,7 +24,7 @@ export function startupChecklist(input: {
   const depts = orgUnits.filter((u) => u.kind === 'department');
 
   const org: string[] = [];
-  if (!depts.length) org.push('还没有部门：请企业管理员在「本企业 › 组织部门」里建好');
+  if (!depts.length) org.push('还没有部门：请在「资料 › 组织与职责」里建好');
   // A head is optional: not every department head has an account here.
   const headless = depts.filter((d) => !d.headId && !d.headName);
   const orgNotes = headless.length ? [`${headless.map((d) => d.name).join('、')} 还没写负责人（责任分工里的 A 要由人填写）`] : [];
@@ -40,7 +40,9 @@ export function startupChecklist(input: {
 
   const people: string[] = [];
   if (!team.some((m) => m.projectRole === 'ent_lead')) people.push('还没有企业项目负责人：只有他能确认定版');
-  if (depts.length && !team.some((m) => m.projectRole === 'dept_head')) people.push('还没有部门负责人参与：部门承接和部门计划书需要他们');
+  // 部门负责人不再是项目角色：看组织里写了负责人账号的部门，负责人有没有加进项目。
+  const absentHeads = depts.filter((d) => d.headId && !team.some((m) => m.userId === d.headId));
+  if (absentHeads.length) people.push(`${absentHeads.map((d) => d.name).join('、')}的负责人还没加进项目：部门承接和部门计划书需要他们`);
 
   const state = (problems: string[], started: boolean): StartupState => (!problems.length ? 'done' : started ? 'partial' : 'todo');
   return [

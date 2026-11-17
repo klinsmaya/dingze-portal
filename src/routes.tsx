@@ -1,4 +1,4 @@
-import { Activity, BookOpenCheck, Building, Building2, ClipboardList, Eye, FolderKanban, LifeBuoy, MessagesSquare, Settings2, Tent, UsersRound } from "lucide-react";
+import { Activity, BookOpenCheck, Building2, ClipboardList, Eye, FolderKanban, Handshake, LifeBuoy, MessagesSquare, Settings2, Tent, Ticket, Users, UsersRound } from "lucide-react";
 import { Navigate, Outlet } from "react-router";
 
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
@@ -75,17 +75,40 @@ export const appRoutes = defineAppRoutes([
     },
   },
   {
+    // 成员管理（企业管理员）：展开成企业成员、咨询师、邀请注册三个子菜单。
+    // 组织部门不在这里，在项目“资料 › 组织与职责”里维护。
     name: "my-enterprise",
     path: "/enterprise",
-    lazy: () => import("@/pages/enterprise"),
+    element: <Outlet />,
     access: { roles: { anyOf: ["dz_ent_admin"] } },
     resource: {
       meta: {
-        label: "本企业",
+        label: "成员管理",
         priority: 2,
-        icon: <Building />,
+        icon: <UsersRound />,
       },
     },
+    children: [
+      { name: "my-enterprise.index", index: true, lazy: () => import("@/pages/enterprise") },
+      {
+        name: "my-enterprise.members",
+        path: "members",
+        lazy: () => import("@/pages/enterprise/members"),
+        resource: { meta: { label: "企业成员", priority: 0, icon: <Users /> } },
+      },
+      {
+        name: "my-enterprise.consultants",
+        path: "consultants",
+        lazy: () => import("@/pages/enterprise/consultants"),
+        resource: { meta: { label: "咨询师", priority: 1, icon: <Handshake /> } },
+      },
+      {
+        name: "my-enterprise.invites",
+        path: "invites",
+        lazy: () => import("@/pages/enterprise/invites"),
+        resource: { meta: { label: "邀请注册", priority: 2, icon: <Ticket /> } },
+      },
+    ],
   },
   {
     name: "expert",

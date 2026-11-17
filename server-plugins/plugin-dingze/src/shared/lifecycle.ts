@@ -22,26 +22,54 @@ export const STATUS_LABELS: Record<ArtifactStatus, string> = {
   archived: '已归档',
 };
 
-/** Roles inside one project. Enterprise confirmation belongs to `ent_lead` only (Q2). */
-export type ProjectRole = 'ent_lead' | 'dept_head' | 'member' | 'readonly' | 'lead_consultant' | 'co_consultant';
+/**
+ * 项目里的角色（2026-11-17 精简为三种）：企业项目负责人、项目成员、咨询师。企业确认定版只属于
+ * `ent_lead`（Q2）。`readonly` 不是可以分派的角色，只是一种状态：本企业账号没被加进项目时按它对待
+ * （能看、能批注，不能填写和流转，见 project-access.ts），不会存进项目成员表。
+ */
+export type ProjectRole = 'ent_lead' | 'member' | 'consultant' | 'readonly';
 
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
   ent_lead: '企业项目负责人',
-  dept_head: '部门负责人',
   member: '项目成员',
-  readonly: '只读成员',
-  lead_consultant: '主咨询师',
-  co_consultant: '协作咨询师',
+  consultant: '咨询师',
+  readonly: '只读查看',
 };
 
-export const ENTERPRISE_EDITORS: ProjectRole[] = ['ent_lead', 'dept_head', 'member'];
+/** 能分派给人、存进项目成员表的角色。 */
+export const ASSIGNABLE_PROJECT_ROLES: ProjectRole[] = ['ent_lead', 'member', 'consultant'];
+/** 企业侧的角色：只能给本企业的账号（企业管理员、企业成员）。 */
+export const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ['ent_lead', 'member'];
+
+/**
+ * 旧角色对齐到三种（升级时用一次，旧邀请码、旧导入表也用）：部门负责人并入项目成员，主咨询师和
+ * 协作咨询师并入咨询师；只读成员不再是角色，返回 null（移出项目成员，继续按未加入只读查看）。
+ */
+export function normalizeProjectRole(value: unknown): ProjectRole | null {
+  switch (value) {
+    case 'ent_lead':
+    case 'member':
+    case 'consultant':
+      return value;
+    case 'dept_head':
+      return 'member';
+    case 'lead_consultant':
+    case 'co_consultant':
+      return 'consultant';
+    default:
+      return null;
+  }
+}
+
+export const ENTERPRISE_EDITORS: ProjectRole[] = ['ent_lead', 'member'];
 /**
  * 普通员工（会议纪要 2026-11）：填表、保存、批注、问数字咨询师；不点流转（本步完成、提交复核、定版、重开），
- * 不动项目资料库和画像。部门负责人这一轮按普通员工对待，角色保留。
+ * 不动项目资料库和画像。
  */
-export const EMPLOYEE_ROLES: ProjectRole[] = ['dept_head', 'member'];
+export const EMPLOYEE_ROLES: ProjectRole[] = ['member'];
 export const isEmployee = (role: ProjectRole | null | undefined): boolean => !!role && EMPLOYEE_ROLES.includes(role);
-export const CONSULTANTS: ProjectRole[] = ['lead_consultant', 'co_consultant'];
+export const CONSULTANTS: ProjectRole[] = ['consultant'];
+export const isConsultantRole = (role: ProjectRole | null | undefined): boolean => role === 'consultant';
 
 export type LifecycleAction =
   | 'save'
@@ -117,10 +145,10 @@ const RULES: Record<LifecycleAction, TransitionRule> = {
   },
   stepDone: { from: ['in_progress'], to: 'step_done', roles: ['ent_lead'], validates: true },
   submitReview: { from: ['step_done'], to: 'in_review', roles: ['ent_lead', ...CONSULTANTS], service: 'guided' },
-  approve: { from: ['in_review'], to: 'pending_confirm', roles: ['lead_consultant'], validates: true, service: 'guided' },
+  approve: { from: ['in_review'], to: 'pending_confirm', roles: ['consultant'], validates: true, service: 'guided' },
   // 自助：企业项目负责人对照书中定版门禁逐条自查（清单见 self-review.ts），再由他定版。
   selfReview: { from: ['step_done'], to: 'pending_confirm', roles: ['ent_lead'], validates: true, service: 'self' },
-  returnToEdit: { from: ['in_review', 'pending_confirm'], to: 'in_progress', roles: ['lead_consultant', 'ent_lead'], requiresReason: true },
+  returnToEdit: { from: ['in_review', 'pending_confirm'], to: 'in_progress', roles: ['consultant', 'ent_lead'], requiresReason: true },
   confirm: { from: ['pending_confirm'], to: 'locked', roles: ['ent_lead'], validates: true },
   // 解锁重开由企业项目负责人做（写原因，全员含咨询师收到通知）；咨询师不定版也不重开（会议纪要 2026-11），
   // 咨询管理员可以代为处理。重新定版仍要复核和确认。

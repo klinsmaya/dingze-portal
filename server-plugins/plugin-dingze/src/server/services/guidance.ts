@@ -21,7 +21,7 @@ export async function addGuidanceGap(
   input: { category?: unknown; description?: unknown; expected?: unknown; excerpt?: unknown },
   pluginVersion: string,
 ) {
-  const consultant = pc.projectRole === 'lead_consultant' || pc.projectRole === 'co_consultant';
+  const consultant = pc.projectRole === 'consultant';
   if (!consultant && !pc.access.isConsultAdmin) throw new HttpError(403, '只有咨询团队可以记录引导缺口');
   const category = String(input.category ?? 'missing');
   if (!(category in GAP_CATEGORIES)) throw new HttpError(400, '缺口类别不正确');

@@ -13,9 +13,6 @@ export function selfProjectAllowed(enterprise: { selfProjectOff?: boolean | null
   return !!enterprise && enterprise.selfProjectOff !== true;
 }
 
-/** 企业管理员自建项目时可以分派的项目角色（咨询师由运营分派）。 */
-export const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ['ent_lead', 'dept_head', 'member', 'readonly'];
-
 /** 只有还没进入复核的表可以带入：未开始的直接带入，填写中的带入后作为新版本，原内容在历史里。 */
 export const IMPORTABLE_STATUSES: ArtifactStatus[] = ['not_started', 'in_progress'];
 

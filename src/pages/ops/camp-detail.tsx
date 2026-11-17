@@ -20,7 +20,8 @@ import { useCampDetail, useOpsMutation } from "@/lib/dingze/ops-queries";
 import { formatTime } from "@/lib/dingze/records";
 import { cn } from "@/lib/utils";
 
-import { CampAccountsDialog, CampAttachDialog, CampEnrollDialog, CampFormDialog, type IssuedRow, IssuedListDialog } from "./components/camp-dialogs";
+import { BulkAccountsDialog } from "./components/bulk-accounts-dialog";
+import { CampAttachDialog, CampEnrollDialog, CampFormDialog, type IssuedRow, IssuedListDialog } from "./components/camp-dialogs";
 import { ConfirmAction } from "./components/confirm-action";
 import { CAMP_STATUS_LABELS } from "./components/labels";
 import { OpsPageHeader } from "./components/page-header";
@@ -113,7 +114,16 @@ export default function CampDetailPage() {
       {editing ? <CampFormDialog open camp={camp} onClose={() => setEditing(false)} /> : null}
       <CampEnrollDialog open={enrolling} onClose={() => setEnrolling(false)} camp={camp} onIssued={(rows) => setIssued({ title: "企业已开通", rows })} />
       <CampAttachDialog open={attaching} onClose={() => setAttaching(false)} camp={camp} />
-      <CampAccountsDialog project={accountsFor} onClose={() => setAccountsFor(null)} onIssued={(rows) => setIssued({ title: "账号已开通", rows })} />
+      {accountsFor ? (
+        <BulkAccountsDialog
+          open
+          title={`批量发账号 · ${accountsFor.enterprise.shortName}`}
+          enterpriseId={accountsFor.enterprise.id}
+          projects={[{ id: accountsFor.id, name: accountsFor.name }]}
+          onClose={() => setAccountsFor(null)}
+          onIssued={(rows) => setIssued({ title: "账号已开通", rows })}
+        />
+      ) : null}
       <IssuedListDialog title={issued?.title ?? ""} rows={issued?.rows ?? null} onClose={() => setIssued(null)} />
     </div>
   );
@@ -330,7 +340,7 @@ function CloseTab({ camp, projects }: { camp: Camp; projects: CampProject[] }) {
         <span>
           {camp.status === "closed"
             ? "本期已结营；项目已转为企业内训，企业照常登录继续做。"
-            : "结营后每个项目转为企业内训：付费客户选陪跑（主咨询师继续复核），其他选自助（企业负责人自查复核后定版）。"}
+            : "结营后每个项目转为企业内训：付费客户选陪跑（咨询师继续复核），其他选自助（企业负责人自查复核后定版）。"}
         </span>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={summary}>

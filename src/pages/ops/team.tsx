@@ -1,5 +1,6 @@
-import { KeyRound, UserPlus } from "lucide-react";
+import { Ban, CirclePlay, KeyRound, UserPlus } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FilterGroup, FilterItem } from "@/components/dingze/filter-group";
 import { useCanAccess } from "@nocobase/portal-sdk/acl";
+import { useGetIdentity } from "@refinedev/core";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type DzUser, SYSTEM_ROLE_LABELS, type SystemRole, opsApi } from "@/lib/dingze/ops-api";
 import { useDzUsers, useOpsMutation } from "@/lib/dingze/ops-queries";
@@ -23,10 +25,16 @@ const TEAM_ROLES: SystemRole[] = ["dz_consultant", "dz_consult_admin", "dz_ops"]
 export default function TeamPage() {
   const [filter, setFilter] = useState<SystemRole | "all">("all");
   const users = useDzUsers();
-  const [creating, setCreating] = useState(false);
+  // 从运营看板的「开通咨询师账号」过来（?open=create）直接打开开通窗口。
+  const [params] = useSearchParams();
+  const [creating, setCreating] = useState(params.get("open") === "create");
   const [issued, setIssued] = useState<IssuedPassword | null>(null);
   const reset = useOpsMutation(opsApi.resetPassword);
+  const setDisabled = useOpsMutation(opsApi.setAccountDisabled);
   const isConsultAdmin = useCanAccess({ roles: { anyOf: ["dz_consult_admin"] } });
+  const identity = useGetIdentity<{ id: number }>();
+  // 停用、恢复：运营管咨询师的账号；管理员（运营、咨询管理员）的账号只有咨询管理员能动。自己的不能停。
+  const canDisable = (user: DzUser) => user.id !== identity.data?.id && (isConsultAdmin || user.roles.every((r) => r === "dz_consultant"));
 
   const team = (users.data ?? []).filter((u) =>
     u.roles.some((r) => (filter === "all" ? TEAM_ROLES.includes(r) : r === filter))
@@ -92,7 +100,10 @@ export default function TeamPage() {
                 team.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <div className="font-medium">{user.nickname || user.username}</div>
+                      <div className="flex flex-wrap items-center gap-2 font-medium">
+                        {user.nickname || user.username}
+                        {user.disabled ? <Badge variant="outline">已停用</Badge> : null}
+                      </div>
                       <div className="text-xs text-muted-foreground">{user.username}</div>
                     </TableCell>
                     <TableCell>
@@ -119,6 +130,25 @@ export default function TeamPage() {
                         confirmLabel="重置"
                         onConfirm={() => resetPassword(user)}
                       />
+                      {canDisable(user) ? (
+                        <ConfirmAction
+                          trigger={
+                            <Button variant="ghost" size="sm">
+                              {user.disabled ? <CirclePlay /> : <Ban />} {user.disabled ? "恢复" : "停用"}
+                            </Button>
+                          }
+                          title={user.disabled ? `恢复 ${user.nickname || user.username} 的账号？` : `停用 ${user.nickname || user.username} 的账号？`}
+                          description={user.disabled ? "恢复后可以照常登录，原来分派的项目都还在。" : "停用后不能登录；账号、批注和分派的项目都保留，随时可以恢复。"}
+                          confirmLabel={user.disabled ? "恢复" : "停用"}
+                          destructive={!user.disabled}
+                          onConfirm={() =>
+                            setDisabled.mutateAsync(
+                              { userId: user.id, disabled: !user.disabled },
+                              { onSuccess: () => toast.success(user.disabled ? "已恢复" : "已停用"), onError: (error) => toast.error(errorMessage(error)) },
+                            )
+                          }
+                        />
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))

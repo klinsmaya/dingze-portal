@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ImportSource } from "@/components/dingze/import-source";
 import { ORG_TEMPLATE } from "@/lib/dingze/import-templates";
 import { errorMessage } from "@/lib/dingze/errors";
-import { type EnterpriseDetail, type OrgUnit, opsApi } from "@/lib/dingze/ops-api";
+import { type OrgUnit, opsApi } from "@/lib/dingze/ops-api";
 import { type OrgNode, flattenOrgUnits, orgSubtreeIds, parseOrgTable } from "@/lib/dingze/org-units";
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
 
@@ -36,26 +36,10 @@ const CUSTOM_KIND = "__custom";
 const draftKind = (label: string) => ({ kind: label, customKind: !ORG_KIND_SUGGESTIONS.includes(label) });
 
 export type OrgPerson = { id: number; name: string; username?: string };
-/** Where the org is edited: 「本企业」 (enterpriseId) or a project's 资料 page (projectId too). */
+/** Where the org is edited: a project's 资料 page (the org itself is enterprise-wide). */
 export type OrgScope = { enterpriseId: number; enterpriseName: string; projectId?: number };
 
-const entPeople = (detail: EnterpriseDetail): OrgPerson[] =>
-  detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member")).map((m) => ({ id: m.id, name: m.nickname || m.username, username: m.username }));
-
-export function OrgUnitsTab({ detail }: { detail: EnterpriseDetail }) {
-  const nodes = useMemo(() => flattenOrgUnits(detail.orgUnits), [detail.orgUnits]);
-  return (
-    <OrgUnitsEditor
-      scope={{ enterpriseId: detail.enterprise.id, enterpriseName: detail.enterprise.shortName }}
-      orgUnits={detail.orgUnits}
-      people={entPeople(detail)}
-      footer={<MemberDepartments detail={detail} nodes={nodes} />}
-      showDuty={false}
-    />
-  );
-}
-
-/** 组织部门的列表与增删改、从 Excel 粘贴；「本企业」和项目「资料」页共用。 */
+/** 组织部门的列表与增删改、从 Excel 粘贴；在项目「资料 › 组织与职责」里用（成员的所属部门在「成员管理 › 企业成员」里设）。 */
 export function OrgUnitsEditor({
   scope,
   orgUnits,
@@ -64,13 +48,7 @@ export function OrgUnitsEditor({
   actions,
   footer,
   rowExtra,
-  showDuty = true,
 }: {
-  /**
-   * 「本企业 › 组织部门」只看架构：部门、层级、负责人，不显示也不编辑职责（测试反馈 7）；职责在项目
-   * 「资料 › 组织与职责」里维护，已填的职责原样保留。
-   */
-  showDuty?: boolean;
   scope: OrgScope;
   orgUnits: OrgUnit[];
   people: OrgPerson[];
@@ -134,7 +112,7 @@ export function OrgUnitsEditor({
                     </span>
                   ) : null}
                 </span>
-                {showDuty && node.duty ? <span className="line-clamp-2 text-xs text-muted-foreground">职责：{node.duty}</span> : null}
+                {node.duty ? <span className="line-clamp-2 text-xs text-muted-foreground">职责：{node.duty}</span> : null}
                 {rowExtra?.(node.id)}
               </span>
               <Button
@@ -176,7 +154,7 @@ export function OrgUnitsEditor({
 
       {footer}
 
-      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} scope={scope} people={people} nodes={nodes} showDuty={showDuty} />
+      <OrgUnitDialog draft={draft} onClose={() => setDraft(null)} scope={scope} people={people} nodes={nodes} />
       <OrgImportDialog open={importing} onClose={() => setImporting(false)} scope={scope} orgUnits={orgUnits} people={people} />
     </div>
   );
@@ -188,14 +166,12 @@ function OrgUnitDialog({
   scope,
   people,
   nodes,
-  showDuty,
 }: {
   draft: Draft | null;
   onClose: () => void;
   scope: OrgScope;
   people: OrgPerson[];
   nodes: OrgNode[];
-  showDuty: boolean;
 }) {
   const [value, setValue] = useState<Draft | null>(draft);
   const [shown, setShown] = useState<Draft | null>(draft);
@@ -313,18 +289,16 @@ function OrgUnitDialog({
                   <Input id="org-head-name" value={value.headName} placeholder="如“赵部长”" onChange={(e) => setValue({ ...value, headName: e.target.value })} />
                 </Field>
               ) : null}
-              {showDuty ? (
-                <Field>
-                  <FieldLabel htmlFor="org-duty">职责</FieldLabel>
-                  <Textarea
-                    id="org-duty"
-                    value={value.duty}
-                    placeholder="这个部门主要负责什么，如“工商业与居民用户开发、客户服务、价格管理”"
-                    className="min-h-20"
-                    onChange={(e) => setValue({ ...value, duty: e.target.value })}
-                  />
-                </Field>
-              ) : null}
+              <Field>
+                <FieldLabel htmlFor="org-duty">职责</FieldLabel>
+                <Textarea
+                  id="org-duty"
+                  value={value.duty}
+                  placeholder="这个部门主要负责什么，如“工商业与居民用户开发、客户服务、价格管理”"
+                  className="min-h-20"
+                  onChange={(e) => setValue({ ...value, duty: e.target.value })}
+                />
+              </Field>
             </FieldGroup>
           ) : null}
           <DialogFooter>
@@ -341,59 +315,6 @@ function OrgUnitDialog({
   );
 }
 
-/** 成员所属部门：企业管理员（或运营）设置，一次对本企业所有项目生效。 */
-function MemberDepartments({ detail, nodes }: { detail: EnterpriseDetail; nodes: OrgNode[] }) {
-  const set = useOpsMutation(opsApi.setMemberDepartment);
-  const people = detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member"));
-  const current = (userId: number) => {
-    const rows = detail.projects.flatMap((p) => p.members.filter((m) => m.userId === userId));
-    return { inProject: rows.length > 0, orgUnitId: rows.find((m) => m.orgUnitId)?.orgUnitId ?? null, mixed: new Set(rows.map((m) => m.orgUnitId ?? 0)).size > 1 };
-  };
-  if (!people.length) return null;
-  return (
-    <section aria-labelledby="member-depts" className="flex flex-col gap-2">
-      <h3 id="member-depts" className="font-semibold">
-        成员所属部门
-      </h3>
-      <ul className="overflow-hidden rounded-xl border bg-card">
-        {people.map((m) => {
-          const c = current(m.id);
-          return (
-            <li key={m.id} className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm last:border-b-0">
-              <span className="min-w-28 font-medium">{m.nickname || m.username}</span>
-              {c.inProject ? (
-                <NativeSelect
-                  size="sm"
-                  aria-label={`${m.nickname || m.username} 所属部门`}
-                  value={c.orgUnitId ?? ""}
-                  disabled={set.isPending}
-                  onChange={(e) =>
-                    set.mutate(
-                      { enterpriseId: detail.enterprise.id, userId: m.id, orgUnitId: e.target.value ? Number(e.target.value) : null },
-                      { onSuccess: (r) => toast.success(`已更新 ${r.updated} 个项目里的所属部门`), onError: (error) => toast.error(errorMessage(error)) },
-                    )
-                  }
-                >
-                  <NativeSelectOption value="">（未归部门）</NativeSelectOption>
-                  {nodes.map((n) => (
-                    <NativeSelectOption key={n.id} value={n.id}>
-                      {"　".repeat(n.depth)}
-                      {n.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              ) : (
-                <span className="text-xs text-muted-foreground">还没加入项目，加入后再设置</span>
-              )}
-              {c.mixed ? <span className="text-xs text-[color:var(--dz-warn)]">各项目里不一致，重新选一次即统一</span> : null}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /** 从 Excel 粘贴组织表：先预览，再按名称新增或更新（同名部门更新职责和负责人）。 */
 function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boolean; onClose: () => void; scope: OrgScope; orgUnits: OrgUnit[]; people: OrgPerson[] }) {
   const [text, setText] = useState("");
@@ -406,7 +327,7 @@ function OrgImportDialog({ open, onClose, scope, orgUnits, people }: { open: boo
       { enterpriseId: scope.enterpriseId, ...(scope.projectId ? { projectId: scope.projectId } : {}), rows },
       {
         onSuccess: (r) => {
-          toast.success(`已导入：新增 ${r.created} 个、更新 ${r.updated} 个${r.changes ? "；已定版的部门表会提示主咨询师" : ""}`);
+          toast.success(`已导入：新增 ${r.created} 个、更新 ${r.updated} 个${r.changes ? "；已定版的部门表会提示咨询师" : ""}`);
           setText("");
           onClose();
         },

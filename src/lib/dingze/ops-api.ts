@@ -1,6 +1,6 @@
 import { nocobaseClient } from "@nocobase/portal-sdk/client";
 
-import type { ArtifactStatus, ProjectRole, StartupState } from "@dingze/shared";
+import type { AccountKind, ArtifactStatus, MemberTier, ProjectRole, StartupState } from "@dingze/shared";
 
 // 运营管理 endpoints. Each names its enterprise or project explicitly and the plugin
 // checks the caller's space membership and system role, so no x-spaces header is needed.
@@ -21,6 +21,19 @@ export type DzUser = {
   email: string | null;
   phone: string | null;
   roles: SystemRole[];
+  /** 账号已停用：不能登录，数据和项目成员身份都留着。 */
+  disabled?: boolean;
+};
+
+/** 企业里的一个人：企业成员（本企业账号）或咨询师（分派来的咨询方账号）。运营管理员不在这里。 */
+export type EnterpriseMember = DzUser & {
+  kind: AccountKind;
+  /** 所属部门，记在人身上，对本企业所有项目生效。 */
+  orgUnitId: number | null;
+  disabled: boolean;
+  /** 还在用初始密码，第一次登录要先改。 */
+  mustChangePassword: boolean;
+  createdAt: string | null;
 };
 
 export type EnterpriseStatus = "active" | "suspended";
@@ -37,6 +50,10 @@ export type Enterprise = {
   selfProjectOff?: boolean;
   /** 客户在首页自助注册的试用企业。 */
   trial?: boolean;
+  /** 能用的企业管理员有几位；0 位的企业要标出来。只在企业列表里有。 */
+  adminCount?: number;
+  /** 待审核的注册申请有几条。只在企业列表里有。 */
+  pendingRegistrations?: number;
 };
 
 export type OpsProject = {
@@ -77,8 +94,27 @@ export type EnterpriseDetail = {
   enterprise: Enterprise;
   projects: (OpsProject & { members: ProjectMember[] })[];
   orgUnits: OrgUnit[];
-  members: DzUser[];
+  /** 企业成员和咨询师，按 kind 分两组。 */
+  members: EnterpriseMember[];
+  /** 还没被分派到本企业项目的咨询管理员：分派咨询师时也可以选他们。 */
+  consultAdmins: EnterpriseMember[];
 };
+
+/** 项目里的“成员”：有谁、当前登录的人是哪一级、能分派什么、还能加谁。 */
+export type ProjectMembers = {
+  projectId: number;
+  enterpriseId: number;
+  projectName: string;
+  service: "guided" | "self";
+  tier: MemberTier | null;
+  assignable: ProjectRole[];
+  members: { userId: number; projectRole: ProjectRole; orgUnitId: number | null; nickname: string; username: string }[];
+  candidates: { id: number; nickname: string; username: string; kind: AccountKind; orgUnitId: number | null }[];
+  orgUnits: { id: number; name: string; parentId: number | null }[];
+};
+
+export type AccountRow = { nickname: string; username: string; phone?: string; email?: string; dept?: string };
+export type AccountResult = { ok: boolean; nickname: string; username: string; initialPassword?: string | null; existed?: boolean; error?: string };
 
 export type CreatedAccount = { user: DzUser; initialPassword: string };
 
@@ -150,7 +186,6 @@ export type CampProject = {
 export type CampDetail = { camp: Camp; projects: CampProject[] };
 
 export type CampEnrollResult = { ok: boolean; enterprise: string; projectId?: number; username?: string; initialPassword?: string | null; error?: string };
-export type CampAccountResult = { ok: boolean; nickname: string; username: string; role?: ProjectRole; initialPassword?: string | null; existed?: boolean; error?: string };
 
 export const opsApi = {
   opsBoard: () => get<OpsBoard>("opsBoard"),
@@ -161,16 +196,21 @@ export const opsApi = {
     shortName: string;
     size: "large" | "sme";
     consultantIds: number[];
-    admin?: { username: string; nickname: string; email?: string; phone?: string };
+    /** 必填：企业至少要有一位管理员。 */
+    admin: { username: string; nickname: string; email?: string; phone?: string };
   }) =>
     post<{ enterprise: Enterprise; spaceName: string; admin: CreatedAccount | null }>("provisionEnterprise", values),
   updateEnterprise: (values: { enterpriseId: number } & Partial<Pick<Enterprise, "name" | "shortName" | "size" | "status">> & { allowSelfProject?: boolean }) =>
     post<Enterprise>("updateEnterprise", values),
   addEnterpriseMembers: (values: { enterpriseId: number; userIds: number[] }) => post("addEnterpriseMembers", values),
   removeEnterpriseMember: (values: { enterpriseId: number; userId: number }) => post("removeEnterpriseMember", values),
+  /** 设为 / 取消企业管理员（运营）。 */
+  setEnterpriseAdmin: (values: { enterpriseId: number; userId: number; admin: boolean }) => post("setEnterpriseAdmin", values),
+  /** 停用 / 恢复账号。带 enterpriseId：运营和本企业管理员；不带：运营管咨询方账号。 */
+  setAccountDisabled: (values: { enterpriseId?: number; userId: number; disabled: boolean }) => post<{ ok: boolean; disabled: boolean }>("setAccountDisabled", values),
   saveOrgUnit: (values: {
     enterpriseId: number;
-    /** 在项目「资料」页维护时带上（企业项目负责人、主咨询师）。 */
+    /** 在项目「资料」页维护时带上（企业项目负责人、咨询师）。 */
     projectId?: number;
     id?: number;
     name: string;
@@ -194,20 +234,25 @@ export const opsApi = {
     phone?: string;
     systemRole: SystemRole;
     enterpriseId?: number;
+    /** 开通后直接加进这些项目（项目成员）。 */
+    projectIds?: number[];
+    orgUnitId?: number | null;
   }) => post<CreatedAccount>("createUser", values),
+  /** 批量开通企业成员，并加进选中的项目；登录名已是本企业账号的只加进项目。 */
+  createUsers: (values: { enterpriseId: number; projectIds?: number[]; rows: AccountRow[] }) => post<{ results: AccountResult[] }>("createUsers", values),
   resetPassword: (values: { userId: number; enterpriseId?: number }) =>
     post<{ initialPassword: string }>("resetPassword", values),
-  createProject: (values: Partial<OpsProject> & { enterpriseId: number; name: string; members?: { userId: number; projectRole: ProjectRole; orgUnitId?: number }[] }) =>
+  createProject: (values: Partial<OpsProject> & { enterpriseId: number; name: string; members?: { userId: number; projectRole: ProjectRole }[] }) =>
     post<OpsProject>("createProject", values),
   updateProject: (values: Partial<OpsProject> & { projectId: number }) => post<OpsProject>("updateProject", values),
   /** 企业管理员自建项目：企业内训 · 自助，只分派企业侧角色。 */
-  createOwnProject: (values: { enterpriseId: number; name: string; year: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
+  createOwnProject: (values: { enterpriseId: number; name: string; year: number; members: { userId: number; projectRole: ProjectRole }[] }) =>
     post<OpsProject>("createOwnProject", values),
-  setProjectMembers: (values: { projectId: number; members: { userId: number; projectRole: ProjectRole; orgUnitId?: number | null }[] }) =>
-    post("setProjectMembers", values),
+  projectMembers: (projectId: number) => get<ProjectMembers>("projectMembers", { projectId }),
+  setProjectMembers: (values: { projectId: number; members: { userId: number; projectRole: ProjectRole }[] }) => post("setProjectMembers", values),
   removeProjectMember: (values: { projectId: number; userId: number }) => post("removeProjectMember", values),
   /** 归档 / 恢复：运营，和本企业的企业管理员。 */
-  setProjectArchived: (values: { projectId: number; archived: boolean }) => post<OpsProject>("setProjectArchived", values),
+  setProjectArchived: (values: { projectId: number; archived: boolean }) => post<OpsProject & { invitesDisabled?: number }>("setProjectArchived", values),
   /** 删除项目，不可恢复；confirmName 要和项目名称一致。 */
   deleteProject: (values: { projectId: number; confirmName: string }) =>
     post<{ ok: boolean; removed: Record<string, number>; files: number; filesFailed: number }>("deleteProject", values),
@@ -218,13 +263,10 @@ export const opsApi = {
     campId: number;
     year?: number;
     projectName?: string;
-    leadConsultantId?: number;
-    coConsultantIds?: number[];
+    consultantIds?: number[];
     rows: { name: string; shortName: string; size: "large" | "sme"; adminNickname: string; adminUsername: string; adminPhone?: string }[];
   }) => post<{ results: CampEnrollResult[] }>("campEnroll", values),
   campAttach: (values: { campId: number | null; projectIds: number[] }) => post<{ updated: number }>("campAttach", values),
-  campAccounts: (values: { projectId: number; rows: { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string }[] }) =>
-    post<{ results: CampAccountResult[] }>("campAccounts", values),
   campRemind: (values: { campId: number; projectIds?: number[] }) => post<{ sent: number }>("campRemind", values),
   campInvites: (values: { campId: number; projectIds?: number[] }) =>
     post<{ results: { projectId: number; enterprise: string; code: string; maxUses: number; expiresAt: string | null; created: boolean }[] }>("campInvites", values),

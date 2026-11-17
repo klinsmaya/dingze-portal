@@ -14,6 +14,8 @@ export type Invite = {
   projectId: number | null;
   projectName: string | null;
   projectRole: ProjectRole | null;
+  /** 绑的项目已归档：码跟着停用，恢复项目后要重新发码或手动启用。 */
+  projectArchived?: boolean;
   orgUnitId: number | null;
   orgUnitName: string | null;
   maxUses: number;
@@ -48,7 +50,6 @@ export type InviteInput = {
   enterpriseId: number;
   id?: number;
   projectId?: number | null;
-  projectRole?: ProjectRole | null;
   orgUnitId?: number | null;
   maxUses?: number;
   expiresAt?: string | null;

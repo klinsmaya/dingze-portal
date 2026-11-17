@@ -98,7 +98,7 @@ export async function addComment(
       const thread = await repo.find({ filter: { $or: [{ id: root.get('id') }, { parentId: root.get('id') }] }, fields: ['createdById'], transaction });
       others = thread.map((c: any) => c.get('createdById'));
     } else {
-      others = await projectMemberIds(ctx, projectId, ['ent_lead', 'lead_consultant'], transaction);
+      others = await projectMemberIds(ctx, projectId, ['ent_lead', 'consultant'], transaction);
     }
     others = others.filter((id) => !mentions.includes(id));
     if (others.length) {
@@ -119,8 +119,8 @@ export async function resolveComment(ctx: Context, pc: ProjectContext, input: { 
   if (!comment) throw new HttpError(404, '批注不存在');
   if (comment.get('parentId')) throw new HttpError(400, '请在批注主题上标记解决');
   const userId = currentUserId(ctx);
-  const allowed = pc.access.isConsultAdmin || comment.get('createdById') === userId || ['ent_lead', 'lead_consultant'].includes(pc.projectRole ?? '');
-  if (!allowed) throw new HttpError(403, '只有批注人、企业项目负责人或主咨询师可以标记解决');
+  const allowed = pc.access.isConsultAdmin || comment.get('createdById') === userId || ['ent_lead', 'consultant'].includes(pc.projectRole ?? '');
+  if (!allowed) throw new HttpError(403, '只有批注人、企业项目负责人或咨询师可以标记解决');
   const resolved = input.resolved !== false;
   await comment.update({ resolved, resolvedById: resolved ? userId : null, resolvedAt: resolved ? new Date() : null });
   return { resolved };

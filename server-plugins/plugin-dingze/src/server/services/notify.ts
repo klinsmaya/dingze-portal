@@ -71,15 +71,14 @@ export async function projectMemberIds(ctx: Context, projectId: number, roles?: 
 }
 
 const RECIPIENTS: Partial<Record<LifecycleAction, { roles?: ProjectRole[]; kind: string; title: (name: string) => string; verb: string }>> = {
-  stepDone: { roles: ['lead_consultant', 'co_consultant'], kind: 'step_done', title: (n) => `《${n}》本步完成，待提交复核`, verb: '标记了本步完成' },
-  submitReview: { roles: ['lead_consultant'], kind: 'review', title: (n) => `《${n}》待复核`, verb: '提交了复核' },
+  stepDone: { roles: ['consultant'], kind: 'step_done', title: (n) => `《${n}》本步完成，待提交复核`, verb: '标记了本步完成' },
+  submitReview: { roles: ['consultant'], kind: 'review', title: (n) => `《${n}》待复核`, verb: '提交了复核' },
   approve: { roles: ['ent_lead'], kind: 'confirm', title: (n) => `《${n}》复核通过，待企业确认`, verb: '复核通过' },
-  returnToEdit: { roles: ['ent_lead', 'dept_head', 'lead_consultant'], kind: 'returned', title: (n) => `《${n}》被退回修改`, verb: '退回修改' },
+  returnToEdit: { roles: ['ent_lead', 'consultant'], kind: 'returned', title: (n) => `《${n}》被退回修改`, verb: '退回修改' },
   confirm: { kind: 'locked', title: (n) => `《${n}》已定版`, verb: '确认定版' },
   forceLock: { kind: 'locked', title: (n) => `《${n}》已定版`, verb: '强制定版' },
   reopen: { kind: 'reopened', title: (n) => `《${n}》已解锁重开`, verb: '解锁重开' },
   forceReturn: { kind: 'reopened', title: (n) => `《${n}》已退回重做`, verb: '强制退回' },
-  selfReview: { roles: ['dept_head'], kind: 'confirm', title: (n) => `《${n}》自查复核完成，待定版`, verb: '完成了自查复核' },
 };
 
 /** 自助项目没有咨询师：本步完成后通知企业项目负责人去自查复核。 */
@@ -126,7 +125,7 @@ export async function notifyTransition(
     );
   }
   if (extra.stale.length) {
-    const owners = await projectMemberIds(ctx, projectId, ['ent_lead', 'lead_consultant'], transaction);
+    const owners = await projectMemberIds(ctx, projectId, ['ent_lead', 'consultant'], transaction);
     for (const code of extra.stale) {
       const target = getArtifactDef(code);
       const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });

@@ -1,4 +1,4 @@
-import { ArrowRight, Plus, Search } from "lucide-react";
+import { ArrowRight, Plus, Search, Ticket, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { nextActionPath } from "@/lib/dingze/progress";
 import { PROJECT_PAGE_SIZE, filterProjects, pageOf, projectRoleLabel, projectYears, splitArchived } from "@/lib/dingze/project-list";
 import { useMyProjects } from "@/lib/dingze/queries";
 import { samplePath } from "@/lib/dingze/sample";
-import { useSelfProjectEnterprise } from "@/lib/dingze/self-project";
+import { useOwnEnterprise, useSelfProjectEnterprise } from "@/lib/dingze/self-project";
 import { OwnProjectDialog } from "@/pages/ops/components/projects-tab";
 
 import { ProjectManageMenu } from "./components/project-manage";
@@ -29,7 +29,7 @@ import { ProjectManageMenu } from "./components/project-manage";
 const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
 
 /**
- * 企业管理员自建项目：默认都可以，运营可以按企业关掉（测试反馈 4）。入口从「本企业 › 项目」
+ * 企业管理员自建项目：默认都可以，运营可以按企业关掉（测试反馈 4）。入口从原来的「本企业 › 项目」
  * 挪到这里，项目只在「我的项目」一处出现（测试反馈 5）。
  */
 function NewOwnProject({ enterprise, autoOpen }: { enterprise: Enterprise; autoOpen: boolean }) {
@@ -54,6 +54,7 @@ function NewOwnProject({ enterprise, autoOpen }: { enterprise: Enterprise; autoO
 export default function ProjectsPage() {
   const { data: projects, isLoading, error } = useMyProjects();
   const selfEnterprise = useSelfProjectEnterprise();
+  const ownEnterprise = useOwnEnterprise();
   // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。从项目里点「全部项目」「新建项目」
   // 过来的（?all=1 / ?new=1）留在列表，否则只有一个项目的企业管理员没有地方新建项目。
   const [params, setParams] = useSearchParams();
@@ -94,6 +95,22 @@ export default function ProjectsPage() {
             选一个项目继续。不知道怎么填，先看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
           </p>
         </div>
+        {/* 企业管理员的常用入口：加人、发邀请码、审核申请都在「成员管理」里，这里放一步到位的口子。 */}
+        {ownEnterprise ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {ownEnterprise.pendingRegistrations ? (
+              <Button variant="outline" nativeButton={false} render={<Link to="/enterprise/invites" />}>
+                待审核 <Badge>{ownEnterprise.pendingRegistrations}</Badge>
+              </Button>
+            ) : null}
+            <Button variant="outline" nativeButton={false} render={<Link to="/enterprise/members?open=create" />}>
+              <UserPlus /> 添加成员
+            </Button>
+            <Button variant="outline" nativeButton={false} render={<Link to="/enterprise/invites" />}>
+              <Ticket /> 邀请成员
+            </Button>
+          </div>
+        ) : null}
         {selfEnterprise ? <NewOwnProject key={selfEnterprise.id} enterprise={selfEnterprise} autoOpen={params.has("new")} /> : null}
       </div>
 

@@ -3,6 +3,7 @@ import { Plugin } from '@nocobase/server';
 
 import type { LifecycleAction } from '../shared';
 import { HttpError, SYSTEM_ROLES, loadProjectContext } from './services/access';
+import { accountStatus, assertAccountUsable, changePassword, signInGuard } from './services/accounts';
 import {
   acknowledgeUpstream,
   artifactDetail,
@@ -25,6 +26,7 @@ import { checkInvite, listInvites, registerWithInvite, registrationStatus, revie
 import { trialSignUp } from './services/trial';
 import { campAccounts, campAttach, campClose, campDetail, campEnroll, campInvites, campRemind, listCamps, saveCamp } from './services/camps';
 import { mergeGoalTargets } from './upgrade/merge-goal-targets';
+import { alignMembers } from './upgrade/align-members';
 import { addGuidanceGap, listGuidanceGaps, reviewGuidanceGap } from './services/guidance';
 import { actOnExpertRequest, createExpertRequest, expertRequestDetail, listExpertRequests } from './services/expert';
 import { addMaterial, deleteMaterial, downloadMaterial, getMaterial, getProfile, listAttachments, listMaterials, saveProfile, searchMaterials, setMaterialLibrary, setMaterialShared } from './services/materials';
@@ -32,19 +34,26 @@ import { addComment, listComments, resolveComment } from './services/comments';
 import { markNotificationsRead, myNotifications } from './services/notify';
 import { planBookSources } from './services/plan-book-sources';
 import { artifactHistory, artifactRegistry, deliveryBundle, recordExport, versionDiff, versionPayload } from './services/registry';
-import { createOwnProject, createProject, listEnterprises, myProjects, provisionEnterprise, setProjectMembers } from './services/enterprises';
+import { createOwnProject, createProject, listEnterprises, myProjects, provisionEnterprise } from './services/enterprises';
 import {
   addEnterpriseMembers,
   createUser,
+  createUsers,
+  projectMembers,
+  removeEnterpriseMember,
+  removeProjectMember,
+  setAccountDisabled,
+  setEnterpriseAdmin,
+  setMemberDepartment,
+  setProjectMembers,
+} from './services/members';
+import {
   deleteOrgUnit,
   deleteProject,
   enterpriseDetail,
   listUsers,
-  removeEnterpriseMember,
-  removeProjectMember,
   resetPassword,
   saveOrgUnit,
-  setMemberDepartment,
   setProjectArchived,
   importOrgUnits,
   updateEnterprise,
@@ -73,10 +82,15 @@ const ROLE_DEFINITIONS = [
 
 type Handler = (ctx: Context) => Promise<unknown>;
 
-/** Wrap a handler so domain errors become JSON responses with a stable `code`. */
-function action(handler: Handler) {
+/**
+ * Wrap a handler so domain errors become JSON responses with a stable `code`.
+ * 每个动作先看账号能不能用（停用的、还没改初始密码的拦下）；`open` 的动作不看：公开的几个，
+ * 以及让人查账号状态、改密码的两个。
+ */
+function action(handler: Handler, open = false) {
   return async (ctx: Context, next: Next) => {
     try {
+      if (!open) await assertAccountUsable(ctx);
       ctx.body = await handler(ctx);
     } catch (raw) {
       const error = toHttpError(raw);
@@ -123,10 +137,13 @@ export class PluginDingzeServer extends Plugin {
         campRemind: action((ctx) => campRemind(ctx, values(ctx) as any)),
         campInvites: action((ctx) => campInvites(ctx, values(ctx) as any)),
         campClose: action((ctx) => campClose(ctx, values(ctx) as any)),
-        checkInvite: action((ctx) => checkInvite(ctx, ctx.action.params as any)),
-        registerWithInvite: action((ctx) => registerWithInvite(ctx, values(ctx))),
-        trialSignUp: action((ctx) => trialSignUp(ctx, values(ctx))),
-        registrationStatus: action((ctx) => registrationStatus(ctx, ctx.action.params as any)),
+        checkInvite: action((ctx) => checkInvite(ctx, ctx.action.params as any), true),
+        registerWithInvite: action((ctx) => registerWithInvite(ctx, values(ctx)), true),
+        trialSignUp: action((ctx) => trialSignUp(ctx, values(ctx)), true),
+        registrationStatus: action((ctx) => registrationStatus(ctx, ctx.action.params as any), true),
+        // 账号自己的事：登录后门户先问状态；还在用初始密码的只能先改密码。
+        accountStatus: action((ctx) => accountStatus(ctx), true),
+        changePassword: action((ctx) => changePassword(ctx, values(ctx)), true),
         listInvites: action((ctx) => listInvites(ctx, ctx.action.params.enterpriseId)),
         saveInvite: action((ctx) => saveInvite(ctx, values(ctx) as any)),
         reviewRegistration: action((ctx) => reviewRegistration(ctx, values(ctx) as any)),
@@ -267,6 +284,8 @@ export class PluginDingzeServer extends Plugin {
           const v = values(ctx);
           return importArtifacts(ctx, await loadProjectContext(ctx, v.projectId), v as any);
         }),
+        // 项目成员三级管理：运营 / 咨询管理员 › 本企业管理员 › 企业项目负责人。
+        projectMembers: action((ctx) => projectMembers(ctx, ctx.action.params.projectId)),
         setProjectMembers: action((ctx) => setProjectMembers(ctx, values(ctx).projectId, values(ctx).members)),
         updateProject: action((ctx) => updateProject(ctx, values(ctx) as any)),
         removeProjectMember: action((ctx) => removeProjectMember(ctx, values(ctx) as any)),
@@ -277,6 +296,8 @@ export class PluginDingzeServer extends Plugin {
         updateEnterprise: action((ctx) => updateEnterprise(ctx, values(ctx) as any)),
         addEnterpriseMembers: action((ctx) => addEnterpriseMembers(ctx, values(ctx) as any)),
         removeEnterpriseMember: action((ctx) => removeEnterpriseMember(ctx, values(ctx) as any)),
+        setEnterpriseAdmin: action((ctx) => setEnterpriseAdmin(ctx, values(ctx) as any)),
+        setAccountDisabled: action((ctx) => setAccountDisabled(ctx, values(ctx) as any)),
         saveOrgUnit: action((ctx) => saveOrgUnit(ctx, values(ctx) as any)),
         setMemberDepartment: action((ctx) => setMemberDepartment(ctx, values(ctx) as any)),
         importOrgUnits: action((ctx) => importOrgUnits(ctx, values(ctx) as any)),
@@ -295,6 +316,7 @@ export class PluginDingzeServer extends Plugin {
         deleteOrgUnit: action((ctx) => deleteOrgUnit(ctx, values(ctx) as any)),
         listUsers: action((ctx) => listUsers(ctx, ctx.action.params as any)),
         createUser: action((ctx) => createUser(ctx, values(ctx) as any)),
+        createUsers: action((ctx) => createUsers(ctx, values(ctx) as any)),
         resetPassword: action((ctx) => resetPassword(ctx, values(ctx) as any)),
       },
     });
@@ -306,12 +328,20 @@ export class PluginDingzeServer extends Plugin {
     // collection is open, reads go through dingze:downloadMaterial.
     this.app.acl.allow('dz_material_files', 'create', 'loggedIn');
 
+    // 停用的账号登录不进来（登录接口返回之后再核对一次；dingze 的每个动作也各自核对）。
+    this.app.resourceManager.use(signInGuard(), { tag: 'dingzeSignInGuard' });
+
     // One-off data alignment after an upgrade; each step is a no-op once done.
     this.app.on('afterStart', async () => {
       try {
         await mergeGoalTargets(this.db, (message) => this.app.log.info(message));
       } catch (error: any) {
         this.app.log.error(`dingze: merging S2-03-T failed: ${error?.message ?? error}`);
+      }
+      try {
+        await alignMembers(this.db, (message) => this.app.log.info(message));
+      } catch (error: any) {
+        this.app.log.error(`dingze: aligning members failed: ${error?.message ?? error}`);
       }
     });
   }
