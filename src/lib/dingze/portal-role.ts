@@ -33,3 +33,14 @@ export function portalRoleFromSystem(roles: readonly string[]): PortalRole {
   if (roles.includes("dz_ent_admin")) return "lead";
   return "employee";
 }
+
+/**
+ * 项目里左上角品牌「自驱战略」去哪（用户 2026-11-17 定）：企业管理员去「我的项目」做项目、人员管理，
+ * 普通员工回本项目总览接着填。按账号的系统角色分，和有几个项目无关：以前一律去 /projects，只有一个
+ * 项目的账号又被带回总览，所以免费注册的和运营开通的账号去处不同。咨询侧和运营跨项目工作，也去列表。
+ */
+export function brandHome(systemRoles: readonly string[], projectId: number): { to: string; label: string } {
+  if (portalRoleFromSystem(systemRoles) === "employee") return { to: `/projects/${projectId}/overview`, label: "总览" };
+  // ?all=1：只有一个项目也停在列表，不自动进项目。
+  return { to: "/projects?all=1", label: "我的项目" };
+}
