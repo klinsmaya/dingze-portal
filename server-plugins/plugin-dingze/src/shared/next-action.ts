@@ -25,8 +25,8 @@ export interface NextAction {
   hint: string;
 }
 
-const ENTERPRISE: ProjectRole[] = ['ent_lead', 'dept_head', 'member'];
-const CONSULTANT: ProjectRole[] = ['lead_consultant', 'co_consultant'];
+const ENTERPRISE: ProjectRole[] = ['ent_lead', 'member'];
+const CONSULTANT: ProjectRole[] = ['consultant'];
 const RETURNS = ['returnToEdit', 'forceReturn'];
 
 export function wasReturned(a: ArtifactProgress): boolean {
@@ -41,7 +41,7 @@ export function staleAdvice(status: string, service: ServiceMode = 'guided'): st
   if (status !== 'locked') return '上游表有改动：看上游改了什么，核对后点“已核对”';
   return service === 'self'
     ? '已定版，但上游表有改动：由企业项目负责人判断是否解锁重开'
-    : '已定版，但上游表有改动：由企业项目负责人或主咨询师判断是否解锁重开';
+    : '已定版，但上游表有改动：由企业项目负责人或咨询师判断是否解锁重开';
 }
 
 /** Collaboration status as the enterprise sees it (spec 二(三): no black-box waiting). */
@@ -71,13 +71,13 @@ export function collaborationStatus(
     case 'step_done':
       return { tone: 'act', text: isEnterprise ? '本步已完成，下一步：提交给顾问审' : '企业已完成本步，可提交复核' };
     case 'in_review':
-      return { tone: isEnterprise ? 'wait' : 'act', text: isEnterprise ? `等主咨询师复核${since(a, '提交')}，审完会通知你` : `待复核${since(a, '提交')}` };
+      return { tone: isEnterprise ? 'wait' : 'act', text: isEnterprise ? `等咨询师复核${since(a, '提交')}，审完会通知你` : `待复核${since(a, '提交')}` };
     case 'pending_confirm':
       return role === 'ent_lead'
         ? { tone: 'act', text: `顾问已审过${since(a, '通过')}，待你定版` }
         : { tone: 'wait', text: isEnterprise ? `顾问已审过${since(a, '通过')}，等企业项目负责人定版` : `等企业项目负责人定版${since(a, '通过')}` };
     case 'locked':
-      return { tone: 'done', text: '已定版（锁定）：如需修改，企业项目负责人或主咨询师可解锁重开' };
+      return { tone: 'done', text: '已定版（锁定）：如需修改，企业项目负责人或咨询师可解锁重开' };
     default:
       return null;
   }
@@ -104,12 +104,12 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
   const editor = isEnterprise && role !== 'member' ? true : isEnterprise;
 
   if (!role) return { kind: 'view', code: null, label: '查看项目进度', hint: '你不在这个项目的团队里，可以查看进度和成果' };
-  if (role === 'readonly') return { kind: 'view', code: null, label: '查看项目进度', hint: '你是只读成员，可以查看各张表、定版结果，也可以批注' };
+  if (role === 'readonly') return { kind: 'view', code: null, label: '查看项目进度', hint: '你还没加入这个项目：可以查看各张表、定版结果，也可以批注；要填写请企业管理员或项目负责人把你加进项目' };
   if (role === 'ent_lead') {
     const a = first((x) => x.status === 'pending_confirm');
     if (a) return { kind: 'confirm', code: a.code, label: `去定版：${title(a.code)}`, hint: '顾问已审过，确认后这张表锁定，作为后面各表的依据' };
   }
-  if (role === 'lead_consultant') {
+  if (role === 'consultant') {
     const a = first((x) => x.status === 'in_review');
     if (a) return { kind: 'review', code: a.code, label: `去复核：${title(a.code)}`, hint: '企业已提交，复核通过后交企业项目负责人定版' };
   }
@@ -120,7 +120,7 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
   // A draft is checked and saved by whoever edits it; a locked table only by whoever may reopen it.
   // 解锁重开只有企业项目负责人（咨询师不定版也不重开）。
   const mayReopen = role === 'ent_lead';
-  const stale = first((x) => x.stale && x.status !== 'not_started' && (x.status === 'locked' ? mayReopen : isEnterprise || role === 'lead_consultant'));
+  const stale = first((x) => x.stale && x.status !== 'not_started' && (x.status === 'locked' ? mayReopen : isEnterprise || role === 'consultant'));
   if (stale) {
     return stale.status === 'locked'
       ? { kind: 'stale', code: stale.code, label: `判断是否重开：${title(stale.code)}`, hint: '已定版的表引用的上游改过了，看上游改了什么后决定解锁重开，还是点“已核对”保持原版' }
@@ -131,8 +131,8 @@ export function nextAction(artifacts: ArtifactProgress[], role: ProjectRole | nu
     if (done && role === 'ent_lead') return { kind: 'submit', code: done.code, label: `自查复核：${title(done.code)}`, hint: '对照书中定版门禁逐条确认，没问题就进入待定版' };
     const confirm = first((x) => x.status === 'pending_confirm');
     if (confirm && role === 'ent_lead') return { kind: 'confirm', code: confirm.code, label: `去定版：${title(confirm.code)}`, hint: '自查复核已完成，确认后这张表锁定' };
-  } else if (done && (role === 'ent_lead' || role === 'dept_head' || (role && CONSULTANT.includes(role)))) {
-    return { kind: 'submit', code: done.code, label: `提交顾问审：${title(done.code)}`, hint: '这张表已完成本步，提交后由主咨询师复核' };
+  } else if (done && (role === 'ent_lead' || (role && CONSULTANT.includes(role)))) {
+    return { kind: 'submit', code: done.code, label: `提交顾问审：${title(done.code)}`, hint: '这张表已完成本步，提交后由咨询师复核' };
   }
   const fill = first((x) => x.unlocked && (x.status === 'not_started' || x.status === 'in_progress') && getArtifactDef(x.code).priority === 'P0');
   if (fill) {

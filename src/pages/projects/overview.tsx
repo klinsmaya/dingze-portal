@@ -1,4 +1,4 @@
-import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
 import { ImportDialog } from "./components/import-dialog";
+import { ProjectMembersDialog } from "./components/project-members-dialog";
 import { useProjectContext } from "./project-context";
 
 export default function ProjectOverviewPage() {
@@ -39,8 +40,11 @@ export default function ProjectOverviewPage() {
   // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
   const employee = isEmployee(role) && !overview.isConsultAdmin;
   const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
-  // 企业管理员（定稿方案三）：成员还没到位时第一张卡是“邀请成员”，然后才是“上传资料”；两张卡到位后自动退后。
-  const inviteFirst = role === "ent_lead" && !materials.isLoading && startup.find((i) => i.key === "team")?.state !== "done";
+  // 能管项目成员的企业侧的人（企业管理员、企业项目负责人）：成员还没到位时第一张卡是“添加项目成员”，
+  // 然后才是“上传资料”；两张卡到位后自动退后。点开是项目成员弹窗（以前链到企业管理员才进得去的邀请页）。
+  const manageMembers = !!overview.memberTier;
+  const [membersOpen, setMembersOpen] = useState(false);
+  const inviteFirst = (overview.memberTier === "lead" || overview.memberTier === "entAdmin") && !materials.isLoading && startup.find((i) => i.key === "team")?.state !== "done";
   // 一页只有一个实心主按钮：第一张卡实心，其余灰底。
   const primaryIndex = inviteFirst ? 0 : materialsFirst ? 1 : 2;
   const cardClass = (index: number, quiet = false) =>
@@ -60,7 +64,7 @@ export default function ProjectOverviewPage() {
     setGuideSeen(true);
   };
   // 训练营和企业内训对企业是同一套界面；场景只给咨询侧看。
-  const consulting = overview.isConsultAdmin || role === "lead_consultant" || role === "co_consultant";
+  const consulting = overview.isConsultAdmin || role === "consultant";
 
   // 从已有项目带入：企业项目负责人手动触发（咨询管理员可代为操作）；新建项目后带 ?import=1 直接打开。
   const canImport = role === "ent_lead" || overview.isConsultAdmin;
@@ -74,12 +78,18 @@ export default function ProjectOverviewPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
+      {manageMembers ? <ProjectMembersDialog projectId={membersOpen ? project.id : null} onClose={() => setMembersOpen(false)} /> : null}
       <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="min-w-0 flex-1 font-heading text-2xl font-bold text-brand">总览</h1>
         <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
           看操作指引
         </Button>
+        {manageMembers ? (
+          <Button variant="outline" onClick={() => setMembersOpen(true)}>
+            <Users /> 成员
+          </Button>
+        ) : null}
         {canImport ? (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="把本企业已有项目里的表带进来作为草稿，再按今年改">
             <Import /> 从已有项目带入
@@ -91,13 +101,13 @@ export default function ProjectOverviewPage() {
 
       <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         {inviteFirst ? (
-          <Link to="/enterprise?tab=invites" className={cardClass(0)}>
+          <button type="button" onClick={() => setMembersOpen(true)} className={cn(cardClass(0), "text-left")}>
             <span className="min-w-0 flex-1">
               <span className="block text-xs opacity-80">先做</span>
-              <span className="block text-lg font-bold">邀请成员</span>
+              <span className="block text-lg font-bold">添加项目成员</span>
             </span>
             <ArrowRight className="size-5 shrink-0" />
-          </Link>
+          </button>
         ) : null}
         {materialsFirst ? (
           <Link to={`/projects/${project.id}/materials`} className={cardClass(1)}>
@@ -228,7 +238,7 @@ function StartupCard({ projectId }: { projectId: number }) {
                 </Link>
               ) : item.key === "team" && item.state !== "done" ? (
                 <span className="mt-auto text-xs text-muted-foreground">
-                  叫同事一起做：企业管理员在<Link to="/enterprise?tab=invites" className="text-primary hover:underline">本企业 › 邀请注册</Link>发一个邀请码，同事凭码注册就进项目；或请运营分派。
+                  叫同事一起做：企业管理员在<Link to="/enterprise/invites" className="text-primary hover:underline">成员管理 › 邀请注册</Link>发一个邀请码，同事凭码注册就进项目；已有账号的同事，在上面的“成员”里直接加。
                 </span>
               ) : null}
             </li>

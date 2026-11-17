@@ -116,7 +116,7 @@ export function UpstreamChangesDialog({
         {canAcknowledge ? (
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="说明一下核对结果（选填，会记在审计里），如：已按新路径调整承接部门" className="min-h-14" />
         ) : (
-          <p className="text-xs text-muted-foreground">{locked ? "由企业项目负责人或主咨询师确认是否受影响。" : "由能修改这张表的人核对。"}</p>
+          <p className="text-xs text-muted-foreground">{locked ? "由企业项目负责人或咨询师确认是否受影响。" : "由能修改这张表的人核对。"}</p>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

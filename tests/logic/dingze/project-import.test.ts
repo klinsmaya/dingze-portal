@@ -21,11 +21,11 @@ it("only brings content into tables that have not gone to review", () => {
 
 it("only the enterprise project lead (or ops) triggers an import", () => {
   expect(canImportInto("ent_lead", false)).toBe(true);
-  expect(canImportInto("dept_head", false)).toBe(false);
-  expect(canImportInto("lead_consultant", false)).toBe(false);
+  expect(canImportInto("member", false)).toBe(false);
+  expect(canImportInto("consultant", false)).toBe(false);
   expect(canImportInto(null, true)).toBe(true);
 });
 
 it("enterprise admins assign enterprise roles only", () => {
-  expect(ENTERPRISE_PROJECT_ROLES).toEqual(["ent_lead", "dept_head", "member", "readonly"]);
+  expect(ENTERPRISE_PROJECT_ROLES).toEqual(["ent_lead", "member"]);
 });

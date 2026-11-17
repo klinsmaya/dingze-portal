@@ -1,9 +1,7 @@
-import { PROJECT_ROLE_LABELS, type ProjectRole } from "@dingze/shared";
-
 import type { ImportTemplate } from "./import-templates";
 
-// 训练营批次的两张导入表：批量加企业、批量发账号。和组织表一样，解析器只看制表符分隔的文本
-// （从 Excel 复制或上传模板），先预览再提交。
+// 训练营批次的导入表：批量加企业（批量发账号用成员名单模板，见 member-import.ts）。和组织表一样，
+// 解析器只看制表符分隔的文本（从 Excel 复制或上传模板），先预览再提交。
 
 export const ENTERPRISE_TEMPLATE: ImportTemplate = {
   fileName: "训练营企业名单模板.xlsx",
@@ -20,26 +18,9 @@ export const ENTERPRISE_TEMPLATE: ImportTemplate = {
   ],
 };
 
-export const ACCOUNT_TEMPLATE: ImportTemplate = {
-  fileName: "项目成员账号模板.xlsx",
-  headers: ["姓名", "登录名", "手机", "邮箱", "项目角色", "部门"],
-  examples: [
-    ["赵部长", "hc_zhao", "13800000002", "", "部门负责人", "市场营销部"],
-    ["李专员", "hc_li", "", "", "项目成员", "市场营销部"],
-  ],
-  notes: [
-    "每行一个人：登录名已存在时只把这个账号加进项目，不新开账号。",
-    "项目角色填 企业项目负责人 / 部门负责人 / 项目成员 / 只读成员，不填按项目成员。",
-    "部门要和这家企业组织表里的名称一致，可以空；可以先在企业页导入组织表。",
-    "初始密码只显示一次，请下载账号清单后发给本人。",
-  ],
-};
-
 export type EnterpriseRow = { name: string; shortName: string; size: "large" | "sme"; adminNickname: string; adminUsername: string; adminPhone?: string };
-export type AccountRow = { nickname: string; username: string; phone?: string; email?: string; role: ProjectRole; dept?: string };
 
 export const USERNAME = /^[A-Za-z0-9_.@-]{3,50}$/;
-const ENTERPRISE_ROLES: ProjectRole[] = ["ent_lead", "dept_head", "member", "readonly"];
 
 /** Pasted rows as trimmed cells; blank lines and the template's header row are dropped. */
 export function tableLines(text: string, header: string): string[][] {
@@ -63,30 +44,6 @@ export function parseEnterpriseTable(text: string): { rows: EnterpriseRow[]; pro
     if (seen.has(adminUsername)) return void problems.push(`${at}登录名 ${adminUsername} 重复`);
     seen.add(adminUsername);
     rows.push({ name, shortName, size: size.includes("大") || size === "large" ? "large" : "sme", adminNickname, adminUsername, adminPhone: adminPhone || undefined });
-  });
-  return { rows, problems };
-}
-
-function roleOf(value: string): ProjectRole | null {
-  if (!value) return "member";
-  if ((ENTERPRISE_ROLES as string[]).includes(value)) return value as ProjectRole;
-  const found = ENTERPRISE_ROLES.find((r) => PROJECT_ROLE_LABELS[r] === value || PROJECT_ROLE_LABELS[r].startsWith(value));
-  return found ?? null;
-}
-
-export function parseAccountTable(text: string): { rows: AccountRow[]; problems: string[] } {
-  const rows: AccountRow[] = [];
-  const problems: string[] = [];
-  const seen = new Set<string>();
-  tableLines(text, "姓名").forEach(([nickname = "", username = "", phone = "", email = "", role = "", dept = ""], i) => {
-    const at = `第 ${i + 1} 行`;
-    if (!nickname || !username) return void problems.push(`${at}缺姓名或登录名`);
-    if (!USERNAME.test(username)) return void problems.push(`${at}登录名 ${username} 只能用字母、数字和 _ . @ -，至少 3 位`);
-    if (seen.has(username)) return void problems.push(`${at}登录名 ${username} 重复`);
-    const projectRole = roleOf(role);
-    if (!projectRole) return void problems.push(`${at}项目角色“${role}”不认识`);
-    seen.add(username);
-    rows.push({ nickname, username, phone: phone || undefined, email: email || undefined, role: projectRole, dept: dept || undefined });
   });
   return { rows, problems };
 }

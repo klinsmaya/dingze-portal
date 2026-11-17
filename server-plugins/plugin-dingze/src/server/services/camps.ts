@@ -1,12 +1,13 @@
 import type { Context } from '@nocobase/actions';
 
-import { ARTIFACTS, type ProjectRole, STAGES, isArtifactCode, stageGateCodes, startupChecklist } from '../../shared';
+import { ARTIFACTS, ENTERPRISE_PROJECT_ROLES, type ProjectRole, STAGES, isArtifactCode, stageGateCodes, startupChecklist } from '../../shared';
 import { HttpError, SYSTEM_ROLES, requireOps, systemAccess, userSpaceNames } from './access';
 import { openCommentCounts } from './comments';
-import { createProject, provisionEnterprise, setProjectMembers } from './enterprises';
+import { createProject, provisionEnterprise } from './enterprises';
 import { notify } from './notify';
 import { ensureTeamInvite } from './invites';
-import { createUser, creator } from './ops';
+import { createUsers } from './members';
+import { creator } from './ops';
 import { usageByProject } from './usage';
 
 // 训练营批次 (闭环第三批): everything ops needs around one camp — enrol enterprises in bulk, hand out
@@ -14,7 +15,6 @@ import { usageByProject } from './usage';
 // camp by turning projects into 企业内训 (陪跑 or 自助). The enterprise side never sees the camp.
 
 const CAMP_STATUS = ['planning', 'running', 'closed'];
-const ENTERPRISE_ROLES: ProjectRole[] = ['ent_lead', 'dept_head', 'member', 'readonly'];
 
 function name(value: unknown, label: string, max = 60) {
   const s = String(value ?? '').trim();
@@ -118,7 +118,7 @@ export async function campDetail(ctx: Context, campId: unknown) {
       service: p.get('service') ?? 'guided',
       enterprise: { id: p.get('enterpriseId'), name: p.get('enterprise')?.get('name'), shortName: p.get('enterprise')?.get('shortName') },
       members: members.map((m: any) => ({ userId: m.userId, nickname: m.nickname, projectRole: m.projectRole })),
-      enterpriseMembers: members.filter((m: any) => ENTERPRISE_ROLES.includes(m.projectRole)).length,
+      enterpriseMembers: members.filter((m: any) => ENTERPRISE_PROJECT_ROLES.includes(m.projectRole)).length,
       startup: startup.map((s) => ({ key: s.key, title: s.title, state: s.state, detail: s.detail, problems: s.problems })),
       stages: STAGES.map((s) => {
         const gate = stageGateCodes(s.key);
@@ -151,6 +151,8 @@ export async function campEnroll(
     campId: number;
     year?: number;
     projectName?: string;
+    consultantIds?: number[];
+    /** 旧版门户分两栏传（主咨询师、协作咨询师），现在不分主次，合在一起。 */
     leadConsultantId?: number;
     coConsultantIds?: number[];
     rows: { name: string; shortName: string; size?: string; adminUsername: string; adminNickname: string; adminPhone?: string }[];
@@ -159,8 +161,13 @@ export async function campEnroll(
   const camp = await loadCamp(ctx, input.campId);
   const rows = Array.isArray(input.rows) ? input.rows.slice(0, 50) : [];
   if (!rows.length) throw new HttpError(400, '没有要开通的企业');
-  const lead = input.leadConsultantId ? Number(input.leadConsultantId) : null;
-  const cos = (Array.isArray(input.coConsultantIds) ? input.coConsultantIds : []).map(Number).filter((x) => x && x !== lead);
+  const consultantIds = [
+    ...new Set(
+      [input.leadConsultantId, ...(Array.isArray(input.consultantIds) ? input.consultantIds : []), ...(Array.isArray(input.coConsultantIds) ? input.coConsultantIds : [])]
+        .map(Number)
+        .filter(Boolean),
+    ),
+  ];
   const year = Number(input.year) || new Date().getFullYear();
   const results = [];
   for (const row of rows) {
@@ -169,7 +176,7 @@ export async function campEnroll(
         name: row.name,
         shortName: row.shortName,
         size: row.size === 'large' ? 'large' : 'sme',
-        consultantIds: [lead, ...cos].filter(Boolean) as number[],
+        consultantIds,
         admin: { username: row.adminUsername, nickname: row.adminNickname, phone: row.adminPhone },
       } as any);
       const adminId = opened.admin?.user?.id;
@@ -182,8 +189,7 @@ export async function campEnroll(
         campId: camp.get('id'),
         members: [
           ...(adminId ? [{ userId: adminId, projectRole: 'ent_lead' as ProjectRole }] : []),
-          ...(lead ? [{ userId: lead, projectRole: 'lead_consultant' as ProjectRole }] : []),
-          ...cos.map((userId) => ({ userId, projectRole: 'co_consultant' as ProjectRole })),
+          ...consultantIds.map((userId) => ({ userId, projectRole: 'consultant' as ProjectRole })),
         ],
       });
       results.push({ ok: true, enterprise: row.shortName, projectId: project.id, username: row.adminUsername, initialPassword: opened.admin?.initialPassword ?? null });
@@ -205,9 +211,8 @@ export async function campAttach(ctx: Context, input: { campId: number | null; p
 }
 
 /**
- * 批量发账号：rows of 姓名 / 登录名 / 手机 / 邮箱 / 项目角色 / 部门 for one camp project. New accounts are
- * created as 企业成员 of the enterprise, then added to the project with role and department; the
- * initial passwords come back once, for ops to hand out.
+ * 批量发账号：和企业里的“批量开通”是同一个功能（members.createUsers），这里只是从训练营的项目进来：
+ * 名单 姓名 / 登录名 / 手机 / 邮箱 / 部门，开通为企业成员并加进这个项目（项目成员）。初始密码只返回一次。
  */
 export async function campAccounts(
   ctx: Context,
@@ -216,33 +221,7 @@ export async function campAccounts(
   requireOps(await systemAccess(ctx));
   const project = await ctx.db.getRepository('dz_projects').findOne({ filterByTk: Number(input.projectId) });
   if (!project || !(await userSpaceNames(ctx)).includes(project.get('spaceName'))) throw new HttpError(404, '项目不存在');
-  const enterpriseId = project.get('enterpriseId') as number;
-  const units = await ctx.db.getRepository('dz_org_units').find({ filter: { enterpriseId } });
-  const rows = Array.isArray(input.rows) ? input.rows.slice(0, 50) : [];
-  const results = [];
-  for (const row of rows) {
-    try {
-      const role = (ENTERPRISE_ROLES as string[]).includes(String(row.role)) ? (row.role as ProjectRole) : 'member';
-      const dept = row.dept ? units.find((u: any) => u.get('name') === String(row.dept).trim()) : null;
-      if (row.dept && !dept) throw new Error(`组织里没有部门「${row.dept}」`);
-      const username = String(row.username ?? '').trim();
-      const existing = await ctx.db.getRepository('users').findOne({ filter: { username } });
-      let userId: number;
-      let initialPassword: string | null = null;
-      if (existing) userId = existing.get('id');
-      else {
-        const created = await createUser(ctx, { username, nickname: row.nickname, phone: row.phone, email: row.email, systemRole: SYSTEM_ROLES.entMember, enterpriseId });
-        userId = created.user.id;
-        initialPassword = created.initialPassword;
-      }
-      // setProjectMembers adds the account to the enterprise space and notifies the new member.
-      await setProjectMembers(ctx, project.get('id'), [{ userId, projectRole: role, orgUnitId: dept?.get('id') ?? undefined }]);
-      results.push({ ok: true, nickname: row.nickname, username: String(row.username ?? '').trim(), role, initialPassword, existed: !!existing });
-    } catch (error: any) {
-      results.push({ ok: false, nickname: row.nickname, username: row.username, error: error?.message ?? String(error) });
-    }
-  }
-  return { results };
+  return createUsers(ctx, { enterpriseId: project.get('enterpriseId') as number, projectIds: [project.get('id') as number], rows: Array.isArray(input.rows) ? input.rows.slice(0, 50) : [] });
 }
 
 /** 营前提醒：给还没准备好的项目的企业项目负责人发一条写明缺什么的通知。 */

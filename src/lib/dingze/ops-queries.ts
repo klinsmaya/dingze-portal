@@ -10,6 +10,7 @@ export const opsKeys = {
   camp: (id: number) => ["dingze", "ops", "camp", id] as const,
   enterprise: (id: number) => ["dingze", "ops", "enterprise", id] as const,
   users: (role?: SystemRole, q?: string) => ["dingze", "ops", "users", role ?? "", q ?? ""] as const,
+  projectMembers: (projectId: number) => ["dingze", "ops", "project-members", projectId] as const,
 };
 
 export function useEnterprises(enabled = true) {
@@ -34,6 +35,10 @@ export function useEnterpriseDetail(enterpriseId: number | undefined) {
     queryFn: () => opsApi.enterpriseDetail(enterpriseId!),
     enabled: !!enterpriseId,
   });
+}
+
+export function useProjectMembers(projectId: number | undefined) {
+  return useQuery({ queryKey: opsKeys.projectMembers(projectId ?? 0), queryFn: () => opsApi.projectMembers(projectId!), enabled: !!projectId });
 }
 
 export function useDzUsers(role?: SystemRole, q?: string, enabled = true) {

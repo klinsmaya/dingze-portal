@@ -23,9 +23,9 @@ describe("enterprise profile", () => {
   it("lets consultants review and only the enterprise lead confirm", () => {
     const reviewed = { items: [{ ...draft, status: "reviewed" as const }] };
     expect(reconcileProfile({ items: [draft] }, reviewed, "member", false).error).toContain("只有咨询师");
-    expect(reconcileProfile({ items: [draft] }, reviewed, "lead_consultant", false).error).toBeNull();
+    expect(reconcileProfile({ items: [draft] }, reviewed, "consultant", false).error).toBeNull();
     const confirmed = { items: [{ ...draft, status: "confirmed" as const }] };
-    expect(reconcileProfile(reviewed, confirmed, "lead_consultant", false).error).toContain("企业项目负责人");
+    expect(reconcileProfile(reviewed, confirmed, "consultant", false).error).toContain("企业项目负责人");
     expect(reconcileProfile(reviewed, confirmed, "ent_lead", false).error).toBeNull();
   });
 

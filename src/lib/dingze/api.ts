@@ -3,6 +3,7 @@ import { nocobaseClient } from "@nocobase/portal-sdk/client";
 import type {
   ArtifactStatus,
   LifecycleAction,
+  MemberTier,
   ProjectRole,
   UnlockInfo,
   NextAction,
@@ -44,7 +45,7 @@ export type ProjectSummary = {
   spaceName: string;
   enterprise?: { id: number; name: string; shortName: string };
   projectRole: ProjectRole | null;
-  /** 已被加进项目成员。本企业账号没加进来也能看（按只读成员），这时是 false。 */
+  /** 已被加进项目成员。本企业账号没加进来也能看（只读查看），这时是 false。 */
   joined?: boolean;
   /** 当前账号能归档、恢复、删除这个项目（运营，和本企业的企业管理员）。 */
   manageable?: boolean;
@@ -106,6 +107,10 @@ export type ProjectOverview = {
   team: ProjectTeamMember[];
   projectRole: ProjectRole | null;
   isConsultAdmin: boolean;
+  /** 本企业的企业管理员：不是项目负责人也能维护组织、管项目成员。 */
+  isEntAdmin?: boolean;
+  /** 当前登录的人在项目成员管理里是哪一级；不能管时为 null。 */
+  memberTier?: MemberTier | null;
   artifacts: ArtifactOverview[];
 };
 
@@ -199,7 +204,7 @@ export async function acknowledgeUpstream(spaceName: string, values: { projectId
   return nocobaseClient.action("dingze", "acknowledgeUpstream", { body: values, headers: spaceHeaders(spaceName) });
 }
 
-/** 组织已变更 → 主咨询师判断已定版的表不需要重开。 */
+/** 组织已变更 → 咨询师判断已定版的表不需要重开。 */
 export async function dismissOrgNotice(spaceName: string, values: { projectId: number; code: string; note?: string }) {
   return nocobaseClient.action("dingze", "dismissOrgNotice", { body: values, headers: spaceHeaders(spaceName) });
 }

@@ -6,11 +6,9 @@ import { brandHome, portalRoleFromSystem, portalRoleIn, portalRoleOf } from "@/l
 describe("三类角色", () => {
   it("folds project roles into employee / lead / consultant", () => {
     expect(portalRoleOf("member", false)).toBe("employee");
-    expect(portalRoleOf("dept_head", false)).toBe("employee");
     expect(portalRoleOf("readonly", false)).toBe("employee");
     expect(portalRoleOf("ent_lead", false)).toBe("lead");
-    expect(portalRoleOf("lead_consultant", false)).toBe("consultant");
-    expect(portalRoleOf("co_consultant", false)).toBe("consultant");
+    expect(portalRoleOf("consultant", false)).toBe("consultant");
     expect(portalRoleOf(null, true)).toBe("consultant");
     expect(portalRoleOf("member", true)).toBe("consultant");
   });

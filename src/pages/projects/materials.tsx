@@ -328,13 +328,13 @@ function askAI(kind: keyof typeof AI_ASK) {
   askCoach(AI_ASK[kind]);
 }
 
-/** ③ 组织与职责：企业项目负责人、主咨询师在这里直接维护（企业级，对本企业所有项目生效）；其他人只读。 */
+/** ③ 组织与职责：企业管理员、企业项目负责人、咨询师在这里直接维护（企业级，对本企业所有项目生效）；其他人只读。 */
 function OrgSection({ canEditOrg, onAI }: { canEditOrg: boolean; onAI: () => void }) {
   const { project, overview } = useProjectContext();
   const team = overview.team ?? [];
   if (!canEditOrg || !project.enterprise?.id) return <OrgView orgUnits={overview.orgUnits ?? []} team={team} />;
-  const people = team.filter((m) => m.projectRole !== "lead_consultant" && m.projectRole !== "co_consultant").map((m) => ({ id: m.userId, name: m.nickname }));
-  const unplaced = team.filter((m) => !m.orgUnitId && m.projectRole !== "lead_consultant" && m.projectRole !== "co_consultant");
+  const people = team.filter((m) => m.projectRole !== "consultant").map((m) => ({ id: m.userId, name: m.nickname }));
+  const unplaced = team.filter((m) => !m.orgUnitId && m.projectRole !== "consultant");
   return (
     <section aria-labelledby="org" className="flex flex-col gap-3">
       <h2 id="org" className="font-heading text-lg font-bold text-brand">
@@ -360,7 +360,7 @@ function OrgSection({ canEditOrg, onAI }: { canEditOrg: boolean; onAI: () => voi
         }}
         footer={
           unplaced.length ? (
-            <p className="text-xs text-[color:var(--dz-warn)]">还没归到部门的项目成员：{unplaced.map((m) => m.nickname).join("、")}（企业管理员在“本企业 › 组织部门”里设置所属部门）</p>
+            <p className="text-xs text-[color:var(--dz-warn)]">还没归到部门的项目成员：{unplaced.map((m) => m.nickname).join("、")}（企业管理员在「成员管理 › 企业成员」里设置所属部门）</p>
           ) : null
         }
       />
@@ -409,7 +409,8 @@ export default function MaterialsPage() {
 
   // The digital consultant reads materials and proposes profile items through the same
   // path-based proposal tool as the workspace; nothing is written until the user approves.
-  const canEditOrg = isAdmin || role === "ent_lead" || role === "lead_consultant";
+  // 组织是企业级的：企业管理员不是项目负责人也能改；运营（运营管理员、咨询管理员）也在这里改。
+  const canEditOrg = isAdmin || overview.memberTier === "ops" || !!overview.isEntAdmin || role === "ent_lead" || role === "consultant";
   const client = useQueryClient();
   const latest = useRef({ items, baseRev, canEdit, canEditOrg, enterpriseId: project.enterprise?.id ?? 0 });
   latest.current = { items, baseRev, canEdit, canEditOrg, enterpriseId: project.enterprise?.id ?? 0 };
@@ -439,7 +440,7 @@ export default function MaterialsPage() {
           const done: string[] = [];
           try {
             if (orgChanges.length) {
-              if (!latest.current.canEditOrg) return { status: "error", content: "当前用户不能维护组织架构（由企业项目负责人、主咨询师或企业管理员维护）。" };
+              if (!latest.current.canEditOrg) return { status: "error", content: "当前用户不能维护组织架构（由企业项目负责人、咨询师或企业管理员维护）。" };
               const rows = orgChanges
                 .map((c) => c.value as { name?: unknown; parent?: unknown; kind?: unknown; head?: unknown; duty?: unknown })
                 .filter((v) => v && typeof v.name === "string" && v.name.trim())
@@ -655,7 +656,7 @@ export default function MaterialsPage() {
               <Skeleton className="h-32" />
             ) : (
               <>
-                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canManageLibrary(role, isAdmin)} canDeleteAny={isAdmin || role === "ent_lead" || role === "lead_consultant"} currentUserId={identity.data?.id ?? null} />
+                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canManageLibrary(role, isAdmin)} canDeleteAny={isAdmin || role === "ent_lead" || role === "consultant"} currentUserId={identity.data?.id ?? null} />
                 {canManageLibrary(role, isAdmin) ? <MemberUploads /> : null}
               </>
             )

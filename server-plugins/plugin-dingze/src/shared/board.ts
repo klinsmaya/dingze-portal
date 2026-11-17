@@ -4,7 +4,7 @@ import type { ArtifactStatus } from './lifecycle';
 export type BoardBucket = 'stale' | 'review' | 'submit' | 'confirm' | 'working';
 
 export const BOARD_BUCKETS: { key: BoardBucket; label: string; hint: string }[] = [
-  { key: 'review', label: '待复核', hint: '企业已提交，等主咨询师复核' },
+  { key: 'review', label: '待复核', hint: '企业已提交，等咨询师复核' },
   { key: 'submit', label: '待提交复核', hint: '企业已完成本步，可提交复核' },
   { key: 'stale', label: '上游已变更', hint: '上游成果重开或修改过，需要核对' },
   { key: 'confirm', label: '待企业确认', hint: '已通过复核，等企业项目负责人确认定版' },

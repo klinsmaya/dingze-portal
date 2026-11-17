@@ -2,8 +2,9 @@ import { randomBytes, randomInt } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ORG_DEPENDENT_CODES, type OrgUnitFacts, PROJECT_FILE_COLLECTION, PROJECT_OWNED_COLLECTIONS, appendOrgNotice, deleteConfirmed, describeOrgChange, getArtifactDef, orgKindFromName } from '../../shared';
+import { ORG_DEPENDENT_CODES, type OrgUnitFacts, PROJECT_FILE_COLLECTION, PROJECT_OWNED_COLLECTIONS, accountKind, appendOrgNotice, deleteConfirmed, describeOrgChange, getArtifactDef, normalizeProjectRole, orgKindFromName } from '../../shared';
 import { HttpError, SYSTEM_ROLES, currentUserId, loadProjectContext, requireOps, systemAccess, userSpaceNames, type SystemAccess } from './access';
+import { accountFactsOf, patchAccount } from './accounts';
 import { notify, projectMemberIds } from './notify';
 
 // 运营管理：账号、企业档案、空间成员、组织部门与项目成员。
@@ -28,7 +29,7 @@ function optionalText(value: unknown, label: string, max = 100): string | null {
   return text(value, label, max);
 }
 
-function positiveId(value: unknown, label: string): number {
+export function positiveId(value: unknown, label: string): number {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, `缺少${label}`);
   return id;
@@ -46,14 +47,19 @@ export function generatePassword(): string {
  * multi-space plugin would otherwise re-home them to the caller's current `x-spaces`
  * (or fail when there is none, e.g. when creating a platform-level account).
  */
-export function creator(ctx: Context) {
-  const id = currentUserId(ctx);
+export function creator(ctx: Context, actorId?: number) {
+  const id = actorId ?? currentUserId(ctx);
   return { createdById: id, updatedById: id };
 }
 
-export async function audit(ctx: Context, spaceName: string | null, action: string, meta: Record<string, unknown>, transaction?: any) {
+/**
+ * 留痕。`actorId` 只在没人登录的公开动作里传（凭免审核邀请码注册：操作人就是刚开通的账号本人）；
+ * 不传时取当前登录的人，没登录会报“请先登录”。
+ */
+export async function audit(ctx: Context, spaceName: string | null, action: string, meta: Record<string, unknown>, transaction?: any, actorId?: number) {
+  const id = actorId ?? currentUserId(ctx);
   await ctx.db.getRepository('dz_audit_events').create({
-    values: { action, meta: { ...meta, actorId: currentUserId(ctx) }, spaceName, ...creator(ctx) },
+    values: { action, meta: { ...meta, actorId: id }, spaceName, createdById: id, updatedById: id },
     transaction,
   });
 }
@@ -87,7 +93,7 @@ export async function loadEnterpriseScope(ctx: Context, enterpriseId: unknown, a
  * Read only the fields we expose: `toJSON()` deep-clones the whole model, and on a user
  * created in this request other plugins' hooks leave request state on it.
  */
-function publicUser(user: any) {
+export function publicUser(user: any) {
   const read = (key: string) => (typeof user.get === 'function' ? user.get(key) : user[key]);
   const roles = (read('roles') ?? []) as any[];
   return {
@@ -102,7 +108,7 @@ function publicUser(user: any) {
   };
 }
 
-async function addUsersToSpace(ctx: Context, spaceName: string, userIds: number[], transaction?: any) {
+export async function addUsersToSpace(ctx: Context, spaceName: string, userIds: number[], transaction?: any) {
   if (userIds.length === 0) return;
   await ctx.db.getRepository('spaces.users', spaceName).add({ tk: userIds, transaction });
 }
@@ -118,33 +124,34 @@ export interface CreateUserInput {
   enterpriseId?: number;
 }
 
-export async function createUser(ctx: Context, input: CreateUserInput, transaction?: any) {
-  const systemRole = String(input.systemRole ?? '');
-  if (!DZ_ROLES.includes(systemRole)) throw new HttpError(400, '系统角色不正确');
+export const DZ_SYSTEM_ROLES = DZ_ROLES;
+export const PRIVILEGED_SYSTEM_ROLES = PRIVILEGED_ROLES;
+export const NEUTRAL_SYSTEM_ROLES = NEUTRAL_ROLES;
+/** 企业侧的系统角色。一个企业账号只属于一家企业。 */
+export const ENTERPRISE_SIDE_ROLES: string[] = [SYSTEM_ROLES.entAdmin, SYSTEM_ROLES.entMember];
 
-  let scope: EnterpriseScope | null = null;
-  if (input.enterpriseId) {
-    scope = await loadEnterpriseScope(ctx, input.enterpriseId, true);
-    if (scope.asEntAdmin && systemRole !== SYSTEM_ROLES.entMember) {
-      throw new HttpError(403, '企业管理员只能为本企业开通企业成员账号');
-    }
-  } else {
-    requireOps(await systemAccess(ctx));
-  }
-  const access = scope?.access ?? (await systemAccess(ctx));
-  if (PRIVILEGED_ROLES.includes(systemRole) && !access.isConsultAdmin) {
-    throw new HttpError(403, '只有咨询管理员可以开通运营管理员或咨询管理员');
-  }
-
-  return insertUser(ctx, { ...input, systemRole }, scope?.spaceName ?? null, transaction);
+export interface InsertUserOptions {
+  /** 账号属于哪家企业、哪个部门（企业侧账号）。 */
+  enterpriseId?: number | null;
+  orgUnitId?: number | null;
+  /**
+   * 没人登录时开通的账号（凭免审核邀请码注册）：留痕里的操作人记账号本人。有人登录时不要传。
+   */
+  selfService?: boolean;
+  /** 账号用本人自己设的密码（邀请码注册）：不用第一次登录先改密码。 */
+  ownPassword?: boolean;
 }
 
-/** Create a 定责 account (callers have already checked permissions) and optionally add it to a space. */
+/**
+ * Create a 定责 account (callers have already checked permissions) and optionally add it to a space.
+ * 运营管理员、咨询管理员的账号自动进入所有企业的空间。
+ */
 export async function insertUser(
   ctx: Context,
   input: Omit<CreateUserInput, 'enterpriseId'>,
   spaceName: string | null,
   transaction?: any,
+  options: InsertUserOptions = {},
 ) {
   const username = text(input.username, '登录名', 50);
   if (!/^[A-Za-z0-9_.@-]{3,50}$/.test(username)) throw new HttpError(400, '登录名只能用字母、数字和 _ . @ -，至少 3 位');
@@ -155,6 +162,8 @@ export async function insertUser(
   if (email && (await repo.findOne({ filter: { email }, transaction }))) throw new HttpError(409, `邮箱 ${email} 已被使用`);
   const phone = optionalText(input.phone, '手机号', 20);
   if (phone && (await repo.findOne({ filter: { phone }, transaction }))) throw new HttpError(409, `手机号 ${phone} 已被使用`);
+  // 没人登录又不是自助注册：照旧报“请先登录”，不往下建账号。
+  if (!options.selfService) currentUserId(ctx);
 
   const password = generatePassword();
   const run = async (tx: any) => {
@@ -164,9 +173,26 @@ export async function insertUser(
       context: ctx,
       transaction: tx,
     });
-    if (spaceName) await addUsersToSpace(ctx, spaceName, [user.get('id') as number], tx);
-    await audit(ctx, spaceName, 'user.create', { userId: user.get('id'), username, systemRole: input.systemRole }, tx);
-    const created = await repo.findOne({ filterByTk: user.get('id'), appends: ['roles'], transaction: tx });
+    const userId = user.get('id') as number;
+    const actorId = (ctx.auth?.user?.id as number | undefined) ?? userId;
+    if (spaceName) await addUsersToSpace(ctx, spaceName, [userId], tx);
+    if (PRIVILEGED_ROLES.includes(input.systemRole)) {
+      const spaces = await ctx.db.getRepository('dz_enterprises').find({ fields: ['spaceName'], transaction: tx });
+      for (const name of new Set<string>(spaces.map((e: any) => e.get('spaceName') as string).filter(Boolean))) await addUsersToSpace(ctx, name, [userId], tx);
+    }
+    await patchAccount(
+      ctx.db,
+      userId,
+      {
+        enterpriseId: ENTERPRISE_SIDE_ROLES.includes(input.systemRole) ? options.enterpriseId ?? null : null,
+        orgUnitId: options.orgUnitId ?? null,
+        mustChangePassword: !options.ownPassword,
+      },
+      actorId,
+      tx,
+    );
+    await audit(ctx, spaceName, 'user.create', { userId, username, systemRole: input.systemRole }, tx, actorId);
+    const created = await repo.findOne({ filterByTk: userId, appends: ['roles'], transaction: tx });
     return { user: publicUser(created), initialPassword: password };
   };
   return transaction ? run(transaction) : ctx.db.sequelize.transaction(run);
@@ -180,7 +206,8 @@ export async function listUsers(ctx: Context, query: { q?: string; role?: string
   const q = typeof query.q === 'string' ? query.q.trim() : '';
   if (q) filter.$or = [{ username: { $includes: q } }, { nickname: { $includes: q } }];
   const users = await ctx.db.getRepository('users').find({ filter, appends: ['roles'], sort: ['id'], limit: 500 });
-  return users.map(publicUser);
+  const accounts = await accountFactsOf(ctx.db, users.map((u: any) => u.get('id') as number));
+  return users.map((u: any) => ({ ...publicUser(u), disabled: !!accounts.get(u.get('id'))?.disabled }));
 }
 
 export async function resetPassword(ctx: Context, input: { userId: number; enterpriseId?: number }) {
@@ -211,12 +238,19 @@ export async function resetPassword(ctx: Context, input: { userId: number; enter
   }
   const password = generatePassword();
   await ctx.db.getRepository('users').update({ filterByTk: userId, values: { password }, context: ctx });
+  // 重置出来的也是别人给的密码：本人下次登录要先改。
+  await patchAccount(ctx.db, userId, { mustChangePassword: true }, currentUserId(ctx));
   await audit(ctx, spaceName, 'user.resetPassword', { userId });
   return { initialPassword: password };
 }
 
 // ── 企业 ─────────────────────────────────────────────────────────────
 
+/**
+ * 企业的成员分两组：企业成员（本企业的账号）和咨询师（分派到这家企业的咨询方账号）。运营管理员、
+ * 咨询管理员自动在所有企业里，不列出来；咨询管理员被分派成某个项目的咨询师时才出现在咨询师一组。
+ * `consultAdmins` 只给“分派咨询师”的选择框用。
+ */
 export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
   const { enterprise, spaceName } = await loadEnterpriseScope(ctx, enterpriseId, true);
   const id = enterprise.get('id');
@@ -229,20 +263,39 @@ export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
     ctx.db.getRepository('dz_org_units').find({ filter: { enterpriseId: id }, appends: ['head'], sort: ['sort', 'id'] }),
     ctx.db.getRepository('spaces.users', spaceName).find({ appends: ['roles'], sort: ['id'] }),
   ]);
-  return {
-    enterprise: enterprise.toJSON(),
-    projects: projects.map((p: any) => {
-      const json = p.toJSON();
-      return {
-        ...json,
-        members: (json.members ?? []).map((m: any) => ({
+  const projectRows = projects.map((p: any) => {
+    const json = p.toJSON();
+    return {
+      ...json,
+      members: (json.members ?? [])
+        .map((m: any) => ({
           userId: m.userId,
-          projectRole: m.projectRole,
+          projectRole: normalizeProjectRole(m.projectRole),
           orgUnitId: m.orgUnitId ?? null,
           user: m.user ? { id: m.user.id, username: m.user.username, nickname: m.user.nickname } : null,
-        })),
-      };
-    }),
+        }))
+        .filter((m: any) => m.projectRole),
+    };
+  });
+  const consultantIds = new Set<number>(projectRows.flatMap((p: any) => p.members.filter((m: any) => m.projectRole === 'consultant').map((m: any) => m.userId as number)));
+  const accounts = await accountFactsOf(ctx.db, members.map((u: any) => u.get('id') as number));
+  type Person = ReturnType<typeof publicUser> & { kind: string; orgUnitId: number | null; disabled: boolean; mustChangePassword: boolean; createdAt: string | null };
+  const people: Person[] = members.map((u: any) => {
+    const user = publicUser(u);
+    const account = accounts.get(user.id);
+    return {
+      ...user,
+      kind: accountKind(user.roles),
+      orgUnitId: account?.orgUnitId ?? null,
+      disabled: !!account?.disabled,
+      mustChangePassword: !!account?.mustChangePassword,
+      createdAt: (u.get('createdAt') as string | null) ?? null,
+    };
+  });
+  const staff = (u: { roles: string[] }) => u.roles.some((r) => PRIVILEGED_ROLES.includes(r));
+  return {
+    enterprise: enterprise.toJSON(),
+    projects: projectRows,
     orgUnits: orgUnits.map((o: any) => {
       const json = o.toJSON();
       return {
@@ -257,7 +310,8 @@ export async function enterpriseDetail(ctx: Context, enterpriseId: unknown) {
         duty: json.duty ?? null,
       };
     }),
-    members: members.map(publicUser),
+    members: people.filter((u) => u.kind === 'enterprise' || (u.kind === 'consulting' && (!staff(u) || consultantIds.has(u.id)))),
+    consultAdmins: people.filter((u) => u.kind === 'consulting' && staff(u) && !consultantIds.has(u.id)),
   };
 }
 
@@ -279,32 +333,6 @@ export async function updateEnterprise(
   await enterprise.update(values);
   await audit(ctx, spaceName, 'enterprise.update', { enterpriseId: enterprise.get('id'), ...values });
   return enterprise.toJSON();
-}
-
-export async function addEnterpriseMembers(ctx: Context, input: { enterpriseId: number; userIds: number[] }) {
-  const { spaceName, asEntAdmin } = await loadEnterpriseScope(ctx, input.enterpriseId, false);
-  if (asEntAdmin) throw new HttpError(403, '只有运营管理员可以把已有账号加入企业');
-  const userIds = [...new Set((input.userIds ?? []).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
-  if (userIds.length === 0) throw new HttpError(400, '请选择账号');
-  await addUsersToSpace(ctx, spaceName, userIds);
-  await audit(ctx, spaceName, 'enterprise.addMembers', { userIds });
-  return { ok: true };
-}
-
-export async function removeEnterpriseMember(ctx: Context, input: { enterpriseId: number; userId: number }) {
-  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, false);
-  const userId = positiveId(input.userId, '用户');
-  if (userId === currentUserId(ctx)) throw new HttpError(400, '不能把自己移出企业，否则将无法再管理它');
-  const projectIds = (await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId: enterprise.get('id') }, fields: ['id'] })).map(
-    (p: any) => p.get('id'),
-  );
-  const memberships = projectIds.length
-    ? await ctx.db.getRepository('dz_project_members').count({ filter: { userId, projectId: { $in: projectIds } } })
-    : 0;
-  if (memberships > 0) throw new HttpError(409, '该账号还是本企业项目的成员，请先在项目里移除');
-  await ctx.db.getRepository('spaces.users', spaceName).remove({ tk: [userId] });
-  await audit(ctx, spaceName, 'enterprise.removeMember', { userId });
-  return { ok: true };
 }
 
 // ── 组织部门 ─────────────────────────────────────────────────────────
@@ -337,7 +365,7 @@ async function flagOrgChange(ctx: Context, enterpriseId: number, line: string | 
     await notify(ctx, {
       projectId,
       spaceName: project.get('spaceName'),
-      userIds: await projectMemberIds(ctx, projectId, ['lead_consultant', 'ent_lead']),
+      userIds: await projectMemberIds(ctx, projectId, ['consultant', 'ent_lead']),
       kind: 'orgChanged',
       title: '组织已变更，请判断已定版的部门表要不要重开',
       content: `${line}。受影响的已定版表：${codes.map((c) => getArtifactDef(c).specId).join('、')}。表里保留定版时的部门，不会自动改。`,
@@ -348,8 +376,9 @@ async function flagOrgChange(ctx: Context, enterpriseId: number, line: string | 
 }
 
 /**
- * 组织在哪维护：运营和企业管理员在「本企业」；项目里的企业项目负责人、主咨询师在项目「资料」页
- * （带 projectId，2026-10-16 资料页调整）。组织是企业级的，改了对本企业所有项目生效。
+ * 组织在哪维护：项目「资料 › 组织与职责」（带 projectId）。企业管理员（不是项目负责人也可以）、
+ * 企业项目负责人、咨询师和运营都能改；组织是企业级的，改了对本企业所有项目生效。
+ * 不带 projectId 的老入口（运营、企业管理员按企业维护）接口还留着。
  */
 /** 层级：企业自己的叫法（kindName）优先，由它定用途；没有就按传来的 kind，都没有按部门。 */
 const orgKindValues = (input: { kind?: unknown; kindName?: unknown }) =>
@@ -358,8 +387,8 @@ const orgKindValues = (input: { kind?: unknown; kindName?: unknown }) =>
 async function loadOrgScope(ctx: Context, input: { enterpriseId: number; projectId?: number }) {
   if (!input.projectId) return loadEnterpriseScope(ctx, input.enterpriseId, true);
   const pc = await loadProjectContext(ctx, input.projectId);
-  if (!pc.access.isOps && !['ent_lead', 'lead_consultant'].includes(pc.projectRole ?? '')) {
-    throw new HttpError(403, '只有企业项目负责人或主咨询师可以在项目里维护组织');
+  if (!pc.access.isOps && !pc.access.isEntAdmin && !['ent_lead', 'consultant'].includes(pc.projectRole ?? '')) {
+    throw new HttpError(403, '只有企业管理员、企业项目负责人或咨询师可以在项目里维护组织');
   }
   const enterprise = await ctx.db.getRepository('dz_enterprises').findOne({ filterByTk: pc.project.get('enterpriseId') });
   if (!enterprise || (input.enterpriseId && Number(input.enterpriseId) !== enterprise.get('id'))) throw new HttpError(404, '企业不存在');
@@ -472,34 +501,17 @@ export async function importOrgUnits(
   return { created, updated, changes: lines.length };
 }
 
-/**
- * 成员所属部门：the enterprise admin (or ops) puts a member in a department for every project of
- * the enterprise at once — members belong to one department, whichever project they work on.
- */
-export async function setMemberDepartment(ctx: Context, input: { enterpriseId: number; userId: number; orgUnitId: number | null }) {
-  const { enterprise, spaceName } = await loadEnterpriseScope(ctx, input.enterpriseId, true);
-  const enterpriseId = enterprise.get('id');
-  const userId = positiveId(input.userId, '成员');
-  const orgUnitId = input.orgUnitId ? positiveId(input.orgUnitId, '部门') : null;
-  if (orgUnitId && !(await ctx.db.getRepository('dz_org_units').findOne({ filter: { id: orgUnitId, enterpriseId } }))) {
-    throw new HttpError(400, '部门不属于本企业');
-  }
-  const projectIds = (await ctx.db.getRepository('dz_projects').find({ filter: { enterpriseId }, fields: ['id'] })).map((p: any) => p.get('id'));
-  if (!projectIds.length) return { updated: 0 };
-  const rows = await ctx.db.getRepository('dz_project_members').find({ filter: { userId, projectId: { $in: projectIds } } });
-  for (const row of rows) await row.update({ orgUnitId });
-  await audit(ctx, spaceName, 'member.setDepartment', { userId, orgUnitId, projects: rows.length });
-  return { updated: rows.length };
-}
-
 export async function deleteOrgUnit(ctx: Context, input: { enterpriseId: number; projectId?: number; id: number }) {
   const { enterprise } = await loadOrgScope(ctx, input);
   const id = positiveId(input.id, '部门');
   const enterpriseId = enterprise.get('id');
   const repo = ctx.db.getRepository('dz_org_units');
   if (await repo.count({ filter: { parentId: id, enterpriseId } })) throw new HttpError(409, '请先删除或移走下级部门');
-  if (await ctx.db.getRepository('dz_project_members').count({ filter: { orgUnitId: id } })) {
-    throw new HttpError(409, '还有项目成员归属这个部门，请先调整成员的部门');
+  if (
+    (await ctx.db.getRepository('dz_accounts').count({ filter: { orgUnitId: id } })) ||
+    (await ctx.db.getRepository('dz_project_members').count({ filter: { orgUnitId: id } }))
+  ) {
+    throw new HttpError(409, '还有成员归属这个部门，请先在成员管理里调整他们的部门');
   }
   const unit = await repo.findOne({ filter: { id, enterpriseId } });
   await repo.destroy({ filter: { id, enterpriseId } });
@@ -549,24 +561,18 @@ export async function updateProject(
     if (!['active', 'archived'].includes(input.status)) throw new HttpError(400, '状态不正确');
     values.status = input.status;
   }
+  const archiving = values.status === 'archived' && project.get('status') !== 'archived';
   await project.update(values);
-  await audit(ctx, spaceName, 'project.update', { projectId: project.get('id'), ...values });
+  const invitesDisabled = archiving ? await disableProjectInvites(ctx, project.get('id') as number) : 0;
+  await audit(ctx, spaceName, 'project.update', { projectId: project.get('id'), ...values, ...(archiving ? { invitesDisabled } : {}) });
   return project.toJSON();
 }
 
-export async function removeProjectMember(ctx: Context, input: { projectId: number; userId: number }) {
-  const { project, spaceName } = await loadOpsProject(ctx, input.projectId);
-  const userId = positiveId(input.userId, '用户');
-  const repo = ctx.db.getRepository('dz_project_members');
-  const member = await repo.findOne({ filter: { projectId: project.get('id'), userId } });
-  if (!member) throw new HttpError(404, '该账号不是项目成员');
-  if (member.get('projectRole') === 'lead_consultant') {
-    const leads = await repo.count({ filter: { projectId: project.get('id'), projectRole: 'lead_consultant' } });
-    if (leads <= 1) throw new HttpError(409, '项目至少需要一位主咨询师，请先指定新的主咨询师');
-  }
-  await member.destroy();
-  await audit(ctx, spaceName, 'project.removeMember', { projectId: project.get('id'), userId });
-  return { ok: true };
+/** 项目归档时停用绑着它的邀请码（恢复项目不会自动启用，需要的话重新发码）。返回停用了几个。 */
+export async function disableProjectInvites(ctx: Context, projectId: number, transaction?: any): Promise<number> {
+  const invites = await ctx.db.getRepository('dz_invites').find({ filter: { projectId, status: 'active' }, transaction });
+  for (const invite of invites) await invite.update({ status: 'disabled' }, { transaction });
+  return invites.length;
 }
 
 // ── 归档与删除（运营，和本企业的企业管理员）──────────────────────────
@@ -586,15 +592,21 @@ async function loadManagedProject(ctx: Context, projectId: unknown) {
   return { project, spaceName };
 }
 
-/** 归档 / 恢复：归档的项目收进「已归档」，不出现在咨询师工作台和邀请码的可选项目里；内容不锁，随时可以恢复。 */
+/** 归档 / 恢复：归档的项目收进「已归档」，不出现在咨询师工作台和邀请码的可选项目里，绑着它的邀请码一起停用；内容不锁，随时可以恢复。 */
 export async function setProjectArchived(ctx: Context, input: { projectId: number; archived: boolean }) {
   const { project, spaceName } = await loadManagedProject(ctx, input.projectId);
   const status = input.archived === true ? 'archived' : 'active';
+  let invitesDisabled = 0;
   if (project.get('status') !== status) {
     await project.update({ status });
-    await audit(ctx, spaceName, status === 'archived' ? 'project.archive' : 'project.restore', { projectId: project.get('id'), name: project.get('name') });
+    if (status === 'archived') invitesDisabled = await disableProjectInvites(ctx, project.get('id') as number);
+    await audit(ctx, spaceName, status === 'archived' ? 'project.archive' : 'project.restore', {
+      projectId: project.get('id'),
+      name: project.get('name'),
+      ...(status === 'archived' ? { invitesDisabled } : {}),
+    });
   }
-  return project.toJSON();
+  return { ...project.toJSON(), invitesDisabled };
 }
 
 /**

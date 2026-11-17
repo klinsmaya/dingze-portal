@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { Context } from '@nocobase/actions';
 
 import { HttpError, SYSTEM_ROLES } from './access';
+import { patchAccount } from './accounts';
 import { ip, limit } from './invites';
 import { notify } from './notify';
 
@@ -93,6 +94,8 @@ export async function trialSignUp(ctx: Context, input: TrialInput) {
       values: { projectId: project.get('id'), userId, projectRole: 'ent_lead', spaceName, ...by },
       transaction,
     });
+    // 账号归到这家企业；密码是本人自己设的，不用先改。
+    await patchAccount(ctx.db, userId, { enterpriseId: enterprise.get('id'), mustChangePassword: false }, userId, transaction);
     await ctx.db.getRepository('dz_audit_events').create({
       values: {
         action: 'trial.signup',

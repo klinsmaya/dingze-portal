@@ -15,3 +15,11 @@ export function useSelfProjectEnterprise(): Enterprise | undefined {
   if (!isEntAdmin) return undefined;
   return (enterprises.data ?? []).find((e) => e.status !== "suspended" && selfProjectAllowed(e));
 }
+
+/** 企业管理员自己的那家企业（一个企业账号只属一家）；首页的常用入口用它拿待审核数。不是企业管理员就是 undefined。 */
+export function useOwnEnterprise(): Enterprise | undefined {
+  const { roles } = useSystemRoles();
+  const isEntAdmin = roles.includes("dz_ent_admin") && !roles.includes("dz_ops");
+  const enterprises = useEnterprises(isEntAdmin);
+  return isEntAdmin ? enterprises.data?.[0] : undefined;
+}

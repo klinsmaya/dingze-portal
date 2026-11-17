@@ -2,15 +2,19 @@ import crypto from 'crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { PROJECT_ROLE_LABELS, type ProjectRole } from '../../shared';
+import { INVITE_DEFAULT_AUTO_APPROVE, INVITE_DEFAULT_DAYS, PROJECT_ROLE_LABELS, type ProjectRole, normalizeProjectRole } from '../../shared';
 import { HttpError, SYSTEM_ROLES } from './access';
-import { notify } from './notify';
+import { upsertMembers } from './members';
 import { audit, creator, insertUser, loadEnterpriseScope } from './ops';
+import { notify } from './notify';
 
-// 邀请码注册（审核制，闭环第三批）。公开注册保持关闭：只有拿到邀请码的人能提交申请，申请不建账号，
-// 企业管理员或运营审核通过后才开通（企业成员 + 企业空间 + 码上绑定的项目、角色和部门）。
+// 邀请码注册（闭环第三批；2026-11-17 调整口径）。公开注册保持关闭：只有拿到邀请码的人能注册。
+// - 一个码绑一家企业，可以再绑一个项目和一个部门；凭码进项目一律是项目成员（建码时不选角色）。
+// - 默认免审核、14 天有效：注册完直接开通。关掉免审核的码要企业管理员或运营审核通过才开通。
+// - 码绑的项目归档时码一起停用；项目已归档的码用不了。
 
-const ENTERPRISE_ROLES: ProjectRole[] = ['ent_lead', 'dept_head', 'member', 'readonly'];
+/** 码上记的项目角色：现在都是项目成员；旧码的“部门负责人”按项目成员，“只读成员”按只加入企业（null）。 */
+const inviteRole = (invite: any): ProjectRole | null => (invite?.get('projectId') ? normalizeProjectRole(invite.get('projectRole') ?? 'member') : null);
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const USERNAME = /^[A-Za-z0-9_.@-]{3,50}$/;
 
@@ -44,47 +48,56 @@ async function usableInvite(ctx: Context, code: string) {
   if (!invite || invite.get('status') !== 'active' || invite.get('enterprise')?.get('status') !== 'active') throw new HttpError(404, '邀请码无效，请向发码人确认');
   const expiresAt = invite.get('expiresAt');
   if (expiresAt && new Date(expiresAt).getTime() < Date.now()) throw new HttpError(410, '邀请码已过期，请向发码人要新的');
+  if (invite.get('projectId') && invite.get('project')?.get('status') === 'archived') throw new HttpError(410, '这个邀请码绑定的项目已归档，请向发码人要新的');
   if ((await usedCount(ctx, invite.get('id'))) >= Number(invite.get('maxUses') ?? 0)) throw new HttpError(410, '这个邀请码的名额已用完，请向发码人要新的');
   return invite;
 }
 
 function describe(invite: any) {
-  const role = invite.get('projectRole') as ProjectRole | null;
+  const role = inviteRole(invite);
   return {
     enterprise: invite.get('enterprise')?.get('shortName') || invite.get('enterprise')?.get('name'),
-    project: invite.get('project')?.get('name') ?? null,
+    project: role ? invite.get('project')?.get('name') ?? null : null,
     role: role ? PROJECT_ROLE_LABELS[role] : null,
     dept: invite.get('orgUnit')?.get('name') ?? null,
     autoApprove: !!invite.get('autoApprove'),
   };
 }
 
-/** 开通账号并按码加入项目：审核通过时用，免审核的码在注册时直接用。 */
+/**
+ * 开通账号并按码加入项目：审核通过时用，免审核的码在注册时直接用。
+ *
+ * 免审核注册时没有人登录（公开接口），留痕和“谁建的”都记刚开通的账号本人。以前这里取当前登录人，
+ * 没登录就报“请先登录”，整个开通回滚，申请卡在待审核、还占着登录名（0.41.0 修）。
+ */
 async function activate(ctx: Context, invite: any, reg: any, spaceName: string) {
-  const auto = !!invite?.get('autoApprove');
-  const userId = await ctx.db.sequelize.transaction(async (transaction: any) => {
+  const reviewerId = ctx.auth?.user?.id as number | undefined;
+  const auto = !reviewerId;
+  const enterpriseId = reg.get('enterpriseId') as number;
+  const orgUnitId = (invite?.get('orgUnitId') as number | null) ?? null;
+  return ctx.db.sequelize.transaction(async (transaction: any) => {
+    const unit = orgUnitId ? await ctx.db.getRepository('dz_org_units').findOne({ filter: { id: orgUnitId, enterpriseId }, transaction }) : null;
     const created = await insertUser(
       ctx,
       { username: reg.get('username'), nickname: reg.get('nickname'), email: reg.get('email') ?? undefined, phone: reg.get('phone') ?? undefined, systemRole: SYSTEM_ROLES.entMember },
       spaceName,
       transaction,
+      { enterpriseId, orgUnitId: unit ? orgUnitId : null, selfService: auto, ownPassword: true },
     );
+    const userId = created.user.id as number;
+    const actorId = reviewerId ?? userId;
     // 账号用申请人自己设的密码：写入注册时存的哈希，跳过密码字段的二次哈希。
-    await ctx.db.getRepository('users').model.update({ password: reg.get('passwordHash') }, { where: { id: created.user.id }, hooks: false, transaction });
-    await reg.update({ status: 'approved', userId: created.user.id, passwordHash: null, reviewedById: auto ? null : ctx.auth?.user?.id, reviewedAt: new Date() }, { transaction });
-    await audit(ctx, spaceName, auto ? 'registration.auto' : 'registration.approve', { registrationId: reg.get('id'), userId: created.user.id, username: reg.get('username') }, transaction);
-    return created.user.id as number;
+    await ctx.db.getRepository('users').model.update({ password: reg.get('passwordHash') }, { where: { id: userId }, hooks: false, transaction });
+    await reg.update({ status: 'approved', userId, passwordHash: null, reviewedById: reviewerId ?? null, reviewedAt: new Date() }, { transaction });
+    await audit(ctx, spaceName, auto ? 'registration.auto' : 'registration.approve', { registrationId: reg.get('id'), userId, username: reg.get('username') }, transaction, actorId);
+    // 码绑了项目、项目还在进行中，就加进项目（项目成员）；项目已归档或已删除的只加入企业。
+    const role = inviteRole(invite);
+    const project = role ? await ctx.db.getRepository('dz_projects').findOne({ filterByTk: invite.get('projectId'), transaction }) : null;
+    if (role && project && project.get('status') !== 'archived' && project.get('enterpriseId') === enterpriseId) {
+      await upsertMembers(ctx, project.get('id') as number, spaceName, [{ userId, projectRole: role }], transaction, actorId);
+    }
+    return userId;
   });
-  if (invite?.get('projectId')) {
-    const projectId = invite.get('projectId') as number;
-    const projectRole = (invite.get('projectRole') ?? 'member') as ProjectRole;
-    const repo = ctx.db.getRepository('dz_project_members');
-    const by = auto ? { createdById: userId, updatedById: userId } : creator(ctx);
-    if (!(await repo.findOne({ filter: { projectId, userId } })))
-      await repo.create({ values: { projectId, userId, projectRole, orgUnitId: invite.get('orgUnitId') ?? null, spaceName, ...by } });
-    await notify(ctx, { projectId, spaceName, userIds: [userId], kind: 'assigned', title: '你已加入项目', content: `角色：${PROJECT_ROLE_LABELS[projectRole]}`, link: `/projects/${projectId}` });
-  }
-  return userId;
 }
 
 // ── 公开接口 ─────────────────────────────────────────────────────────
@@ -139,10 +152,15 @@ export async function registerWithInvite(
   });
 
   const scope = describe(invite);
-  // 免审核的码：马上开通，注册页直接登录进项目。
+  // 免审核的码：马上开通，注册页直接登录进项目。开通没成功就把这条申请撤掉，不让它占着登录名。
   if (invite.get('autoApprove')) {
-    await activate(ctx, invite, reg, spaceName);
-    return { status: 'approved', enterprise: scope.enterprise, projectId: (invite.get('projectId') ?? null) as number | null };
+    try {
+      await activate(ctx, invite, reg, spaceName);
+    } catch (error) {
+      await reg.destroy().catch((cleanup: any) => ctx.app.logger.warn(`dingze: removing the failed registration ${reg.get('id')} failed: ${cleanup?.message ?? cleanup}`));
+      throw error;
+    }
+    return { status: 'approved', enterprise: scope.enterprise, projectId: scope.project ? ((invite.get('projectId') ?? null) as number | null) : null };
   }
 
   // 通知本企业的企业管理员（没有企业管理员时通知空间里的运营）。
@@ -150,7 +168,7 @@ export async function registerWithInvite(
   const has = (u: any, role: string) => (u.get('roles') ?? []).some((r: any) => r.get('name') === role);
   const admins = members.filter((u: any) => has(u, SYSTEM_ROLES.entAdmin));
   const reviewers = admins.length
-    ? { userIds: admins.map((u: any) => u.get('id')), link: '/enterprise?tab=invites' }
+    ? { userIds: admins.map((u: any) => u.get('id')), link: '/enterprise/invites' }
     : {
         userIds: members.filter((u: any) => has(u, SYSTEM_ROLES.ops) || has(u, SYSTEM_ROLES.consultAdmin)).map((u: any) => u.get('id')),
         link: `/ops/enterprises/${invite.get('enterpriseId')}?tab=invites`,
@@ -197,7 +215,8 @@ export async function listInvites(ctx: Context, enterpriseId: unknown) {
       code: i.get('code'),
       projectId: i.get('projectId') ?? null,
       projectName: i.get('project')?.get('name') ?? null,
-      projectRole: i.get('projectRole') ?? null,
+      projectRole: inviteRole(i),
+      projectArchived: i.get('project')?.get('status') === 'archived',
       orgUnitId: i.get('orgUnitId') ?? null,
       orgUnitName: i.get('orgUnit')?.get('name') ?? null,
       maxUses: i.get('maxUses'),
@@ -228,20 +247,23 @@ export async function listInvites(ctx: Context, enterpriseId: unknown) {
 
 export async function saveInvite(
   ctx: Context,
-  input: { enterpriseId: number; id?: number; projectId?: number | null; projectRole?: string | null; orgUnitId?: number | null; maxUses?: number; expiresAt?: string | null; status?: string; note?: string; autoApprove?: boolean },
+  input: { enterpriseId: number; id?: number; projectId?: number | null; orgUnitId?: number | null; maxUses?: number; expiresAt?: string | null; status?: string; note?: string; autoApprove?: boolean },
 ) {
   const scope = await loadEnterpriseScope(ctx, input.enterpriseId, true);
   const enterpriseId = scope.enterprise.get('id');
+  const repo = ctx.db.getRepository('dz_invites');
+  const existing = input.id ? await repo.findOne({ filterByTk: Number(input.id) }) : null;
+  if (input.id && (!existing || existing.get('enterpriseId') !== enterpriseId)) throw new HttpError(404, '邀请码不存在');
+  const status = input.status === 'disabled' ? 'disabled' : 'active';
+
   let projectId: number | null = null;
   if (input.projectId) {
     const project = await ctx.db.getRepository('dz_projects').findOne({ filterByTk: Number(input.projectId) });
     if (!project || project.get('enterpriseId') !== enterpriseId) throw new HttpError(400, '项目不属于这家企业');
+    // 已归档的项目不能发码，也不能把绑着它的码重新启用（停用这样的码不拦）。
+    if (project.get('status') === 'archived' && status === 'active') throw new HttpError(400, '项目已归档，不能用它的邀请码；先恢复项目');
     projectId = project.get('id');
   }
-  const projectRole = input.projectRole && (ENTERPRISE_ROLES as string[]).includes(input.projectRole) ? input.projectRole : null;
-  if (projectId && !projectRole) throw new HttpError(400, '绑定项目时请选项目角色');
-  // 企业管理员发的码不能直接给“企业项目负责人”：这个角色要由运营指定。
-  if (projectRole === 'ent_lead' && scope.asEntAdmin) throw new HttpError(403, '企业项目负责人由运营指定，邀请码不能直接给这个角色');
   let orgUnitId: number | null = null;
   if (input.orgUnitId) {
     const unit = await ctx.db.getRepository('dz_org_units').findOne({ filterByTk: Number(input.orgUnitId) });
@@ -249,30 +271,36 @@ export async function saveInvite(
     orgUnitId = unit.get('id');
   }
   const maxUses = Math.min(Math.max(Math.round(Number(input.maxUses) || 20), 1), 500);
-  const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+  // 有效期：不传按默认 14 天（新建时）或保持原样（修改时）；传 null 是长期有效。
+  const expiresAt =
+    input.expiresAt === undefined
+      ? existing
+        ? ((existing.get('expiresAt') as Date | null) ?? null)
+        : new Date(Date.now() + INVITE_DEFAULT_DAYS * 86400_000)
+      : input.expiresAt
+        ? new Date(input.expiresAt)
+        : null;
   if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new HttpError(400, '有效期格式不正确');
   const values = {
     projectId,
-    projectRole: projectId ? projectRole : null,
+    // 凭码进项目一律是项目成员；企业项目负责人在项目成员里换。
+    projectRole: projectId ? 'member' : null,
     orgUnitId,
     maxUses,
     expiresAt,
-    status: input.status === 'disabled' ? 'disabled' : 'active',
+    status,
     note: String(input.note ?? '').trim().slice(0, 100) || null,
-    autoApprove: input.autoApprove === true,
+    autoApprove: input.autoApprove === undefined ? (existing ? !!existing.get('autoApprove') : INVITE_DEFAULT_AUTO_APPROVE) : input.autoApprove === true,
   };
-  const repo = ctx.db.getRepository('dz_invites');
-  if (input.id) {
-    const invite = await repo.findOne({ filterByTk: Number(input.id) });
-    if (!invite || invite.get('enterpriseId') !== enterpriseId) throw new HttpError(404, '邀请码不存在');
-    await invite.update(values);
-    await audit(ctx, scope.spaceName, 'invite.update', { inviteId: invite.get('id'), status: values.status });
-    return invite.toJSON();
+  if (existing) {
+    await existing.update(values);
+    await audit(ctx, scope.spaceName, 'invite.update', { inviteId: existing.get('id'), status: values.status });
+    return existing.toJSON();
   }
   let code = newCode();
   while (await repo.findOne({ filter: { code } })) code = newCode();
   const invite = await repo.create({ values: { ...values, code, enterpriseId, spaceName: scope.spaceName, ...creator(ctx) } });
-  await audit(ctx, scope.spaceName, 'invite.create', { inviteId: invite.get('id'), projectId, projectRole: values.projectRole, maxUses, autoApprove: values.autoApprove });
+  await audit(ctx, scope.spaceName, 'invite.create', { inviteId: invite.get('id'), projectId, maxUses, autoApprove: values.autoApprove });
   return invite.toJSON();
 }
 
@@ -296,7 +324,7 @@ export async function reviewRegistration(ctx: Context, input: { enterpriseId: nu
 }
 
 /**
- * 团队码：给一个项目一个免审核的邀请码（项目成员 · 20 人 · 60 天），已有可用的就复用。
+ * 团队码：给一个项目一个免审核的邀请码（项目成员 · 20 人，默认 14 天，训练营发的 60 天），已有可用的就复用。
  * 训练营“一键发团队码”和企业自助发码都用它。
  */
 export async function ensureTeamInvite(ctx: Context, project: any, opts: { maxUses?: number; days?: number } = {}) {
@@ -320,7 +348,7 @@ export async function ensureTeamInvite(ctx: Context, project: any, opts: { maxUs
       projectRole: 'member',
       orgUnitId: null,
       maxUses: Math.min(Math.max(Number(opts.maxUses) || 20, 1), 500),
-      expiresAt: new Date(Date.now() + (opts.days ?? 60) * 86400_000),
+      expiresAt: new Date(Date.now() + (opts.days ?? INVITE_DEFAULT_DAYS) * 86400_000),
       status: 'active',
       autoApprove: true,
       note: '团队码',

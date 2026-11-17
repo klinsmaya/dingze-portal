@@ -1,7 +1,7 @@
 // Demo org setup (idempotent): names, departments, extra accounts, project 3, memberships.
 // Generated passwords go to $DINGZE_SECRETS_DIR/<user>.pw only; nothing secret is printed.
 import fs from 'node:fs';
-import { IDS_FILE, call, ok, remember } from './api.mjs';
+import { IDS_FILE, call, ok, ownPassword, remember } from './api.mjs';
 
 const OPS = 'dz_yun';
 const log = (...a) => console.log(...a);
@@ -39,6 +39,7 @@ async function user(username, nickname, systemRole, enterpriseId, caller = OPS) 
   if (users[username]) return users[username];
   const r = await ok(caller, 'dingze:createUser', { username, nickname, systemRole, ...(enterpriseId ? { enterpriseId } : {}) });
   remember(username, r.initialPassword);
+  await ownPassword(username);
   users[username] = r.user.id;
   log('created', username);
   return r.user.id;
@@ -49,13 +50,16 @@ await user('dz_he', '何总监', 'dz_ent_member', 3);
 await user('dz_guan', '关主任', 'dz_consult_admin', null, 'admin');
 for (const e of [1, 3]) await ok(OPS, 'dingze:addEnterpriseMembers', { enterpriseId: e, userIds: [users.dz_guan, users.dz_li, users.dz_chen].filter(Boolean) });
 
+// 项目角色只有三种（0.41.0）。周总监、何总监是本企业账号但不进项目：只读查看，部门记在账号上。
+await ok(OPS, 'dingze:setMemberDepartment', { enterpriseId: 1, userId: users.dz_zhou, orgUnitId: org1['财务部'] });
+await ok(OPS, 'dingze:setMemberDepartment', { enterpriseId: 3, userId: users.dz_he, orgUnitId: org3['财务部'] });
+
 const p1Members = [
   { userId: users.dz_zhang, projectRole: 'ent_lead' },
-  { userId: users.dz_wang, projectRole: 'dept_head', orgUnitId: org1['燃气运营部'] },
+  { userId: users.dz_wang, projectRole: 'member', orgUnitId: org1['燃气运营部'] },
   { userId: users.dz_liu, projectRole: 'member', orgUnitId: org1['调度中心'] },
-  { userId: users.dz_zhou, projectRole: 'readonly', orgUnitId: org1['财务部'] },
-  { userId: users.dz_chen, projectRole: 'lead_consultant' },
-  { userId: users.dz_li, projectRole: 'co_consultant' },
+  { userId: users.dz_chen, projectRole: 'consultant' },
+  { userId: users.dz_li, projectRole: 'consultant' },
 ];
 await ok(OPS, 'dingze:setProjectMembers', { projectId: 1, members: p1Members });
 // The platform admin was added to project 1 during early wiring; a real project wouldn't list it.
@@ -68,10 +72,9 @@ await ok(OPS, 'dingze:setProjectMembers', {
   projectId: 2,
   members: [
     { userId: users.dz_qian, projectRole: 'ent_lead' },
-    { userId: users.dz_sun, projectRole: 'dept_head', orgUnitId: org3['储能事业部'] },
-    { userId: users.dz_he, projectRole: 'readonly', orgUnitId: org3['财务部'] },
-    { userId: users.dz_chen, projectRole: 'lead_consultant' },
-    { userId: users.dz_li, projectRole: 'co_consultant' },
+    { userId: users.dz_sun, projectRole: 'member', orgUnitId: org3['储能事业部'] },
+    { userId: users.dz_chen, projectRole: 'consultant' },
+    { userId: users.dz_li, projectRole: 'consultant' },
   ],
 });
 let p3 = detail1.projects.find((p) => p.year === 2027);

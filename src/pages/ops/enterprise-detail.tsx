@@ -12,7 +12,7 @@ export default function EnterpriseDetailPage() {
       <Button variant="ghost" size="sm" className="self-start" nativeButton={false} render={<Link to="/ops/enterprises" />}>
         <ArrowLeft /> 企业列表
       </Button>
-      <EnterpriseManager key={enterpriseId} enterpriseId={enterpriseId} asOps />
+      <EnterpriseManager key={enterpriseId} enterpriseId={enterpriseId} />
     </div>
   );
 }

@@ -25,25 +25,28 @@ import { useEnterpriseDetail, useOpsMutation } from "@/lib/dingze/ops-queries";
 import { ConfirmAction } from "./confirm-action";
 import { EnterpriseStatusBadge } from "./labels";
 import { InvitesTab, usePendingRegistrations } from "./invites-tab";
-import { MembersTab } from "./members-tab";
-import { OrgUnitsTab } from "./org-units-tab";
+import { ConsultantsTab, StaffTab } from "./members-tab";
 import { OpsPageHeader } from "./page-header";
 import { ProjectsTab } from "./projects-tab";
 
+const TABS = ["projects", "staff", "consultants", "invites"];
+// 旧链接（通知、书签）里的页签名：成员并入企业成员；组织部门挪到了项目“资料 › 组织与职责”。
+const OLD_TABS: Record<string, string> = { members: "staff", org: "projects" };
+
 /**
- * One enterprise's administration. Ops (and consulting admins) see projects and can
- * suspend the enterprise; an enterprise admin maintains only its members, departments and invites.
+ * 运营（和咨询管理员）管一家企业：项目与分派、企业成员、咨询师、邀请注册，可以停用企业。
+ * 企业管理员不进这里：他们在左侧「成员管理」的三个子菜单里（pages/enterprise）。
+ * 组织部门不在这里维护：在项目“资料 › 组织与职责”里。
  */
-export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: number; asOps: boolean }) {
+export function EnterpriseManager({ enterpriseId }: { enterpriseId: number }) {
   const detail = useEnterpriseDetail(enterpriseId);
   const [editing, setEditing] = useState(false);
   const update = useOpsMutation(opsApi.updateEnterprise);
   const pendingRegistrations = usePendingRegistrations(enterpriseId);
   const [params, setParams] = useSearchParams();
-  const defaultTab = asOps ? "projects" : "members";
-  // 企业管理员的「本企业」只管成员、组织部门、邀请注册；项目只在「我的项目」里出现（测试反馈 5）。
-  const tabs = asOps ? ["projects", "members", "org", "invites"] : ["members", "org", "invites"];
-  const tab = tabs.includes(params.get("tab") ?? "") ? (params.get("tab") as string) : defaultTab;
+  const defaultTab = "projects";
+  const asked = params.get("tab") ?? "";
+  const tab = TABS.includes(asked) ? asked : (OLD_TABS[asked] ?? defaultTab);
 
   if (detail.isLoading) return <Skeleton className="h-96 rounded-xl" />;
   if (detail.error || !detail.data) {
@@ -67,7 +70,6 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
           </span>
         }
         actions={
-          asOps ? (
             <>
               <Button variant="outline" onClick={() => setEditing(true)}>
                 <Pencil /> 编辑档案
@@ -97,7 +99,6 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
                 }
               />
             </>
-          ) : null
         }
       />
 
@@ -110,31 +111,29 @@ export function EnterpriseManager({ enterpriseId, asOps }: { enterpriseId: numbe
 
       <Tabs value={tab} onValueChange={(v) => setParams(v === defaultTab ? {} : { tab: String(v) }, { replace: true })}>
         <TabsList>
-          {asOps ? <TabsTrigger value="projects">项目与分派</TabsTrigger> : null}
-          <TabsTrigger value="members">成员</TabsTrigger>
-          <TabsTrigger value="org">组织部门</TabsTrigger>
+          <TabsTrigger value="projects">项目与分派</TabsTrigger>
+          <TabsTrigger value="staff">企业成员</TabsTrigger>
+          <TabsTrigger value="consultants">咨询师</TabsTrigger>
           <TabsTrigger value="invites">
             邀请注册
             {pendingRegistrations ? <Badge className="ml-1 h-4 px-1.5 text-[10px]">{pendingRegistrations}</Badge> : null}
           </TabsTrigger>
         </TabsList>
-        {asOps ? (
-          <TabsContent value="projects" className="pt-4">
-            <ProjectsTab detail={detail.data} />
-          </TabsContent>
-        ) : null}
-        <TabsContent value="members" className="pt-4">
-          <MembersTab detail={detail.data} asOps={asOps} />
+        <TabsContent value="projects" className="pt-4">
+          <ProjectsTab detail={detail.data} />
         </TabsContent>
-        <TabsContent value="org" className="pt-4">
-          <OrgUnitsTab detail={detail.data} />
+        <TabsContent value="staff" className="pt-4">
+          <StaffTab detail={detail.data} asOps />
+        </TabsContent>
+        <TabsContent value="consultants" className="pt-4">
+          <ConsultantsTab detail={detail.data} asOps />
         </TabsContent>
         <TabsContent value="invites" className="pt-4">
-          <InvitesTab detail={detail.data} asOps={asOps} />
+          <InvitesTab detail={detail.data} />
         </TabsContent>
       </Tabs>
 
-      {asOps ? <EditEnterpriseDialog enterprise={enterprise} open={editing} onOpenChange={setEditing} /> : null}
+      <EditEnterpriseDialog enterprise={enterprise} open={editing} onOpenChange={setEditing} />
     </div>
   );
 }

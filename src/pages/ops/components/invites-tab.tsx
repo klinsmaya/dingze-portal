@@ -1,4 +1,4 @@
-import { PROJECT_ROLE_LABELS, type ProjectRole } from "@dingze/shared";
+import { INVITE_DEFAULT_AUTO_APPROVE, INVITE_DEFAULT_DAYS, PROJECT_ROLE_LABELS } from "@dingze/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Plus, Ticket, X } from "lucide-react";
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,10 +20,9 @@ import type { EnterpriseDetail } from "@/lib/dingze/ops-api";
 import { opsKeys } from "@/lib/dingze/ops-queries";
 import { formatTime } from "@/lib/dingze/records";
 
-// 邀请注册（审核制）：发邀请码 → 对方凭码申请 → 这里审核。通过后才开通账号（企业成员），并按码上的
-// 项目、角色和部门加入项目。
+// 邀请注册：发邀请码 → 对方凭码注册。默认免审核、14 天有效，注册完直接开通（企业成员），按码上的项目和部门
+// 加入；凭码进项目一律是项目成员。关掉免审核的码要在这里审核通过才开通。
 
-const ENTERPRISE_ROLES: ProjectRole[] = ["ent_lead", "dept_head", "member", "readonly"];
 const invitesKey = (enterpriseId: number) => ["dingze", "ops", "invites", enterpriseId] as const;
 
 export function usePendingRegistrations(enterpriseId: number) {
@@ -41,18 +40,20 @@ function useInviteMutation<TVars, TResult>(enterpriseId: number, fn: (vars: TVar
 }
 
 function scopeText(i: Invite) {
-  const scope = [i.projectName && `项目「${i.projectName}」`, i.projectRole && PROJECT_ROLE_LABELS[i.projectRole], i.orgUnitName].filter(Boolean).join(" · ") || "只加入企业";
-  return i.autoApprove ? `${scope} · 免审核` : scope;
+  // 老码里运营发的“企业项目负责人”还照旧生效，标出来；其余进项目都是项目成员，不用写。
+  const lead = i.projectRole === "ent_lead" ? PROJECT_ROLE_LABELS.ent_lead : null;
+  const scope = [i.projectName && `项目「${i.projectName}」`, lead, i.orgUnitName].filter(Boolean).join(" · ") || "只加入企业";
+  return i.autoApprove ? `${scope} · 免审核` : `${scope} · 要审核`;
 }
 
 function inviteState(i: Invite): { label: string; muted: boolean } {
-  if (i.status === "disabled") return { label: "已停用", muted: true };
+  if (i.status === "disabled") return { label: i.projectArchived ? "已停用（项目已归档）" : "已停用", muted: true };
   if (i.expiresAt && new Date(i.expiresAt).getTime() < Date.now()) return { label: "已过期", muted: true };
   if (i.used >= i.maxUses) return { label: "名额已满", muted: true };
   return { label: "可用", muted: false };
 }
 
-export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps: boolean }) {
+export function InvitesTab({ detail }: { detail: EnterpriseDetail }) {
   const enterpriseId = detail.enterprise.id;
   const data = useQuery({ queryKey: invitesKey(enterpriseId), queryFn: () => inviteApi.listInvites(enterpriseId) });
   const save = useInviteMutation(enterpriseId, inviteApi.saveInvite);
@@ -184,7 +185,7 @@ export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
                           disabled={save.isPending}
                           onClick={() =>
                             save.mutate(
-                              { enterpriseId, id: i.id, projectId: i.projectId, projectRole: i.projectRole, orgUnitId: i.orgUnitId, maxUses: i.maxUses, expiresAt: i.expiresAt, note: i.note ?? undefined, autoApprove: i.autoApprove, status: i.status === "active" ? "disabled" : "active" },
+                              { enterpriseId, id: i.id, projectId: i.projectId, orgUnitId: i.orgUnitId, maxUses: i.maxUses, expiresAt: i.expiresAt, note: i.note ?? undefined, autoApprove: i.autoApprove, status: i.status === "active" ? "disabled" : "active" },
                               { onSuccess: () => toast.success(i.status === "active" ? "已停用，这个码不能再用来申请" : "已重新启用"), onError: (e) => toast.error(errorMessage(e)) },
                             )
                           }
@@ -225,7 +226,7 @@ export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
         </section>
       ) : null}
 
-      {creating ? <InviteDialog detail={detail} asOps={asOps} onClose={() => setCreating(false)} onCreated={copy} save={save.mutateAsync} /> : null}
+      {creating ? <InviteDialog detail={detail} onClose={() => setCreating(false)} onCreated={copy} save={save.mutateAsync} /> : null}
       <RejectDialog
         registration={rejecting}
         pending={review.isPending}
@@ -250,28 +251,24 @@ export function InvitesTab({ detail, asOps }: { detail: EnterpriseDetail; asOps:
 
 function InviteDialog({
   detail,
-  asOps,
   onClose,
   onCreated,
   save,
 }: {
   detail: EnterpriseDetail;
-  asOps: boolean;
   onClose: () => void;
   onCreated: (invite: Invite) => void;
   save: (values: InviteInput) => Promise<Invite>;
 }) {
   const projects = detail.projects.filter((p) => p.status !== "archived");
   const [projectId, setProjectId] = useState(projects.length === 1 ? String(projects[0].id) : "");
-  const [role, setRole] = useState<ProjectRole>("member");
   const [orgUnitId, setOrgUnitId] = useState("");
   const [maxUses, setMaxUses] = useState("20");
-  const [expiresAt, setExpiresAt] = useState(() => new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10));
+  const [expiresAt, setExpiresAt] = useState(() => new Date(Date.now() + INVITE_DEFAULT_DAYS * 86400_000).toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   // 默认免审核：训练营和内训都是几十人一起进来，审核一遍太重；需要把关时再关掉。
-  const [autoApprove, setAutoApprove] = useState(true);
+  const [autoApprove, setAutoApprove] = useState(INVITE_DEFAULT_AUTO_APPROVE);
   const [busy, setBusy] = useState(false);
-  const roles = ENTERPRISE_ROLES.filter((r) => asOps || r !== "ent_lead");
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -279,7 +276,6 @@ function InviteDialog({
       const invite = await save({
         enterpriseId: detail.enterprise.id,
         projectId: projectId ? Number(projectId) : null,
-        projectRole: projectId ? role : null,
         orgUnitId: orgUnitId ? Number(orgUnitId) : null,
         maxUses: Number(maxUses) || 20,
         // 到期日当天整天有效。
@@ -308,7 +304,7 @@ function InviteDialog({
             <Field>
               <FieldLabel htmlFor="inv-project">加入项目</FieldLabel>
               <NativeSelect id="inv-project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <NativeSelectOption value="">不加入项目（以后再分派）</NativeSelectOption>
+                <NativeSelectOption value="">只加入企业</NativeSelectOption>
                 {projects.map((p) => (
                   <NativeSelectOption key={p.id} value={String(p.id)}>
                     {p.name}
@@ -316,19 +312,6 @@ function InviteDialog({
                 ))}
               </NativeSelect>
             </Field>
-            {projectId ? (
-              <Field>
-                <FieldLabel htmlFor="inv-role">项目角色</FieldLabel>
-                <NativeSelect id="inv-role" value={role} onChange={(e) => setRole(e.target.value as ProjectRole)}>
-                  {roles.map((r) => (
-                    <NativeSelectOption key={r} value={r}>
-                      {PROJECT_ROLE_LABELS[r]}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                {!asOps ? <FieldDescription>企业项目负责人由运营指定，不能用邀请码发。</FieldDescription> : null}
-              </Field>
-            ) : null}
             <Field>
               <FieldLabel htmlFor="inv-dept">所属部门</FieldLabel>
               <NativeSelect id="inv-dept" value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)}>

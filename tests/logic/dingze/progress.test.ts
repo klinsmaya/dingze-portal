@@ -47,7 +47,7 @@ describe("project progress", () => {
       "S1-03": { status: "in_progress", stale: true, staleReason: "S1-01 有新版本" },
     });
     expect(todosFor(artifacts, "ent_lead").map((t) => t.kind)).toEqual(["confirm", "stale"]);
-    expect(todosFor(artifacts, "lead_consultant").map((t) => t.kind)).toEqual(["review", "stale"]);
+    expect(todosFor(artifacts, "consultant").map((t) => t.kind)).toEqual(["review", "stale"]);
     expect(todosFor(artifacts, "readonly")).toEqual([]);
   });
 });

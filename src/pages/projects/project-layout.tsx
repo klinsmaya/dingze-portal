@@ -57,7 +57,7 @@ function flowNav(artifacts: ArtifactOverview[], library: boolean): NavItem[] {
     { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
   ];
 }
-const ENTERPRISE_ROLES = ["ent_lead", "dept_head", "member", "readonly"];
+const ENTERPRISE_ROLES = ["ent_lead", "member"];
 
 type TeamMember = { userId: number; nickname: string; projectRole: string };
 

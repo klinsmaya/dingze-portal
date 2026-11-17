@@ -70,7 +70,7 @@ export type Todo = {
   description: string;
 };
 
-const ENTERPRISE: ProjectRole[] = ["ent_lead", "dept_head", "member"];
+const ENTERPRISE: ProjectRole[] = ["ent_lead", "member"];
 
 export function todosFor(artifacts: ArtifactOverview[], role: ProjectRole | null): Todo[] {
   const todos: Todo[] = [];
@@ -80,10 +80,10 @@ export function todosFor(artifacts: ArtifactOverview[], role: ProjectRole | null
     if (a.status === "pending_confirm" && role === "ent_lead") {
       todos.push({ kind: "confirm", code: a.code, title, description: "咨询师已复核通过，等你确认定版" });
     }
-    if (a.status === "in_review" && (role === "lead_consultant" || role === "co_consultant")) {
+    if (a.status === "in_review" && (role === "consultant")) {
       todos.push({ kind: "review", code: a.code, title, description: "企业已提交，等你复核" });
     }
-    if (a.stale && role && (ENTERPRISE.includes(role) || role === "lead_consultant")) {
+    if (a.stale && role && (ENTERPRISE.includes(role) || role === "consultant")) {
       todos.push({ kind: "stale", code: a.code, title, description: a.staleReason ?? "引用的上游有新版本，请核对" });
     }
   }

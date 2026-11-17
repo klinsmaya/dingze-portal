@@ -16,7 +16,7 @@ export function isEnterpriseAccount(systemRoles: readonly string[]): boolean {
 /**
  * 一个账号在（自己所在企业空间的）某个项目里按什么角色对待：
  * - 加进了项目的，按项目成员里设的角色；
- * - 没加进项目的本企业账号，按只读成员（能看、能批注，不能填写和流转）；
+ * - 没加进项目的本企业账号，按只读查看（能看、能批注，不能填写和流转）；
  * - 其余没加进项目的（咨询师等）没有角色。运营和咨询管理员另有系统级的查看权，不在这里。
  */
 export function effectiveProjectRole(memberRole: ProjectRole | null | undefined, systemRoles: readonly string[]): ProjectRole | null {

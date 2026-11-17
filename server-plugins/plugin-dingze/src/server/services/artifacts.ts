@@ -24,6 +24,8 @@ import {
   type ImportSourceRow,
   canImportInto,
   importBasis,
+  memberManagerTier,
+  normalizeProjectRole,
   importBlocker,
 } from '../../shared';
 import { HttpError, type ProjectContext, currentUserId } from './access';
@@ -480,14 +482,19 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
       duty: o.get('duty') ?? null,
       sort: o.get('sort') ?? 0,
     })),
-    team: members.map((m: any) => ({
-      userId: m.get('userId'),
-      nickname: m.get('user')?.get('nickname') || m.get('user')?.get('username') || '',
-      projectRole: m.get('projectRole'),
-      orgUnitId: m.get('orgUnitId') ?? null,
-    })),
+    team: members
+      .map((m: any) => ({
+        userId: m.get('userId'),
+        nickname: m.get('user')?.get('nickname') || m.get('user')?.get('username') || '',
+        projectRole: normalizeProjectRole(m.get('projectRole')),
+        orgUnitId: m.get('orgUnitId') ?? null,
+      }))
+      .filter((m: any) => m.projectRole),
     projectRole: pc.projectRole,
     isConsultAdmin: pc.access.isConsultAdmin,
+    // 企业管理员不是项目负责人也能维护组织、管项目成员。
+    isEntAdmin: pc.access.isEntAdmin,
+    memberTier: memberManagerTier({ isOps: pc.access.isOps, isEntAdmin: pc.access.isEntAdmin, projectRole: pc.joined ? pc.projectRole : null }),
     artifacts: ARTIFACTS.map((def) => {
       const row: any = byCode.get(def.code);
       return {
@@ -508,7 +515,7 @@ export async function projectOverview(ctx: Context, pc: ProjectContext) {
 }
 
 export async function recordDissent(ctx: Context, pc: ProjectContext, def: ArtifactDef, content: string) {
-  if (!pc.projectRole || !['ent_lead', 'dept_head', 'member'].includes(pc.projectRole)) {
+  if (!pc.projectRole || !['ent_lead', 'member'].includes(pc.projectRole)) {
     throw new HttpError(403, '只有参与共创的企业成员可以记录异议');
   }
   if (!content?.trim()) throw new HttpError(400, '请填写异议内容');
@@ -527,8 +534,8 @@ export async function recordDissent(ctx: Context, pc: ProjectContext, def: Artif
 }
 
 export async function grantStepException(ctx: Context, pc: ProjectContext, def: ArtifactDef, reason: string) {
-  if (pc.projectRole !== 'lead_consultant' && !pc.access.isConsultAdmin) {
-    throw new HttpError(403, '只有主咨询师或咨询管理员可以批准跳步例外');
+  if (pc.projectRole !== 'consultant' && !pc.access.isConsultAdmin) {
+    throw new HttpError(403, '只有咨询师或咨询管理员可以批准跳步例外');
   }
   if (!reason?.trim()) throw new HttpError(400, '需要填写原因');
   return ctx.db.sequelize.transaction(async (transaction: any) => {
@@ -550,7 +557,7 @@ export async function grantStepException(ctx: Context, pc: ProjectContext, def: 
  */
 export async function dismissOrgNotice(ctx: Context, pc: ProjectContext, code: string, note?: string) {
   const selfLead = pc.actor.service === 'self' && pc.projectRole === 'ent_lead';
-  if (!(pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || pc.projectRole === 'ent_lead' || selfLead)) throw new HttpError(403, '只有主咨询师或企业项目负责人可以确认不需要重开');
+  if (!(pc.access.isConsultAdmin || pc.projectRole === 'consultant' || pc.projectRole === 'ent_lead' || selfLead)) throw new HttpError(403, '只有咨询师或企业项目负责人可以确认不需要重开');
   const projectId = pc.project.get('id');
   return ctx.db.sequelize.transaction(async (transaction: any) => {
     const row = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code }, transaction });
@@ -596,9 +603,9 @@ export async function acknowledgeUpstream(ctx: Context, pc: ProjectContext, def:
     const artifact = await ctx.db.getRepository('dz_artifacts').findOne({ filter: { projectId, code: def.code }, transaction });
     if (!artifact?.get('stale')) return { ok: true };
     const status = artifact.get('status') as ArtifactStatus;
-    const judge = pc.access.isConsultAdmin || pc.projectRole === 'lead_consultant' || pc.projectRole === 'ent_lead';
+    const judge = pc.access.isConsultAdmin || pc.projectRole === 'consultant' || pc.projectRole === 'ent_lead';
     if (status === 'locked' ? !judge : !canPerform('save', pc.actor)) {
-      throw new HttpError(403, status === 'locked' ? '已定版的表由企业项目负责人或主咨询师确认是否受影响' : '当前角色不能修改这张表');
+      throw new HttpError(403, status === 'locked' ? '已定版的表由企业项目负责人或咨询师确认是否受影响' : '当前角色不能修改这张表');
     }
     const upstream = await upstreamState(ctx, projectId, def, transaction);
     if (upstream.reopened.length) {

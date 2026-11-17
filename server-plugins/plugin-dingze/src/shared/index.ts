@@ -18,3 +18,4 @@ export * from './startup';
 export * from './coherence';
 export * from './project-import';
 export * from './project-access';
+export * from './members';

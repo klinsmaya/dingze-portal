@@ -28,16 +28,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { errorMessage } from "@/lib/dingze/errors";
 import { type EnterpriseDetail, type OpsProject, opsApi } from "@/lib/dingze/ops-api";
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
-import { flattenOrgUnits, orgUnitPath } from "@/lib/dingze/org-units";
-import { type MemberRow, defaultOrgUnitId, diffMembers, memberWarnings } from "@/lib/dingze/project-members";
+import { orgUnitPath } from "@/lib/dingze/org-units";
+import { type MemberRow, memberWarnings } from "@/lib/dingze/project-members";
 import { DeleteProjectDialog } from "@/pages/projects/components/project-manage";
+import { ProjectMembersDialog } from "@/pages/projects/components/project-members-dialog";
 
 import { SCENE_LABELS, SCHEDULE_LABELS } from "./labels";
 
 type ProjectWithMembers = EnterpriseDetail["projects"][number];
 
-const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ["ent_lead", "dept_head", "member", "readonly"];
-const CONSULTANT_PROJECT_ROLES: ProjectRole[] = ["lead_consultant", "co_consultant"];
+const ENTERPRISE_PROJECT_ROLES: ProjectRole[] = ["ent_lead", "member"];
 
 /** 运营管理 › 企业 › 项目与分派。企业管理员不进这里：他们的项目都在「我的项目」（测试反馈 5）。 */
 export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
@@ -76,7 +76,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
               <FolderKanban />
             </EmptyMedia>
             <EmptyTitle>还没有项目</EmptyTitle>
-            <EmptyDescription>新建项目并指定主咨询师、企业项目负责人后，双方就能在“我的项目”里看到它。</EmptyDescription>
+            <EmptyDescription>新建项目后，企业管理员默认是企业项目负责人；再在“成员”里分派咨询师。</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -126,7 +126,7 @@ export function ProjectsTab({ detail }: { detail: EnterpriseDetail }) {
       )}
 
       <ProjectDialog target={editing} detail={detail} onClose={() => setEditing(null)} />
-      <MembersDialog project={staffing} detail={detail} onClose={() => setStaffing(null)} />
+      <ProjectMembersDialog projectId={staffing?.id ?? null} onClose={() => setStaffing(null)} />
       <DeleteProjectDialog project={deleting} onClose={() => setDeleting(null)} />
     </div>
   );
@@ -174,7 +174,7 @@ function ProjectDialog({
     const values = { ...draft, name: draft.name.trim() };
     const done = {
       onSuccess: () => {
-        toast.success(isNew ? "项目已创建，下一步请设置成员" : "已保存");
+        toast.success(isNew ? "项目已创建，企业管理员默认是企业项目负责人；咨询师和其他成员在“成员”里加" : "已保存");
         onClose();
       },
       onError: (error: unknown) => toast.error(errorMessage(error)),
@@ -238,7 +238,7 @@ function ProjectDialog({
                   value={draft.status}
                   options={{ active: "进行中", archived: "已归档" }}
                   onChange={(v) => set("status", v)}
-                  description="归档后项目收进「已归档」，成员仍可打开，随时可以改回进行中。"
+                  description="归档后项目收进「已归档」，成员仍可打开，绑着它的邀请码一起停用；随时可以改回进行中。"
                 />
               ) : null}
             </FieldGroup>
@@ -287,187 +287,6 @@ function SelectField<T extends string>({
   );
 }
 
-function MembersDialog({
-  project,
-  detail,
-  onClose,
-}: {
-  project: ProjectWithMembers | null;
-  detail: EnterpriseDetail;
-  onClose: () => void;
-}) {
-  const saved: MemberRow[] = (project?.members ?? []).map((m) => ({
-    userId: m.userId,
-    projectRole: m.projectRole,
-    orgUnitId: m.orgUnitId,
-  }));
-  const [rows, setRows] = useState<MemberRow[]>(saved);
-  const [shown, setShown] = useState<ProjectWithMembers | null>(null);
-  if (project !== shown) {
-    setShown(project);
-    setRows(saved);
-  }
-  const [pending, setPending] = useState(false);
-  const setMembers = useOpsMutation(opsApi.setProjectMembers);
-  const removeMember = useOpsMutation(opsApi.removeProjectMember);
-  const orgNodes = flattenOrgUnits(detail.orgUnits);
-  const available = detail.members.filter((m) => m.roles.length > 0 && !rows.some((r) => r.userId === m.id));
-  const isConsultantAccount = (userId: number) =>
-    detail.members.find((m) => m.id === userId)?.roles.some((r) => r === "dz_consultant" || r === "dz_consult_admin") ?? false;
-
-  const update = (index: number, patch: Partial<MemberRow>) =>
-    setRows(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-
-  const addRow = (userId: number) =>
-    setRows([
-      ...rows,
-      {
-        userId,
-        projectRole: isConsultantAccount(userId) ? "co_consultant" : "member",
-        // 自动带上所属部门：本企业其他项目里已有的部门，或其负责的部门。
-        orgUnitId: isConsultantAccount(userId) ? null : defaultOrgUnitId(userId, detail.projects, detail.orgUnits),
-      },
-    ]);
-
-  const save = async () => {
-    if (!project) return;
-    const { removed, upserts } = diffMembers(saved, rows);
-    setPending(true);
-    try {
-      // Upsert first so a new lead consultant exists before the old one is removed.
-      if (upserts.length) await setMembers.mutateAsync({ projectId: project.id, members: upserts });
-      for (const userId of removed) await removeMember.mutateAsync({ projectId: project.id, userId });
-      toast.success("项目成员已更新");
-      onClose();
-    } catch (error) {
-      toast.error(errorMessage(error));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const nameOf = (userId: number) => {
-    const user = detail.members.find((m) => m.id === userId);
-    return user ? user.nickname || user.username : `#${userId}`;
-  };
-  const warnings = memberWarnings(rows, project?.service);
-
-  return (
-    <Dialog open={!!project} onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>项目成员 · {project?.name}</DialogTitle>
-        </DialogHeader>
-
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>成员</TableHead>
-                <TableHead>项目角色</TableHead>
-                <TableHead>所属部门</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row, index) => {
-                const consultant = isConsultantAccount(row.userId);
-                return (
-                  <TableRow key={row.userId}>
-                    <TableCell className="font-medium">{nameOf(row.userId)}</TableCell>
-                    <TableCell>
-                      <NativeSelect
-                        aria-label={`${nameOf(row.userId)} 的项目角色`}
-                        value={row.projectRole}
-                        onChange={(e) => update(index, { projectRole: e.target.value as ProjectRole })}
-                      >
-                        {(consultant ? CONSULTANT_PROJECT_ROLES : ENTERPRISE_PROJECT_ROLES).map((role) => (
-                          <NativeSelectOption key={role} value={role}>
-                            {PROJECT_ROLE_LABELS[role]}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-                    </TableCell>
-                    <TableCell>
-                      {consultant ? (
-                        <span className="text-xs text-muted-foreground">咨询方</span>
-                      ) : (
-                        <NativeSelect
-                          aria-label={`${nameOf(row.userId)} 的部门`}
-                          value={row.orgUnitId ?? ""}
-                          onChange={(e) => update(index, { orgUnitId: e.target.value ? Number(e.target.value) : null })}
-                        >
-                          <NativeSelectOption value="">（未指定）</NativeSelectOption>
-                          {orgNodes.map((n) => (
-                            <NativeSelectOption key={n.id} value={n.id}>
-                              {"　".repeat(n.depth)}
-                              {n.name}
-                            </NativeSelectOption>
-                          ))}
-                        </NativeSelect>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`移除 ${nameOf(row.userId)}`}
-                        onClick={() => setRows(rows.filter((_, i) => i !== index))}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <NativeSelect
-            aria-label="添加成员"
-            value=""
-            onChange={(e) => e.target.value && addRow(Number(e.target.value))}
-            disabled={available.length === 0}
-          >
-            <NativeSelectOption value="">
-              {available.length ? "＋ 从企业空间添加成员…" : "企业空间里的账号都已加入"}
-            </NativeSelectOption>
-            {available.map((m) => (
-              <NativeSelectOption key={m.id} value={m.id}>
-                {m.nickname || m.username}（{m.username}）
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
-
-        {warnings.length ? (
-          <Alert>
-            <TriangleAlert />
-            <AlertDescription>
-              <ul className="list-disc pl-4">
-                {warnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button onClick={save} disabled={pending}>
-            {pending ? "保存中…" : "保存成员"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /**
  * 企业管理员自建项目（默认允许，运营可按企业关掉；入口在「我的项目」）：企业内训 · 自助；只列本企业账号，只能分派企业侧角色，
  * 默认把自己设为企业项目负责人。建好后直接进项目并打开“从已有项目带入”。
@@ -485,12 +304,11 @@ export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; det
     if (open) {
       setName(`${year} 年度战略落地`);
       setProjectYear(year);
-      setRows(me?.id ? [{ userId: me.id, projectRole: "ent_lead", orgUnitId: null }] : []);
+      setRows(me?.id ? [{ userId: me.id, projectRole: "ent_lead" }] : []);
     }
   }
   const create = useOpsMutation(opsApi.createOwnProject);
-  const orgNodes = flattenOrgUnits(detail.orgUnits);
-  const staff = detail.members.filter((m) => m.roles.some((r) => r === "dz_ent_admin" || r === "dz_ent_member"));
+  const staff = detail.members.filter((m) => m.kind === "enterprise" && !m.disabled);
   const available = staff.filter((m) => !rows.some((r) => r.userId === m.id));
   const nameOf = (userId: number) => {
     const user = detail.members.find((m) => m.id === userId);
@@ -541,7 +359,6 @@ export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; det
                 <TableRow>
                   <TableHead>成员</TableHead>
                   <TableHead>项目角色</TableHead>
-                  <TableHead>所属部门</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -559,17 +376,6 @@ export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; det
                       </NativeSelect>
                     </TableCell>
                     <TableCell>
-                      <NativeSelect aria-label={`${nameOf(row.userId)} 的部门`} value={row.orgUnitId ?? ""} onChange={(e) => update(index, { orgUnitId: e.target.value ? Number(e.target.value) : null })}>
-                        <NativeSelectOption value="">（未指定）</NativeSelectOption>
-                        {orgNodes.map((n) => (
-                          <NativeSelectOption key={n.id} value={n.id}>
-                            {"　".repeat(n.depth)}
-                            {n.name}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-                    </TableCell>
-                    <TableCell>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`移除 ${nameOf(row.userId)}`} onClick={() => setRows(rows.filter((_, i) => i !== index))}>
                         <Trash2 />
                       </Button>
@@ -580,7 +386,7 @@ export function OwnProjectDialog({ open, detail, onClose }: { open: boolean; det
             </Table>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <NativeSelect aria-label="添加成员" value="" onChange={(e) => e.target.value && setRows([...rows, { userId: Number(e.target.value), projectRole: "member", orgUnitId: defaultOrgUnitId(Number(e.target.value), detail.projects, detail.orgUnits) }])} disabled={available.length === 0}>
+            <NativeSelect aria-label="添加成员" value="" onChange={(e) => e.target.value && setRows([...rows, { userId: Number(e.target.value), projectRole: "member" }])} disabled={available.length === 0}>
               <NativeSelectOption value="">{available.length ? "＋ 添加本企业成员…" : "本企业的账号都已加入"}</NativeSelectOption>
               {available.map((m) => (
                 <NativeSelectOption key={m.id} value={m.id}>

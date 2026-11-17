@@ -152,7 +152,7 @@ export async function createExpertRequest(
   pc: ProjectContext,
   input: { topic?: unknown; title?: unknown; question?: unknown; refs?: unknown },
 ) {
-  if (!canRequestExpert(pc.projectRole, pc.access.isConsultAdmin)) throw new HttpError(403, '只读成员不能申请专家咨询');
+  if (!canRequestExpert(pc.projectRole, pc.access.isConsultAdmin)) throw new HttpError(403, '你还没加入这个项目，不能申请专家咨询');
   const topic = String(input.topic ?? 'other');
   if (!(topic in EXPERT_TOPICS)) throw new HttpError(400, '咨询议题类型不正确');
   const title = text(input.title, '议题', { required: true, max: 100 });
@@ -178,7 +178,7 @@ export async function createExpertRequest(
   await notify(ctx, {
     projectId,
     spaceName: pc.spaceName,
-    userIds: [...admins.map((u) => u.id), ...(await projectMemberIds(ctx, projectId, ['lead_consultant']))],
+    userIds: [...admins.map((u) => u.id), ...(await projectMemberIds(ctx, projectId, ['consultant']))],
     kind: 'expert',
     title: `新的专家咨询申请：${title}`,
     content: `${EXPERT_TOPICS[topic as keyof typeof EXPERT_TOPICS]}｜${question.slice(0, 80)}`,

@@ -9,12 +9,12 @@ describe("自助 projects", () => {
     expect(canPerform("selfReview", { ...lead, service: "self" })).toBe(true);
     expect(canPerform("selfReview", lead)).toBe(false);
     expect(canPerform("submitReview", { ...lead, service: "self" })).toBe(false);
-    expect(canPerform("approve", { projectRole: "lead_consultant", isConsultAdmin: false, service: "self" })).toBe(false);
+    expect(canPerform("approve", { projectRole: "consultant", isConsultAdmin: false, service: "self" })).toBe(false);
     expect(canPerform("reopen", { ...lead, service: "self" })).toBe(true);
     expect(canPerform("reopen", lead)).toBe(true);
-    expect(canPerform("reopen", { ...lead, projectRole: "dept_head" })).toBe(false);
+    expect(canPerform("reopen", { ...lead, projectRole: "member" })).toBe(false);
     expect(nextStatus("selfReview", "step_done", { ...lead, service: "self" })).toBe("pending_confirm");
-    expect(canPerform("confirm", { projectRole: "dept_head", isConsultAdmin: false, service: "self" })).toBe(false);
+    expect(canPerform("confirm", { projectRole: "member", isConsultAdmin: false, service: "self" })).toBe(false);
   });
 
   it("builds the checklist from the step's completion checks, pitfalls and open suggestions", () => {

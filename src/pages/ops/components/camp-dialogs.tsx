@@ -1,10 +1,9 @@
-import { ARTIFACTS, PROJECT_ROLE_LABELS } from "@dingze/shared";
+import { ARTIFACTS } from "@dingze/shared";
 import { Download, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { ImportSource } from "@/components/dingze/import-source";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,15 +13,16 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { ACCOUNT_TEMPLATE, ENTERPRISE_TEMPLATE, downloadCsv, parseAccountTable, parseEnterpriseTable } from "@/lib/dingze/camp-import";
+import { ENTERPRISE_TEMPLATE, downloadCsv, parseEnterpriseTable } from "@/lib/dingze/camp-import";
 import { errorMessage } from "@/lib/dingze/errors";
-import { type Camp, type CampProject, type CampStatus, opsApi } from "@/lib/dingze/ops-api";
+import { type Camp, type CampStatus, opsApi } from "@/lib/dingze/ops-api";
 import { useDzUsers, useEnterprises, useOpsMutation } from "@/lib/dingze/ops-queries";
 
 import { CAMP_STATUS_LABELS } from "./labels";
 import { UserChecklist } from "./user-checklist";
 
-// 训练营批次的弹窗：建 / 改批次、批量加企业、编入已有项目、批量发账号，以及一次性的账号清单。
+// 训练营批次的弹窗：建 / 改批次、批量加企业、编入已有项目，以及一次性的账号清单。
+// 批量发账号用的是企业里“批量开通”的同一个弹窗（bulk-accounts-dialog.tsx）。
 
 const FOCUS_CHOICES = ARTIFACTS.filter((a) => a.priority === "P0");
 
@@ -186,15 +186,14 @@ export function CampEnrollDialog({ open, onClose, camp, onIssued }: { open: bool
   const [text, setText] = useState("");
   const [projectName, setProjectName] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [lead, setLead] = useState("");
-  const [cos, setCos] = useState<number[]>([]);
+  const [picked, setPicked] = useState<number[]>([]);
   const users = useDzUsers(undefined, undefined, open);
   const consultants = (users.data ?? []).filter((u) => u.roles.some((r) => r === "dz_consultant" || r === "dz_consult_admin"));
   const enroll = useOpsMutation(opsApi.campEnroll);
   const { rows, problems } = parseEnterpriseTable(text);
   const run = () =>
     enroll.mutate(
-      { campId: camp.id, year: Number(year) || undefined, projectName: projectName.trim() || undefined, leadConsultantId: lead ? Number(lead) : undefined, coConsultantIds: cos, rows },
+      { campId: camp.id, year: Number(year) || undefined, projectName: projectName.trim() || undefined, consultantIds: picked, rows },
       {
         onSuccess: ({ results }) => {
           setText("");
@@ -221,20 +220,9 @@ export function CampEnrollDialog({ open, onClose, camp, onIssued }: { open: bool
             <Input id="enroll-year" inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value)} />
           </Field>
         </div>
-        <Field>
-          <FieldLabel htmlFor="enroll-lead">主咨询师</FieldLabel>
-          <NativeSelect id="enroll-lead" value={lead} onChange={(e) => setLead(e.target.value)}>
-            <NativeSelectOption value="">暂不指定</NativeSelectOption>
-            {consultants.map((u) => (
-              <NativeSelectOption key={u.id} value={String(u.id)}>
-                {u.nickname || u.username}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
         <FieldSet>
-          <FieldLegend variant="label">协作咨询师</FieldLegend>
-          <UserChecklist users={consultants.filter((u) => String(u.id) !== lead)} selected={cos} onChange={setCos} emptyText="没有其他咨询师" />
+          <FieldLegend variant="label">咨询师</FieldLegend>
+          <UserChecklist users={consultants} selected={picked} onChange={setPicked} emptyText="还没有咨询师账号，可以先不选" />
         </FieldSet>
         <ImportSource template={ENTERPRISE_TEMPLATE} onText={setText} />
         <Textarea aria-label="企业名单" className="min-h-32 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"企业全称\t简称\t规模\t管理员姓名\t管理员登录名\t管理员手机"} />
@@ -315,74 +303,6 @@ export function CampAttachDialog({ open, onClose, camp }: { open: boolean; onClo
             }
           >
             编入 {selected.length || ""} 个项目
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function CampAccountsDialog({ project, onClose, onIssued }: { project: CampProject | null; onClose: () => void; onIssued: (rows: IssuedRow[]) => void }) {
-  const [text, setText] = useState("");
-  const accounts = useOpsMutation(opsApi.campAccounts);
-  const { rows, problems } = parseAccountTable(text);
-  return (
-    <Dialog open={!!project} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>批量发账号 · {project?.enterprise.shortName}</DialogTitle>
-        </DialogHeader>
-        <ImportSource template={ACCOUNT_TEMPLATE} onText={setText} />
-        <Textarea aria-label="成员名单" className="min-h-32 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"姓名\t登录名\t手机\t邮箱\t项目角色\t部门"} />
-        {rows.length ? (
-          <ul className="max-h-40 overflow-y-auto rounded-lg border text-xs">
-            {rows.map((r) => (
-              <li key={r.username} className="flex gap-2 border-b px-3 py-1.5 last:border-b-0">
-                <span className="font-medium">{r.nickname}</span>
-                <span className="text-muted-foreground">
-                  {r.username} · {PROJECT_ROLE_LABELS[r.role]}
-                  {r.dept ? ` · ${r.dept}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {problems.length ? <p className="text-xs text-[color:var(--dz-warn)]">{problems.join("；")}</p> : null}
-        {rows.some((r) => r.dept) ? (
-          <Alert>
-            <AlertDescription>部门要和企业组织表里的名称一致；对不上的那一行会失败，其他行照常开通。</AlertDescription>
-          </Alert>
-        ) : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            disabled={!project || !rows.length || accounts.isPending}
-            onClick={() =>
-              project &&
-              accounts.mutate(
-                { projectId: project.id, rows },
-                {
-                  onSuccess: ({ results }) => {
-                    setText("");
-                    onClose();
-                    onIssued(
-                      results.map((r) => ({
-                        label: `${r.nickname}${r.role ? ` · ${PROJECT_ROLE_LABELS[r.role]}` : ""}`,
-                        username: r.username,
-                        password: r.initialPassword,
-                        ok: r.ok,
-                        error: r.error,
-                      })),
-                    );
-                  },
-                  onError: (error) => toast.error(errorMessage(error)),
-                },
-              )
-            }
-          >
-            {accounts.isPending ? "开通中…" : `开通 ${rows.length || ""} 个账号`}
           </Button>
         </DialogFooter>
       </DialogContent>

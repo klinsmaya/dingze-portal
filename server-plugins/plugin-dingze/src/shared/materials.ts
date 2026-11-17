@@ -49,7 +49,7 @@ export const MATERIAL_TEXT_LIMIT = 150_000;
 export type MaterialKind = 'file' | 'note' | 'attachment';
 
 /** 谁能上传、删除项目资料库的资料和改画像：企业项目负责人、咨询师、咨询管理员。普通员工只能传表下附件。 */
-export const LIBRARY_MANAGERS: ProjectRole[] = ['ent_lead', 'lead_consultant', 'co_consultant'];
+export const LIBRARY_MANAGERS: ProjectRole[] = ['ent_lead', 'consultant'];
 export function canManageLibrary(role: ProjectRole | null | undefined, isConsultAdmin: boolean): boolean {
   return isConsultAdmin || (!!role && LIBRARY_MANAGERS.includes(role));
 }
@@ -70,7 +70,7 @@ ${cut ? text.slice(0, ATTACHMENT_PROMPT_CHARS) : text}`;
 /** Who may move an item to a status: consultants review, the enterprise lead confirms. */
 export function canSetProfileStatus(status: ProfileStatus, role: ProjectRole | null, isConsultAdmin: boolean): boolean {
   if (status === 'draft') return true;
-  if (status === 'reviewed') return isConsultAdmin || role === 'lead_consultant' || role === 'co_consultant';
+  if (status === 'reviewed') return isConsultAdmin || role === 'consultant';
   return role === 'ent_lead';
 }
 

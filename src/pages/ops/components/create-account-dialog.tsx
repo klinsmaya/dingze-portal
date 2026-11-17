@@ -1,3 +1,4 @@
+import { defaultJoinProjectIds } from "@dingze/shared";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,13 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { type AccountFields, accountPayload, emptyAccount } from "@/lib/dingze/accounts";
 import { errorMessage } from "@/lib/dingze/errors";
-import { type CreatedAccount, SYSTEM_ROLE_LABELS, type SystemRole, opsApi } from "@/lib/dingze/ops-api";
+import { type CreatedAccount, type OrgUnit, SYSTEM_ROLE_LABELS, type SystemRole, opsApi } from "@/lib/dingze/ops-api";
 import { useOpsMutation } from "@/lib/dingze/ops-queries";
+import { flattenOrgUnits } from "@/lib/dingze/org-units";
+
+import { ProjectPicker } from "./project-picker";
 
 /** 登录名 / 姓名 / 手机 / 邮箱 — shared by account creation and enterprise provisioning. */
 export function AccountFieldsEditor({
@@ -65,25 +69,38 @@ export function CreateAccountDialog({
   title,
   description,
   roles,
-  enterpriseId,
+  enterprise,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: string;
+  description?: string;
   roles: SystemRole[];
-  enterpriseId?: number;
+  /** 在企业里开通：可以顺手归到部门、加进项目（默认本企业所有进行中的项目）。 */
+  enterprise?: { id: number; projects: { id: number; name: string; status?: string | null }[]; orgUnits: OrgUnit[] };
   onCreated: (account: CreatedAccount) => void;
 }) {
   const [account, setAccount] = useState<AccountFields>(emptyAccount);
   const [role, setRole] = useState<SystemRole>(roles[0]);
+  const [orgUnitId, setOrgUnitId] = useState("");
+  const [projectIds, setProjectIds] = useState<number[]>(() => defaultJoinProjectIds(enterprise?.projects ?? []));
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setOrgUnitId("");
+      setProjectIds(defaultJoinProjectIds(enterprise?.projects ?? []));
+    }
+  }
   const create = useOpsMutation(opsApi.createUser);
+  const active = (enterprise?.projects ?? []).filter((p) => p.status !== "archived");
+  const orgNodes = flattenOrgUnits(enterprise?.orgUnits ?? []);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     create.mutate(
-      { ...accountPayload(account), systemRole: role, enterpriseId },
+      { ...accountPayload(account), systemRole: role, enterpriseId: enterprise?.id, ...(enterprise ? { projectIds, orgUnitId: orgUnitId ? Number(orgUnitId) : null } : {}) },
       {
         onSuccess: (created) => {
           setAccount(emptyAccount);
@@ -97,11 +114,11 @@ export function CreateAccountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
+            {description ? <DialogDescription>{description}</DialogDescription> : null}
           </DialogHeader>
           <FieldGroup>
             <AccountFieldsEditor value={account} onChange={setAccount} idPrefix="new-account" />
@@ -115,9 +132,23 @@ export function CreateAccountDialog({
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
-                <FieldDescription>系统角色决定能进入哪些菜单；项目里的权限在项目成员中设置。</FieldDescription>
               </Field>
             ) : null}
+            {enterprise && orgNodes.length ? (
+              <Field>
+                <FieldLabel htmlFor="new-account-dept">所属部门</FieldLabel>
+                <NativeSelect id="new-account-dept" value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)}>
+                  <NativeSelectOption value="">（未指定）</NativeSelectOption>
+                  {orgNodes.map((n) => (
+                    <NativeSelectOption key={n.id} value={n.id}>
+                      {"　".repeat(n.depth)}
+                      {n.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+            ) : null}
+            {enterprise ? <ProjectPicker projects={active} selected={projectIds} onChange={setProjectIds} /> : null}
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

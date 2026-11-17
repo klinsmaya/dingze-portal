@@ -2,13 +2,12 @@ import { randomBytes } from 'node:crypto';
 
 import type { Context } from '@nocobase/actions';
 
-import { ENTERPRISE_PROJECT_ROLES, PROJECT_ROLE_LABELS, type ProjectRole, STAGES, canManageProjects, effectiveProjectRole, nextAction, selfProjectAllowed, stageGateCodes } from '../../shared';
+import { ENTERPRISE_PROJECT_ROLES, type ProjectRole, STAGES, canManageProjects, defaultLeadId, effectiveProjectRole, nextAction, normalizeProjectRole, selfProjectAllowed, stageGateCodes } from '../../shared';
 import { projectProgress } from './artifacts';
 import { HttpError, SYSTEM_ROLES, currentUserId, requireOps, systemAccess, userSpaceNames } from './access';
-import { notifyAssignment } from './notify';
-import { audit, creator, insertUser, loadEnterpriseScope } from './ops';
-
-const PROJECT_ROLES = Object.keys(PROJECT_ROLE_LABELS) as ProjectRole[];
+import { accountFactsOf, staffUserIds } from './accounts';
+import { type MemberInput, parseMembers, upsertMembers } from './members';
+import { addUsersToSpace, audit, creator, insertUser, loadEnterpriseScope } from './ops';
 
 function text(value: unknown, label: string, max = 100): string {
   if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, `请填写${label}`);
@@ -23,11 +22,6 @@ function ids(value: unknown): number[] {
   return [...new Set(value.map(Number))].filter((n) => Number.isInteger(n) && n > 0);
 }
 
-async function addUsersToSpace(ctx: Context, spaceName: string, userIds: number[], transaction?: any) {
-  if (userIds.length === 0) return;
-  await ctx.db.getRepository('spaces.users', spaceName).add({ tk: userIds, transaction });
-}
-
 export interface ProvisionInput {
   name: string;
   shortName: string;
@@ -38,30 +32,37 @@ export interface ProvisionInput {
   admin?: { username: string; nickname: string; email?: string; phone?: string };
 }
 
-/** 开通企业：建空间 → 企业档案 → 开通人、咨询师、企业成员加入空间。 */
+/**
+ * 开通企业：建空间 → 企业档案 → 企业管理员账号（必填：企业至少要有一位管理员）。运营管理员、咨询管理员
+ * 自动进入每一家企业的空间，开通的人不用再挨个加；咨询师按 consultantIds 分派进来。
+ */
 export async function provisionEnterprise(ctx: Context, input: ProvisionInput) {
   requireOps(await systemAccess(ctx));
   const name = text(input.name, '企业名称');
   const shortName = text(input.shortName, '简称', 20);
   const size = input.size === 'large' ? 'large' : 'sme';
+  if (!input.admin || !String(input.admin.username ?? '').trim() || !String(input.admin.nickname ?? '').trim()) {
+    throw new HttpError(400, '请填写企业管理员的姓名和登录名：企业至少要有一位管理员');
+  }
   const spaceName = `dz-${randomBytes(5).toString('hex')}`;
-  const userIds = [currentUserId(ctx), ...ids(input.consultantIds), ...ids(input.memberIds)];
 
   return ctx.db.sequelize.transaction(async (transaction: any) => {
+    const userIds = [currentUserId(ctx), ...(await staffUserIds(ctx.db, transaction)), ...ids(input.consultantIds), ...ids(input.memberIds)];
     await ctx.db.getRepository('spaces').create({ values: { name: spaceName, title: shortName }, transaction });
     await addUsersToSpace(ctx, spaceName, [...new Set(userIds)], transaction);
     const enterprise = await ctx.db.getRepository('dz_enterprises').create({
       values: { name, shortName, size, status: 'active', spaceName, ...creator(ctx) },
       transaction,
     });
-    const admin = input.admin
-      ? await insertUser(ctx, { ...input.admin, systemRole: SYSTEM_ROLES.entAdmin }, spaceName, transaction)
-      : null;
+    const admin = await insertUser(ctx, { ...input.admin!, systemRole: SYSTEM_ROLES.entAdmin }, spaceName, transaction, { enterpriseId: enterprise.get('id') as number });
     return { enterprise: enterprise.toJSON(), spaceName, admin };
   });
 }
 
-/** Ops see every enterprise whose space they joined; an enterprise admin sees their own. */
+/**
+ * Ops see every enterprise whose space they joined; an enterprise admin sees their own.
+ * 每家企业带上：能用的企业管理员有几位（0 位的要标出来）、待审核的注册申请有几条。
+ */
 export async function listEnterprises(ctx: Context) {
   const access = await systemAccess(ctx);
   if (!access.isOps && !access.roles.includes(SYSTEM_ROLES.entAdmin)) requireOps(access);
@@ -71,25 +72,23 @@ export async function listEnterprises(ctx: Context) {
     appends: ['projects'],
     sort: ['-createdAt'],
   });
-  return rows.map((r: any) => r.toJSON());
+  const enterpriseIds = rows.map((r: any) => r.get('id') as number);
+  const pending = enterpriseIds.length
+    ? await ctx.db.getRepository('dz_registrations').find({ filter: { enterpriseId: { $in: enterpriseIds }, status: 'pending' }, fields: ['enterpriseId'] })
+    : [];
+  const admins = await ctx.db.getRepository('users').find({ filter: { 'roles.name': SYSTEM_ROLES.entAdmin }, fields: ['id'] });
+  const accounts = await accountFactsOf(ctx.db, admins.map((u: any) => u.get('id') as number));
+  const count = (list: (number | null)[], id: number) => list.filter((x) => x === id).length;
+  const adminOf = [...accounts.values()].filter((a) => !a.disabled).map((a) => a.enterpriseId);
+  const pendingOf = pending.map((r: any) => r.get('enterpriseId') as number);
+  return rows.map((r: any) => ({
+    ...r.toJSON(),
+    adminCount: count(adminOf, r.get('id')),
+    pendingRegistrations: count(pendingOf, r.get('id')),
+  }));
 }
 
-export interface MemberInput {
-  userId: number;
-  projectRole: ProjectRole;
-  orgUnitId?: number;
-}
-
-function members(value: unknown): MemberInput[] {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw new HttpError(400, '成员格式不正确');
-  return value.map((m: any) => {
-    const userId = Number(m?.userId);
-    if (!Number.isInteger(userId) || userId <= 0) throw new HttpError(400, '成员缺少用户');
-    if (!PROJECT_ROLES.includes(m?.projectRole)) throw new HttpError(400, '项目角色不正确');
-    return { userId, projectRole: m.projectRole, orgUnitId: m.orgUnitId ? Number(m.orgUnitId) : undefined };
-  });
-}
+export type { MemberInput };
 
 export interface ProjectInput {
   enterpriseId: number;
@@ -110,7 +109,18 @@ export async function createProject(ctx: Context, input: ProjectInput) {
   if (!enterprise) throw new HttpError(404, '企业不存在');
   const spaceName = enterprise.get('spaceName') as string;
   if (!(await userSpaceNames(ctx)).includes(spaceName)) throw new HttpError(404, '企业不存在');
-  return insertProject(ctx, enterprise, input, members(input.members));
+  return insertProject(ctx, enterprise, input, await withDefaultLead(ctx, enterprise, parseMembers(input.members)));
+}
+
+/** 新建项目没指定企业项目负责人时，默认是企业管理员（有多位取最早开通的）；之后可以在项目成员里换。 */
+async function withDefaultLead(ctx: Context, enterprise: any, list: MemberInput[]): Promise<MemberInput[]> {
+  if (list.some((m) => m.projectRole === 'ent_lead')) return list;
+  const people = await ctx.db.getRepository('spaces.users', enterprise.get('spaceName')).find({ appends: ['roles'] });
+  const admins = people.filter((u: any) => (u.get('roles') ?? []).some((r: any) => r.get('name') === SYSTEM_ROLES.entAdmin));
+  const accounts = await accountFactsOf(ctx.db, admins.map((u: any) => u.get('id') as number));
+  const leadId = defaultLeadId(admins.filter((u: any) => !accounts.get(u.get('id'))?.disabled).map((u: any) => ({ id: u.get('id') as number, createdAt: u.get('createdAt') })));
+  if (!leadId) return list;
+  return [...list.filter((m) => m.userId !== leadId), { userId: leadId, projectRole: 'ent_lead' }];
 }
 
 async function insertProject(ctx: Context, enterprise: any, input: ProjectInput, list: MemberInput[]) {
@@ -150,65 +160,22 @@ export async function createOwnProject(ctx: Context, input: ProjectInput) {
   }
   const year = input.year ? Number(input.year) : new Date().getFullYear();
   if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new HttpError(400, '年度不正确');
-  const list = members(input.members);
-  if (list.some((m) => !ENTERPRISE_PROJECT_ROLES.includes(m.projectRole))) throw new HttpError(400, '自建项目只能分派企业侧角色；咨询师由运营分派');
+  const given = parseMembers(input.members);
+  if (given.some((m) => !ENTERPRISE_PROJECT_ROLES.includes(m.projectRole))) throw new HttpError(400, '自建项目只能分派企业侧角色；咨询师由运营分派');
+  // 没指定负责人时默认是企业管理员（建项目的人自己，或本企业最早开通的管理员）。只能分派本企业的账号，
+  // 角色和账号对不对得上在写入时核对（upsertMembers）。
+  const me = currentUserId(ctx);
+  const mine = !access.isOps && !given.some((m) => m.projectRole === 'ent_lead') ? [...given.filter((m) => m.userId !== me), { userId: me, projectRole: 'ent_lead' as ProjectRole }] : given;
+  const list = await withDefaultLead(ctx, enterprise, mine);
   if (!list.some((m) => m.projectRole === 'ent_lead')) throw new HttpError(400, '请指定一位企业项目负责人');
-  // 只能分派本企业的账号（企业管理员、企业成员），不能把咨询方或别家企业的人拉进来。
-  const staff = await ctx.db.getRepository('spaces.users', spaceName).find({ appends: ['roles'] });
-  const allowed = new Set(
-    staff
-      .filter((u: any) => (u.get('roles') ?? []).some((r: any) => [SYSTEM_ROLES.entAdmin, SYSTEM_ROLES.entMember].includes(r.get('name'))))
-      .map((u: any) => u.get('id') as number),
-  );
-  if (list.some((m) => !allowed.has(m.userId))) throw new HttpError(400, '只能分派本企业的账号');
   const project = await insertProject(ctx, enterprise, { ...input, year, scene: 'inhouse', service: 'self', campId: null }, list);
   await audit(ctx, spaceName, 'project.createByEnterprise', { projectId: project.id, enterpriseId: enterprise.get('id') });
   return project;
 }
 
-async function upsertMembers(ctx: Context, projectId: number, spaceName: string, list: MemberInput[], transaction: any) {
-  const repo = ctx.db.getRepository('dz_project_members');
-  const added: { userId: number; projectRole: ProjectRole; isNew: boolean }[] = [];
-  for (const m of list) {
-    const existing = await repo.findOne({ filter: { projectId, userId: m.userId }, transaction });
-    added.push({ userId: m.userId, projectRole: m.projectRole, isNew: !existing });
-    // A new member with no department takes the one they already have in the enterprise's other projects.
-    if (!existing && !m.orgUnitId) {
-      const known = await repo.find({ filter: { userId: m.userId, spaceName, orgUnitId: { $notEmpty: true } }, transaction });
-      const counts = new Map<number, number>();
-      for (const k of known) counts.set(k.get('orgUnitId'), (counts.get(k.get('orgUnitId')) ?? 0) + 1);
-      const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      if (best) m.orgUnitId = best;
-    }
-    if (existing) {
-      await existing.update({ projectRole: m.projectRole, orgUnitId: m.orgUnitId ?? null }, { transaction });
-    } else {
-      await repo.create({
-        values: { projectId, userId: m.userId, projectRole: m.projectRole, orgUnitId: m.orgUnitId, spaceName, ...creator(ctx) },
-        transaction,
-      });
-    }
-  }
-  await addUsersToSpace(ctx, spaceName, list.map((m) => m.userId), transaction);
-  const project = await ctx.db.getRepository('dz_projects').findOne({ filterByTk: projectId, transaction });
-  await notifyAssignment(ctx, project, added, transaction);
-}
-
-export async function setProjectMembers(ctx: Context, projectId: number, input: unknown) {
-  requireOps(await systemAccess(ctx));
-  const project = await ctx.db.getRepository('dz_projects').findOne({ filterByTk: Number(projectId) });
-  if (!project) throw new HttpError(404, '项目不存在');
-  const spaceName = project.get('spaceName') as string;
-  if (!(await userSpaceNames(ctx)).includes(spaceName)) throw new HttpError(404, '项目不存在');
-  await ctx.db.sequelize.transaction((transaction: any) =>
-    upsertMembers(ctx, project.get('id'), spaceName, members(input), transaction),
-  );
-  return { ok: true };
-}
-
 /**
  * 「我的项目」：运营和咨询管理员看所在空间的全部项目；本企业账号（企业管理员、企业成员）看本企业的
- * 全部项目，没被加进去的按只读成员；其余（咨询师）只看自己参与的。
+ * 全部项目，没被加进去的只读查看；其余（咨询师）只看自己参与的。
  */
 export async function myProjects(ctx: Context) {
   const userId = currentUserId(ctx);
@@ -240,8 +207,8 @@ export async function myProjects(ctx: Context) {
   // The concrete next step on each card (“继续填：…”, “去定版：…”) instead of a bare “进入”.
   const out = [];
   for (const p of projects as any[]) {
-    const joined = roleByProject.has(p.get('id'));
-    const role = effectiveProjectRole(roleByProject.get(p.get('id')) as ProjectRole | undefined, access.roles);
+    const joined = !!normalizeProjectRole(roleByProject.get(p.get('id')));
+    const role = effectiveProjectRole(normalizeProjectRole(roleByProject.get(p.get('id'))), access.roles);
     const steps = await projectProgress(ctx, p.get('id'));
     out.push({
       ...p.toJSON(),
