@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { profileBrief, profileItem, reconcileProfile, searchSnippets } from "@dingze/shared";
+import { profileBrief, profileItem, reconcileProfile, searchSnippets, type LibraryActor } from "@dingze/shared";
 
 describe("materials search", () => {
   const materials = [
@@ -19,22 +19,46 @@ describe("materials search", () => {
 
 describe("enterprise profile", () => {
   const draft = profileItem({ id: "a", topic: "售气量", content: "900 万方" });
+  const member: LibraryActor = { projectRole: "member", isConsultAdmin: false, isEntAdmin: false };
+  const consultant: LibraryActor = { ...member, projectRole: "consultant" };
+  const lead: LibraryActor = { ...member, projectRole: "ent_lead" };
+  const entAdmin: LibraryActor = { ...member, projectRole: "readonly", isEntAdmin: true };
+  const consultAdmin: LibraryActor = { ...member, projectRole: null, isConsultAdmin: true };
 
-  it("lets consultants review and only the enterprise lead confirm", () => {
+  it("keeps consulting review and enterprise confirmation separate", () => {
+    const previous = { items: [draft] };
     const reviewed = { items: [{ ...draft, status: "reviewed" as const }] };
-    expect(reconcileProfile({ items: [draft] }, reviewed, "member", false).error).toContain("只有咨询师");
-    expect(reconcileProfile({ items: [draft] }, reviewed, "consultant", false).error).toBeNull();
     const confirmed = { items: [{ ...draft, status: "confirmed" as const }] };
-    expect(reconcileProfile(reviewed, confirmed, "consultant", false).error).toContain("企业项目负责人");
-    expect(reconcileProfile(reviewed, confirmed, "ent_lead", false).error).toBeNull();
+    for (const actor of [member, entAdmin]) {
+      const denied = reconcileProfile(previous, reviewed, actor);
+      expect(denied.error).not.toBeNull();
+      expect(denied.profile).toEqual(previous);
+    }
+    for (const actor of [consultant, consultAdmin]) {
+      expect(reconcileProfile(previous, reviewed, actor)).toEqual({ profile: reviewed, error: null });
+      const denied = reconcileProfile(reviewed, confirmed, actor);
+      expect(denied.error).not.toBeNull();
+      expect(denied.profile).toEqual(reviewed);
+    }
+    for (const actor of [lead, entAdmin]) {
+      expect(reconcileProfile(reviewed, confirmed, actor)).toEqual({ profile: confirmed, error: null });
+    }
   });
 
   it("drops a confirmation when someone else edits the text, and tidies bad values", () => {
     const confirmed = { items: [{ ...draft, status: "confirmed" as const }] };
-    const edited = reconcileProfile(confirmed, { items: [{ ...draft, content: "950 万方", status: "confirmed" }] }, "member", false);
+    const edited = reconcileProfile(confirmed, { items: [{ ...draft, content: "950 万方", status: "confirmed" }] }, member);
     expect(edited.profile.items[0].status).toBe("draft");
-    const odd = reconcileProfile({ items: [] }, { items: [{ ...draft, id: "b", category: "x" as never }] }, "member", false);
+    const odd = reconcileProfile({ items: [] }, { items: [{ ...draft, id: "b", category: "x" as never }] }, member);
     expect(odd.profile.items[0].category).toBe("todo");
+  });
+
+  it("keeps an enterprise administrator's confirmation on edits but drops a consulting review", () => {
+    const confirmed = { items: [{ ...draft, status: "confirmed" as const }] };
+    const edited = { items: [{ ...draft, content: "950 万方", status: "confirmed" as const }] };
+    expect(reconcileProfile(confirmed, edited, entAdmin)).toEqual({ profile: edited, error: null });
+    const reviewed = { items: [{ ...draft, status: "reviewed" as const }] };
+    expect(reconcileProfile(reviewed, { items: [{ ...draft, content: "950 万方", status: "reviewed" }] }, entAdmin).profile.items[0].status).toBe("draft");
   });
 
   it("briefs reviewed items before drafts", () => {

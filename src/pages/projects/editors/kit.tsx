@@ -328,12 +328,25 @@ export function GridCell({
   );
 }
 
-/** 一行“数据从哪来”的说明 (闭环：组织 → RACI / 部门承接 / 部门计划书), with a link to where it is kept. */
-export function SourceNote({ children, to, linkLabel, warn }: { children: ReactNode; to?: string; linkLabel?: string; warn?: boolean }) {
+export type SourceNoteProps = {
+  children: ReactNode;
+  to?: string;
+  linkLabel?: string;
+  warn?: boolean;
+  /** 不离开当前页的动作（如打开只读 Sheet）。和 to 互斥，优先于 to。 */
+  onAction?: () => void;
+};
+
+/** 一行“数据从哪来”的说明 (闭环：组织 → RACI / 部门承接 / 部门计划书), with a link or action to where it is kept. */
+export function SourceNote({ children, to, linkLabel, warn, onAction }: SourceNoteProps) {
   return (
     <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs", warn ? "text-[color:var(--dz-warn)]" : "text-muted-foreground")}>
       <span>{children}</span>
-      {to ? (
+      {onAction ? (
+        <button type="button" onClick={onAction} className="text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+          {linkLabel ?? "查看"} →
+        </button>
+      ) : to ? (
         <Link to={to} className="text-primary hover:underline">
           {linkLabel ?? "查看"} →
         </Link>

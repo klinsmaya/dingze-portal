@@ -24,8 +24,8 @@ const make = (overrides: Record<string, Partial<ArtifactOverview>> = {}): Artifa
 const lockStage = (stage: string) =>
   Object.fromEntries(ARTIFACTS.filter((a) => a.stage === stage).map((a) => [a.code, { status: "locked" as ArtifactStatus, unlock: { unlocked: true } }]));
 
-const flow = (artifacts: ArtifactOverview[], materialsReady = false) =>
-  flowSteps({ stages: stageProgress(artifacts), materialsReady, started: artifacts.some((a) => a.status !== "not_started") });
+const flow = (artifacts: ArtifactOverview[], materialsReady = false, canOperateMaterials = true) =>
+  flowSteps({ stages: stageProgress(artifacts), materialsReady, started: artifacts.some((a) => a.status !== "not_started"), canOperateMaterials });
 
 describe("customer flow", () => {
   it("starts a fresh project at 上传资料, with 战略解码 open and the rest locked", () => {
@@ -49,6 +49,17 @@ describe("customer flow", () => {
   it("ends at 下载成果 when all three stages are 定版", () => {
     const steps = flow(make({ ...lockStage("strategy"), ...lockStage("goal"), ...lockStage("action") }), true);
     expect(steps.map((s) => s.state)).toEqual(["done", "done", "done", "done", "current"]);
+  });
+
+  it("never makes 上传资料 current for someone who cannot upload, but still shows whether it is ready", () => {
+    expect(flow(make(), false, false).map((s) => s.state)).toEqual(["todo", "current", "locked", "locked", "locked"]);
+    expect(flow(make(), true, false)[0].state).toBe("done");
+  });
+
+  it("falls back to 上传资料 only when the viewer can upload", () => {
+    const noOpenStage = { stages: [], materialsReady: false, started: true };
+    expect(flowSteps({ ...noOpenStage, canOperateMaterials: true })[0].state).toBe("current");
+    expect(flowSteps({ ...noOpenStage, canOperateMaterials: false }).some((s) => s.state === "current")).toBe(false);
   });
 
   it("sends a stage tab to the first open table that is not 定版 yet", () => {

@@ -23,13 +23,15 @@ export type FlowInput = {
   materialsReady: boolean;
   /** 任一张表已经开始填。 */
   started: boolean;
+  /** 能上传资料、整理画像（canManageLibrary）。不能操作时资料这一步只标就绪与否，不做“当前”。 */
+  canOperateMaterials: boolean;
 };
 
 /**
  * The five steps a customer walks through inside a project, and which one they are on.
  * 资料可以先跳过：已经开始填表时，“当前”落到第一个没做完的阶段上，资料只标“未完成”。
  */
-export function flowSteps({ stages, materialsReady, started }: FlowInput): FlowStep[] {
+export function flowSteps({ stages, materialsReady, started, canOperateMaterials }: FlowInput): FlowStep[] {
   const steps: FlowStep[] = [
     {
       key: "materials",
@@ -56,11 +58,12 @@ export function flowSteps({ stages, materialsReady, started }: FlowInput): FlowS
     state: allLocked ? "todo" : "locked",
   });
 
-  // 当前步：资料没好且还没开始填表 → 资料；否则第一个没做完、已开启的步骤。
+  // 当前步：能操作资料、资料没好且还没开始填表 → 资料；否则第一个没做完、已开启的步骤。
+  const materialsDue = canOperateMaterials && !materialsReady;
   const current =
-    !materialsReady && !started
+    materialsDue && !started
       ? steps[0]
-      : steps.find((s) => s.key !== "materials" && s.state === "todo") ?? (!materialsReady ? steps[0] : null);
+      : steps.find((s) => s.key !== "materials" && s.state === "todo") ?? (materialsDue ? steps[0] : null);
   if (current) current.state = "current";
   return steps;
 }

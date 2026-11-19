@@ -18,9 +18,9 @@ function requireEditor(pc: ProjectContext) {
   if (!pc.projectRole || pc.projectRole === 'readonly') throw new HttpError(403, '你还没加入这个项目，不能修改资料与画像');
 }
 
-/** The project library and the profile: 企业项目负责人、咨询师、咨询管理员 (普通员工只能传表下附件). */
-function requireLibraryManager(pc: ProjectContext) {
-  if (!canManageLibrary(pc.projectRole, pc.access.isConsultAdmin)) throw new HttpError(403, '只有企业管理员和咨询师可以管理项目资料库和企业画像');
+/** The project library and profile: 企业管理员、企业项目负责人、咨询师、咨询管理员. */
+function requireLibraryManager(pc: ProjectContext): void {
+  if (!canManageLibrary({ projectRole: pc.projectRole, isConsultAdmin: pc.access.isConsultAdmin, isEntAdmin: pc.access.isEntAdmin })) throw new HttpError(403, '只有企业管理员和咨询师可以管理项目资料库和企业画像');
 }
 
 // 表下附件建的时候 inLibrary 就是 false，「加入资料库」后变 true；资料库的资料一直是 true（老数据为空也算）。
@@ -187,12 +187,13 @@ export async function downloadMaterial(ctx: Context, pc: ProjectContext, id: unk
 }
 
 export async function deleteMaterial(ctx: Context, pc: ProjectContext, id: unknown) {
-  requireEditor(pc);
+  const manager = canManageLibrary({ projectRole: pc.projectRole, isConsultAdmin: pc.access.isConsultAdmin, isEntAdmin: pc.access.isEntAdmin });
+  if (!manager) requireEditor(pc);
   const m = await ctx.db.getRepository('dz_materials').findOne({ filter: { id: Number(id), projectId: pc.project.get('id') } });
   if (!m) throw new HttpError(404, '资料不存在，或是别的项目共用过来的（请到上传它的项目里删）');
   const mine = m.get('createdById') === currentUserId(ctx);
   // An attachment: its uploader or a library manager; a library material: library managers only.
-  if (m.get('kind') === 'attachment' ? !mine && !canManageLibrary(pc.projectRole, pc.access.isConsultAdmin) : !canManageLibrary(pc.projectRole, pc.access.isConsultAdmin)) {
+  if (!manager && (m.get('kind') !== 'attachment' || !mine)) {
     throw new HttpError(403, m.get('kind') === 'attachment' ? '只有上传人或企业管理员可以删除这份附件' : '只有企业管理员和咨询师可以删除资料库的资料');
   }
   const fileId = m.get('fileId');
@@ -226,7 +227,7 @@ export async function saveProfile(ctx: Context, pc: ProjectContext, input: { ite
     if (Number(input.baseRev ?? 0) !== rev) throw new HttpError(409, '画像刚被其他人更新过，请刷新后再改', 'CONFLICT', { rev });
     const previous = { items: (row?.get('items') as EnterpriseProfile['items']) ?? [] };
     const next = { items: Array.isArray(input.items) ? (input.items as EnterpriseProfile['items']) : [] };
-    const { profile, error } = reconcileProfile(previous, next, pc.projectRole, pc.access.isConsultAdmin);
+    const { profile, error } = reconcileProfile(previous, next, { projectRole: pc.projectRole, isConsultAdmin: pc.access.isConsultAdmin, isEntAdmin: pc.access.isEntAdmin });
     if (error) throw new HttpError(403, error);
     if (row) await row.update({ items: profile.items, rev: rev + 1, updatedById: currentUserId(ctx) }, { transaction });
     else await repo.create({ values: { projectId, items: profile.items, rev: 1, spaceName: pc.spaceName }, context: ctx, transaction });

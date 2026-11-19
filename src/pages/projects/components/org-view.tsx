@@ -12,20 +12,29 @@ import { flattenOrgUnits } from "@/lib/dingze/org-units";
  * one and which project members sit in it. Maintained on this page by those who may edit it; the
  * tables that use departments (RACI, 部门承接, 部门计划书) keep their own copy once filled.
  */
-export function OrgView({ orgUnits, team }: { orgUnits: ProjectOrgUnit[]; team: ProjectTeamMember[] }) {
+export type OrgViewProps = {
+  orgUnits: ProjectOrgUnit[];
+  team: ProjectTeamMember[];
+  /** 默认 true。放进工作台的「组织与职责」Sheet 时传 false：标题与可访问名称由 SheetTitle 给。 */
+  showHeading?: boolean;
+};
+
+export function OrgView({ orgUnits, team, showHeading = true }: OrgViewProps) {
   const nodes = flattenOrgUnits(orgUnits);
   const name = (id: number | null) => (id ? (team.find((m) => m.userId === id)?.nickname ?? null) : null);
   const unplaced = team.filter((m) => !m.orgUnitId && m.projectRole !== "consultant");
   return (
-    <section aria-labelledby="org" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h2 id="org" className="font-heading text-lg font-bold text-brand">
-          ③ 组织与职责
-        </h2>
-        <span className="text-xs text-muted-foreground">
-          由企业管理员、企业项目负责人、咨询师在这里维护。责任分工矩阵、部门承接、部门计划书会用到这里的部门；表定版后保留当时的部门，组织再变只提示、不自动改。
-        </span>
-      </div>
+    <section aria-labelledby={showHeading ? "org" : undefined} className="flex flex-col gap-3">
+      {showHeading ? (
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 id="org" className="font-heading text-lg font-bold text-brand">
+            ③ 组织与职责
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            由企业管理员、企业项目负责人、咨询师在这里维护。责任分工矩阵、部门承接、部门计划书会用到这里的部门；表定版后保留当时的部门，组织再变只提示、不自动改。
+          </span>
+        </div>
+      ) : null}
       {nodes.length === 0 ? (
         <EmptyState text="还没有组织部门。定目标责的责任分工和部门承接要先有部门，请企业项目负责人或企业管理员建好。" />
       ) : (

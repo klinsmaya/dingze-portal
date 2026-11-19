@@ -24,6 +24,7 @@ import {
   previousStage,
   stageGateCodes,
   profileBrief,
+  canAccessMaterialsPage,
   canPerform,
   staleAdvice,
   taskGuide,
@@ -38,6 +39,7 @@ import {
 import { RegionErrorBoundary } from "@/components/dingze/region-error-boundary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { setGateHint, useGateHint } from "@/lib/dingze/gate-hint";
 import { nextStep, stageBlockers, stageProgress, workspacePath } from "@/lib/dingze/progress";
@@ -46,6 +48,7 @@ import { useArtifactDetail, useDismissOrgNotice, useSaveArtifact, useUpstreamPay
 import { useComments } from "@/lib/dingze/comments-api";
 import { SEARCH_MATERIALS_TOOL } from "@/lib/dingze/material-tools";
 import { useMaterials, useProfile } from "@/lib/dingze/materials-api";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { useAddComment } from "@/lib/dingze/comments-api";
 import { type Command, type CommandMeta, appendCommand, buildCommand, preview, reapplyCommand, revertCommand, toSaved } from "@/lib/dingze/edit-log";
 import { getVersionPayload } from "@/lib/dingze/records-api";
@@ -88,6 +91,7 @@ import { ChangesPanel } from "./components/changes-panel";
 import { AnchorMenu, type CommentDraft, CommentComposer, LassoBar, LassoOutlines } from "./components/comment-composer";
 import { CommentsPanel, circled } from "./components/comments-panel";
 import { MaterialViewer } from "./components/material-shared";
+import { OrgView } from "./components/org-view";
 import { CommentPins, EditMarkers } from "./components/edit-markers";
 import { type EditSession, EditSessionContext, type EditorChrome, type RevisionState, pathNamer } from "./components/edit-session";
 import { ShortcutsDialog, StatusBar } from "./components/status-bar";
@@ -367,6 +371,19 @@ function Workspace({ code }: { code: string }) {
   const materialsQuery = useMaterials(project);
   const materialList = useMemo(() => [...(materialsQuery.data ?? [])].sort((a, b) => b.at.localeCompare(a.at)), [materialsQuery.data]);
   const [viewingMaterial, setViewingMaterial] = useState<number | null>(null);
+  // 进不了资料页的人在工作台里只读看「组织与职责」：整页只有这一个 Sheet。
+  const [orgOpen, setOrgOpen] = useState(false);
+  const openOrg = useCallback(() => setOrgOpen(true), []);
+  // 和资料页守卫同一谓词；系统角色没到时按进不了算，不渲染资料页入口。
+  const systemRoles = useSystemRoles();
+  const canAccessMaterials =
+    !systemRoles.isLoading &&
+    canAccessMaterialsPage({
+      projectRole: overview.projectRole,
+      isConsultAdmin: overview.isConsultAdmin,
+      isEntAdmin: !!overview.isEntAdmin,
+      isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)),
+    });
   const allThreadsRef = useRef<{ id: number; author: string }[]>([]);
   const revisionRef = useRef<{ entries: DiffEntry[]; whoOf: (path: string) => string | undefined; stats: ReturnType<EditSession["revisionStats"]> } | null>(null);
   const revisionToggle = useRef<() => void>(() => {});
@@ -950,6 +967,10 @@ function Workspace({ code }: { code: string }) {
             onToggle={() => setRailPref(!railCollapsed)}
             materials={materialList}
             onOpenMaterial={setViewingMaterial}
+            canAccessMaterials={canAccessMaterials}
+            materialsLoading={materialsQuery.isLoading}
+            materialsError={materialsQuery.isError}
+            onOpenOrg={openOrg}
             gateCodes={gateHere?.codes}
             onGate={(stage) => setGateHint(project.id, stage)}
           />
@@ -1255,6 +1276,7 @@ function Workspace({ code }: { code: string }) {
                     team={overview.team ?? []}
                     scheduleScale={project.scheduleScale}
                     enterprise={project.enterprise?.name ?? "企业"}
+                    onOpenOrg={canAccessMaterials ? undefined : openOrg}
                   />
                   </RegionErrorBoundary>
                   </div>
@@ -1363,6 +1385,17 @@ function Workspace({ code }: { code: string }) {
             />
           </ExportDialog>
           <MaterialViewer id={viewingMaterial} onClose={() => setViewingMaterial(null)} />
+          <Sheet open={orgOpen} onOpenChange={setOrgOpen}>
+            <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+              <SheetHeader>
+                <SheetTitle>组织与职责</SheetTitle>
+                <SheetDescription>部门、负责人和项目成员。由企业管理员、企业项目负责人或咨询师维护，这里只读。</SheetDescription>
+              </SheetHeader>
+              <div className="px-4 pb-6">
+                <OrgView orgUnits={overview.orgUnits ?? []} team={overview.team ?? []} showHeading={false} />
+              </div>
+            </SheetContent>
+          </Sheet>
           <ArtifactHistorySheet project={project} code={historyOpen ? code : null} onClose={() => setHistoryOpen(false)} />
           <ImpactDialog
             project={project}

@@ -2,7 +2,7 @@ import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock, 
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { STAGES, nextAction, isEmployee } from "@dingze/shared";
+import { STAGES, nextAction, canAccessMaterialsPage, canManageLibrary } from "@dingze/shared";
 
 import { LockedStepBadge, StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { ArtifactOverview } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
 import { STEP_ARTIFACTS, nextActionPath, progressOf, stageBlockers, stageEntryCode, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { cn } from "@/lib/utils";
 
 import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
@@ -25,6 +26,10 @@ export default function ProjectOverviewPage() {
   const artifacts = overview.artifacts;
   const byCode = new Map(artifacts.map((a) => [a.code, a]));
   const role = overview.projectRole;
+  const systemRoles = useSystemRoles();
+  const actor = { projectRole: role, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin };
+  const manager = !systemRoles.isLoading && canManageLibrary(actor);
+  const access = !systemRoles.isLoading && canAccessMaterialsPage({ ...actor, isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)) });
   const steps = progressOf(artifacts);
   const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
   const next = nextAction(steps, role, service);
@@ -36,10 +41,11 @@ export default function ProjectOverviewPage() {
     stages,
     materialsReady: startup.find((i) => i.key === "materials")?.state === "done",
     started: artifacts.some((a) => a.status !== "not_started"),
+    canOperateMaterials: manager,
   });
   // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
-  const employee = isEmployee(role) && !overview.isConsultAdmin;
-  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
+  const employee = !systemRoles.isLoading && !access && (role === "member" || role === "readonly");
+  const materialsFirst = manager && !materials.isLoading && !profile.isLoading && flow[0].state === "current" && (!!overview.isEntAdmin || role === "ent_lead");
   // 能管项目成员的企业侧的人（企业管理员、企业项目负责人）：成员还没到位时第一张卡是“添加项目成员”，
   // 然后才是“上传资料”；两张卡到位后自动退后。点开是项目成员弹窗（以前链到企业管理员才进得去的邀请页）。
   const manageMembers = !!overview.memberTier;
@@ -55,10 +61,10 @@ export default function ProjectOverviewPage() {
   const freshProject = !artifacts.some((a) => a.status !== "not_started");
   useEffect(() => {
     // 普通员工多半是中途加入的，项目不新也给看一次三步指引。
-    if (!guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    if (!systemRoles.isLoading && !guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
     // 只在首次加载完判断一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materials.isLoading, profile.isLoading]);
+  }, [materials.isLoading, profile.isLoading, systemRoles.isLoading]);
   const closeGuide = () => {
     setGuideOpen(false);
     setGuideSeen(true);
@@ -79,7 +85,7 @@ export default function ProjectOverviewPage() {
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
       {manageMembers ? <ProjectMembersDialog projectId={membersOpen ? project.id : null} onClose={() => setMembersOpen(false)} /> : null}
-      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
+      <FirstRunGuide open={!systemRoles.isLoading && guideOpen} onClose={closeGuide} startHref={access ? `/projects/${project.id}/materials` : nextActionPath(project.id, next)} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="min-w-0 flex-1 font-heading text-2xl font-bold text-brand">总览</h1>
         <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
@@ -97,7 +103,7 @@ export default function ProjectOverviewPage() {
         ) : null}
       </div>
 
-      <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} />
+      <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} canAccessMaterials={access} />
 
       <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         {inviteFirst ? (
@@ -127,7 +133,7 @@ export default function ProjectOverviewPage() {
         </Link>
       </section>
 
-      {employee ? null : <StartupCard projectId={project.id} />}
+      {access ? <StartupCard projectId={project.id} /> : null}
 
       <section aria-label="三阶段进度" className="grid gap-4 lg:grid-cols-3">
         {stages.map((stage) => (
@@ -251,7 +257,7 @@ function StartupCard({ projectId }: { projectId: number }) {
 
 
 /** 五步流程条：资料 → 战略解码 → 目标分解 → 计划制定 → 下载成果，标出做完的、当前的和还没开启的。 */
-function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: FlowStep[]; artifacts: ArtifactOverview[] }) {
+function FlowStrip({ projectId, steps, artifacts, canAccessMaterials }: { projectId: number; steps: FlowStep[]; artifacts: ArtifactOverview[]; canAccessMaterials: boolean }) {
   const href = (step: FlowStep) =>
     step.key === "materials"
       ? `/projects/${projectId}/materials`
@@ -262,38 +268,51 @@ function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: 
   const gateOf = (step: FlowStep) => (step.state === "locked" && step.key !== "materials" && step.key !== "deliver" ? stageBlockers(artifacts, step.key) : null);
   return (
     <ol aria-label="流程" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-      {steps.map((step) => (
-        <li key={step.key}>
-          <Link
-            to={href(step)}
-            onClick={() => {
-              const gate = gateOf(step);
-              if (gate && step.key !== "materials" && step.key !== "deliver") setGateHint(projectId, step.key);
-            }}
-            title={gateOf(step) ? `前面还有 ${gateOf(step)!.codes.length} 张必做表没定版，点一下去看` : undefined}
-            aria-current={step.state === "current" ? "step" : undefined}
-            className={cn(
-              "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",
-              step.state === "current" && "border-primary ring-3 ring-accent",
-              step.state === "locked" && "opacity-60",
-            )}
-          >
-            <span className="flex items-center gap-2">
-              <span
+      {steps.map((step) => {
+        const inner = (
+          <span className="flex items-center gap-2">
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                step.state === "done" ? "bg-status-done text-status-done-foreground" : step.state === "current" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {step.state === "done" ? <Check className="size-3.5" /> : step.no}
+            </span>
+            <span className="font-heading font-bold text-brand">{step.label}</span>
+            {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
+            {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
+          </span>
+        );
+        return (
+          <li key={step.key}>
+            {/* 进不了资料页的人：第 1 步只是阶段认知，不是链接，不进 Tab 顺序；它不归你做，不是被锁住。 */}
+            {step.key === "materials" && !canAccessMaterials ? (
+              <div className="flex h-full flex-col gap-1 rounded-xl border bg-card p-3">
+                {inner}
+                <span className="sr-only">（由企业管理员或项目负责人准备）</span>
+              </div>
+            ) : (
+              <Link
+                to={href(step)}
+                onClick={() => {
+                  const gate = gateOf(step);
+                  if (gate && step.key !== "materials" && step.key !== "deliver") setGateHint(projectId, step.key);
+                }}
+                title={gateOf(step) ? `前面还有 ${gateOf(step)!.codes.length} 张必做表没定版，点一下去看` : undefined}
+                aria-current={step.state === "current" ? "step" : undefined}
                 className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  step.state === "done" ? "bg-status-done text-status-done-foreground" : step.state === "current" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                  "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",
+                  step.state === "current" && "border-primary ring-3 ring-accent",
+                  step.state === "locked" && "opacity-60",
                 )}
               >
-                {step.state === "done" ? <Check className="size-3.5" /> : step.no}
-              </span>
-              <span className="font-heading font-bold text-brand">{step.label}</span>
-              {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
-              {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
-            </span>
-          </Link>
-        </li>
-      ))}
+                {inner}
+              </Link>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }
