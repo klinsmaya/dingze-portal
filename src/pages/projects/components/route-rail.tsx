@@ -161,6 +161,10 @@ export function RouteRail({
   onToggle,
   materials = [],
   onOpenMaterial,
+  canAccessMaterials,
+  materialsLoading,
+  materialsError,
+  onOpenOrg,
   gateCodes,
   onGate,
 }: {
@@ -171,6 +175,12 @@ export function RouteRail({
   /** 参考资料: the project's materials, newest first; opened in a side sheet. */
   materials?: { id: number; title: string }[];
   onOpenMaterial?: (id: number) => void;
+  /** 能进「资料」页：能进的给资料页链接；进不了的（普通员工）不给上传入口，组织与职责在工作台里只读打开。 */
+  canAccessMaterials: boolean;
+  materialsLoading: boolean;
+  materialsError: boolean;
+  /** 打开工作台里只读的「组织与职责」Sheet。 */
+  onOpenOrg: () => void;
   projectId: number;
   route: Route;
   /** 三阶段：入口、是否开启、必做表定版进度。 */
@@ -181,6 +191,8 @@ export function RouteRail({
   onToggle: () => void;
 }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  // 普通员工看全部参考资料：左栏页内展开，只在本组件里记，切表、切项目回到收起。
+  const [allMaterials, setAllMaterials] = useState(false);
   const [foot, setFootState] = useState<FootState>(readFoot);
   const setFoot = (next: FootState) => {
     setFootState(next);
@@ -341,23 +353,64 @@ export function RouteRail({
         icon={<FolderOpen className="size-3" />}
         title={`参考资料${materials.length ? ` · ${materials.length}` : ""}`}
         extra={
-          <Link to={`/projects/${projectId}/materials#library`} className="ml-auto text-primary hover:underline">
-            {materials.length ? "全部 / 上传" : "去上传"}
-          </Link>
+          canAccessMaterials ? (
+            <Link to={`/projects/${projectId}/materials#library`} className="ml-auto text-primary hover:underline">
+              {materials.length ? "全部 / 上传" : "去上传"}
+            </Link>
+          ) : null
         }
       >
-        <Link to={`/projects/${projectId}/materials#org`} className="flex items-center gap-1.5 py-0.5 hover:text-foreground" title="组织与职责：部门、负责人和职责">
-          <Building2 className="size-3 shrink-0" /> 组织与职责
-        </Link>
-        {materials.length ? (
-          materials.slice(0, 4).map((m) => (
-            <button key={m.id} type="button" onClick={() => onOpenMaterial?.(m.id)} className="flex w-full items-center gap-1.5 py-0.5 text-left hover:text-foreground">
-              <FileText className="size-3 shrink-0" />
-              <span className="truncate">{m.title}</span>
-            </button>
-          ))
+        {canAccessMaterials ? (
+          <Link to={`/projects/${projectId}/materials#org`} className="flex items-center gap-1.5 py-0.5 hover:text-foreground" title="组织与职责：部门、负责人和职责">
+            <Building2 className="size-3 shrink-0" /> 组织与职责
+          </Link>
         ) : (
+          <button
+            type="button"
+            onClick={onOpenOrg}
+            className="flex min-h-6 w-full items-center gap-1.5 text-left hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            title="组织与职责：部门、负责人和职责"
+          >
+            <Building2 className="size-3 shrink-0" /> 组织与职责
+          </button>
+        )}
+        {materialsLoading ? (
+          <p>正在加载…</p>
+        ) : materialsError ? (
+          <p className="text-[color:var(--dz-warn)]">参考资料没加载出来，刷新页面再试。</p>
+        ) : materials.length ? (
+          <>
+            <ul id="rail-materials" className={cn(allMaterials && "max-h-48 overflow-y-auto")}>
+              {(allMaterials ? materials : materials.slice(0, 4)).map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenMaterial?.(m.id)}
+                    title={m.title}
+                    className="flex min-h-6 w-full items-center gap-1.5 text-left hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <FileText className="size-3 shrink-0" />
+                    <span className="truncate">{m.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {!canAccessMaterials && materials.length > 4 ? (
+              <button
+                type="button"
+                aria-expanded={allMaterials}
+                aria-controls="rail-materials"
+                onClick={() => setAllMaterials(!allMaterials)}
+                className="flex min-h-6 items-center text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                {allMaterials ? "收起" : `查看全部（${materials.length}）`}
+              </button>
+            ) : null}
+          </>
+        ) : canAccessMaterials ? (
           <p>还没有资料：企业简介、组织架构、战略规划传上来，数字咨询师起草更准。</p>
+        ) : (
+          <p>还没有参考资料，由企业管理员或项目负责人上传。</p>
         )}
       </FootSection>
       {products.length ? (

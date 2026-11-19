@@ -41,6 +41,7 @@ export default function ProjectOverviewPage() {
     stages,
     materialsReady: startup.find((i) => i.key === "materials")?.state === "done",
     started: artifacts.some((a) => a.status !== "not_started"),
+    canOperateMaterials: manager,
   });
   // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
   const employee = !systemRoles.isLoading && !access && (role === "member" || role === "readonly");
@@ -102,7 +103,7 @@ export default function ProjectOverviewPage() {
         ) : null}
       </div>
 
-      <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} />
+      <FlowStrip projectId={project.id} steps={flow} artifacts={artifacts} canAccessMaterials={access} />
 
       <section aria-label="下一步" className="flex flex-col gap-3 rounded-2xl border bg-card p-4">
         {inviteFirst ? (
@@ -256,7 +257,7 @@ function StartupCard({ projectId }: { projectId: number }) {
 
 
 /** 五步流程条：资料 → 战略解码 → 目标分解 → 计划制定 → 下载成果，标出做完的、当前的和还没开启的。 */
-function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: FlowStep[]; artifacts: ArtifactOverview[] }) {
+function FlowStrip({ projectId, steps, artifacts, canAccessMaterials }: { projectId: number; steps: FlowStep[]; artifacts: ArtifactOverview[]; canAccessMaterials: boolean }) {
   const href = (step: FlowStep) =>
     step.key === "materials"
       ? `/projects/${projectId}/materials`
@@ -267,38 +268,51 @@ function FlowStrip({ projectId, steps, artifacts }: { projectId: number; steps: 
   const gateOf = (step: FlowStep) => (step.state === "locked" && step.key !== "materials" && step.key !== "deliver" ? stageBlockers(artifacts, step.key) : null);
   return (
     <ol aria-label="流程" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-      {steps.map((step) => (
-        <li key={step.key}>
-          <Link
-            to={href(step)}
-            onClick={() => {
-              const gate = gateOf(step);
-              if (gate && step.key !== "materials" && step.key !== "deliver") setGateHint(projectId, step.key);
-            }}
-            title={gateOf(step) ? `前面还有 ${gateOf(step)!.codes.length} 张必做表没定版，点一下去看` : undefined}
-            aria-current={step.state === "current" ? "step" : undefined}
-            className={cn(
-              "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",
-              step.state === "current" && "border-primary ring-3 ring-accent",
-              step.state === "locked" && "opacity-60",
-            )}
-          >
-            <span className="flex items-center gap-2">
-              <span
+      {steps.map((step) => {
+        const inner = (
+          <span className="flex items-center gap-2">
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                step.state === "done" ? "bg-status-done text-status-done-foreground" : step.state === "current" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {step.state === "done" ? <Check className="size-3.5" /> : step.no}
+            </span>
+            <span className="font-heading font-bold text-brand">{step.label}</span>
+            {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
+            {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
+          </span>
+        );
+        return (
+          <li key={step.key}>
+            {/* 进不了资料页的人：第 1 步只是阶段认知，不是链接，不进 Tab 顺序；它不归你做，不是被锁住。 */}
+            {step.key === "materials" && !canAccessMaterials ? (
+              <div className="flex h-full flex-col gap-1 rounded-xl border bg-card p-3">
+                {inner}
+                <span className="sr-only">（由企业管理员或项目负责人准备）</span>
+              </div>
+            ) : (
+              <Link
+                to={href(step)}
+                onClick={() => {
+                  const gate = gateOf(step);
+                  if (gate && step.key !== "materials" && step.key !== "deliver") setGateHint(projectId, step.key);
+                }}
+                title={gateOf(step) ? `前面还有 ${gateOf(step)!.codes.length} 张必做表没定版，点一下去看` : undefined}
+                aria-current={step.state === "current" ? "step" : undefined}
                 className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  step.state === "done" ? "bg-status-done text-status-done-foreground" : step.state === "current" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                  "flex h-full flex-col gap-1 rounded-xl border bg-card p-3 hover:border-primary",
+                  step.state === "current" && "border-primary ring-3 ring-accent",
+                  step.state === "locked" && "opacity-60",
                 )}
               >
-                {step.state === "done" ? <Check className="size-3.5" /> : step.no}
-              </span>
-              <span className="font-heading font-bold text-brand">{step.label}</span>
-              {step.state === "locked" ? <Lock className="ml-auto size-3.5 text-muted-foreground" aria-label="待开启" /> : null}
-              {step.state === "current" ? <span className="ml-auto text-xs font-semibold text-primary">现在</span> : null}
-            </span>
-          </Link>
-        </li>
-      ))}
+                {inner}
+              </Link>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }

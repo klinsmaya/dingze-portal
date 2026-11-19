@@ -62,6 +62,8 @@ type Props = {
   team: ProjectTeamMember[];
   scheduleScale: "month" | "quarter";
   enterprise: string;
+  /** 进不了资料页的人在表里看「组织与职责」：工作台打开只读 Sheet。示例页不传。 */
+  onOpenOrg?: () => void;
 };
 
 /** Picks the editor for an artifact code; every editor works on that code's payload type. */
@@ -78,6 +80,7 @@ export function ArtifactEditor({
   team,
   scheduleScale,
   enterprise,
+  onOpenOrg,
 }: Props) {
   const people = team.map((m) => m.nickname).filter(Boolean);
   const common = { readOnly, issues, onChange };
@@ -137,7 +140,7 @@ export function ArtifactEditor({
         />
       );
     case "S2-04":
-      return <RaciEditor {...common} value={value as RaciTable} upstream={upstream} orgUnits={orgUnits} />;
+      return <RaciEditor {...common} value={value as RaciTable} upstream={upstream} orgUnits={orgUnits} onOpenOrg={onOpenOrg} />;
     case "S2-05":
       return <UndertakingEditor {...common} value={value as DeptUndertakingTable} upstream={upstream} />;
     case "S2-07":
