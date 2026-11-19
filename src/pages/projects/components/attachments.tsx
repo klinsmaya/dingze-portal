@@ -57,7 +57,7 @@ export function Attachments({ code, canUpload }: { code: string; canUpload: bool
   const fill = useAttachmentFill(project, code);
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const manager = canManageLibrary(overview.projectRole, overview.isConsultAdmin);
+  const manager = canManageLibrary({ projectRole: overview.projectRole, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin });
   const items = list.data ?? [];
   if (!canUpload && !items.length) return null;
   const table = getArtifactDef(code).plain;

@@ -48,10 +48,20 @@ export const MATERIAL_TEXT_LIMIT = 150_000;
  */
 export type MaterialKind = 'file' | 'note' | 'attachment';
 
-/** 谁能上传、删除项目资料库的资料和改画像：企业项目负责人、咨询师、咨询管理员。普通员工只能传表下附件。 */
-export const LIBRARY_MANAGERS: ProjectRole[] = ['ent_lead', 'consultant'];
-export function canManageLibrary(role: ProjectRole | null | undefined, isConsultAdmin: boolean): boolean {
-  return isConsultAdmin || (!!role && LIBRARY_MANAGERS.includes(role));
+export type LibraryActor = {
+  projectRole: ProjectRole | null | undefined;
+  isConsultAdmin: boolean;
+  isEntAdmin: boolean;
+};
+
+/** 项目上下文已校验后，企业管理员、企业项目负责人、咨询师、咨询管理员可管理资料库与画像。 */
+export function canManageLibrary(actor: LibraryActor): boolean {
+  return actor.isConsultAdmin || actor.isEntAdmin || actor.projectRole === 'ent_lead' || actor.projectRole === 'consultant';
+}
+
+/** 运营可进入资料页只读；进入能力不能用来授权写操作。 */
+export function canAccessMaterialsPage(actor: LibraryActor & { isOps: boolean }): boolean {
+  return canManageLibrary(actor) || actor.isOps;
 }
 
 /** 填表附件给数字咨询师看的那段话：先说目的，再附正文（太长就截）。 */
@@ -67,11 +77,11 @@ export function attachmentPrompt(input: { fileName: string; table: string; text:
 ${cut ? text.slice(0, ATTACHMENT_PROMPT_CHARS) : text}`;
 }
 
-/** Who may move an item to a status: consultants review, the enterprise lead confirms. */
-export function canSetProfileStatus(status: ProfileStatus, role: ProjectRole | null, isConsultAdmin: boolean): boolean {
+/** Consultants review; enterprise administrators and project leads confirm. Not save authorization. */
+export function canSetProfileStatus(status: ProfileStatus, actor: LibraryActor): boolean {
   if (status === 'draft') return true;
-  if (status === 'reviewed') return isConsultAdmin || role === 'consultant';
-  return role === 'ent_lead';
+  if (status === 'reviewed') return actor.isConsultAdmin || actor.projectRole === 'consultant';
+  return actor.isEntAdmin || actor.projectRole === 'ent_lead';
 }
 
 /**
@@ -81,8 +91,7 @@ export function canSetProfileStatus(status: ProfileStatus, role: ProjectRole | n
 export function reconcileProfile(
   previous: EnterpriseProfile,
   next: EnterpriseProfile,
-  role: ProjectRole | null,
-  isConsultAdmin: boolean,
+  actor: LibraryActor,
 ): { profile: EnterpriseProfile; error: string | null } {
   const before = new Map((previous.items ?? []).map((i) => [i.id, i]));
   const items: ProfileItem[] = [];
@@ -99,10 +108,10 @@ export function reconcileProfile(
     const old = before.get(item.id);
     const oldStatus = old?.status ?? 'draft';
     const edited = !!old && (old.topic !== item.topic || old.content !== item.content || old.category !== item.category);
-    if (item.status !== oldStatus && !canSetProfileStatus(item.status, role, isConsultAdmin)) {
-      return { profile: previous, error: item.status === 'confirmed' ? '只有企业项目负责人可以确认画像' : '只有咨询师可以复核画像' };
+    if (item.status !== oldStatus && !canSetProfileStatus(item.status, actor)) {
+      return { profile: previous, error: item.status === 'confirmed' ? '只有企业管理员或企业项目负责人可以确认画像' : '只有咨询师可以复核画像' };
     }
-    if (edited && item.status === oldStatus && item.status !== 'draft' && !canSetProfileStatus(item.status, role, isConsultAdmin)) item.status = 'draft';
+    if (edited && item.status === oldStatus && item.status !== 'draft' && !canSetProfileStatus(item.status, actor)) item.status = 'draft';
     items.push(item);
   }
   return { profile: { items }, error: null };

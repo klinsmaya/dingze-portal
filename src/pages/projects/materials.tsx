@@ -622,12 +622,12 @@ export default function MaterialsPage() {
                               <Badge variant={item.status === "draft" ? "outline" : "default"} className={cn("w-fit", STATUS_TONE[item.status])}>{PROFILE_STATUS_LABELS[item.status]}</Badge>
                             </div>
                             <div className="flex flex-wrap items-start gap-1">
-                              {canEdit && item.status === "draft" && canSetProfileStatus("reviewed", role, isAdmin) ? (
+                              {canEdit && item.status === "draft" && canSetProfileStatus("reviewed", { projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? (
                                 <Button variant="outline" size="sm" onClick={() => patch(item.id, { status: "reviewed" })}>
                                   <ShieldCheck /> 复核
                                 </Button>
                               ) : null}
-                              {canEdit && item.status !== "confirmed" && canSetProfileStatus("confirmed", role, isAdmin) ? (
+                              {canEdit && item.status !== "confirmed" && canSetProfileStatus("confirmed", { projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? (
                                 <Button variant="outline" size="sm" onClick={() => patch(item.id, { status: "confirmed" })}>
                                   <CheckCheck /> 确认
                                 </Button>
@@ -656,8 +656,8 @@ export default function MaterialsPage() {
               <Skeleton className="h-32" />
             ) : (
               <>
-                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canManageLibrary(role, isAdmin)} canDeleteAny={isAdmin || role === "ent_lead" || role === "consultant"} currentUserId={identity.data?.id ?? null} />
-                {canManageLibrary(role, isAdmin) ? <MemberUploads /> : null}
+                <MaterialLibrary materials={materialList} canEdit={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} canShare={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} canDeleteAny={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} currentUserId={identity.data?.id ?? null} />
+                {canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? <MemberUploads /> : null}
               </>
             )
           ) : null}

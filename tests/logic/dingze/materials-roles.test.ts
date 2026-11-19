@@ -1,17 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { ATTACHMENT_PROMPT_CHARS, attachmentPrompt, canManageLibrary } from "@dingze/shared";
+import { ATTACHMENT_PROMPT_CHARS, attachmentPrompt, canAccessMaterialsPage, canManageLibrary, type LibraryActor } from "@dingze/shared";
 
 describe("资料库权限", () => {
-  it("企业项目负责人、咨询师、咨询管理员能管资料库，普通员工不能", () => {
-    expect(canManageLibrary("ent_lead", false)).toBe(true);
-    expect(canManageLibrary("consultant", false)).toBe(true);
-    expect(canManageLibrary("consultant", false)).toBe(true);
-    expect(canManageLibrary(null, true)).toBe(true);
-    expect(canManageLibrary("member", false)).toBe(false);
-    expect(canManageLibrary("member", false)).toBe(false);
-    expect(canManageLibrary("readonly", false)).toBe(false);
-    expect(canManageLibrary(null, false)).toBe(false);
+  it.each<[string, LibraryActor & { isOps: boolean }, boolean, boolean]>([
+    ["企业项目负责人", { projectRole: "ent_lead", isConsultAdmin: false, isEntAdmin: false, isOps: false }, true, true],
+    ["项目咨询师", { projectRole: "consultant", isConsultAdmin: false, isEntAdmin: false, isOps: false }, true, true],
+    ["咨询管理员", { projectRole: null, isConsultAdmin: true, isEntAdmin: false, isOps: false }, true, true],
+    ["已入项企业管理员", { projectRole: "member", isConsultAdmin: false, isEntAdmin: true, isOps: false }, true, true],
+    ["未入项企业管理员", { projectRole: "readonly", isConsultAdmin: false, isEntAdmin: true, isOps: false }, true, true],
+    ["无项目角色企业管理员", { projectRole: null, isConsultAdmin: false, isEntAdmin: true, isOps: false }, true, true],
+    ["纯运营", { projectRole: null, isConsultAdmin: false, isEntAdmin: false, isOps: true }, true, false],
+    ["只读运营", { projectRole: "readonly", isConsultAdmin: false, isEntAdmin: false, isOps: true }, true, false],
+    ["已入项运营", { projectRole: "member", isConsultAdmin: false, isEntAdmin: false, isOps: true }, true, false],
+    ["已入项员工", { projectRole: "member", isConsultAdmin: false, isEntAdmin: false, isOps: false }, false, false],
+    ["未入项员工", { projectRole: "readonly", isConsultAdmin: false, isEntAdmin: false, isOps: false }, false, false],
+    ["无角色访问者", { projectRole: undefined, isConsultAdmin: false, isEntAdmin: false, isOps: false }, false, false],
+    ["运营兼企业管理员", { projectRole: "readonly", isConsultAdmin: false, isEntAdmin: true, isOps: true }, true, true],
+    ["运营兼咨询师", { projectRole: "consultant", isConsultAdmin: false, isEntAdmin: false, isOps: true }, true, true],
+  ])("%s 的进入与管理权限分开", (_name, actor, access, manage) => {
+    expect(canAccessMaterialsPage(actor)).toBe(access);
+    expect(canManageLibrary(actor)).toBe(manage);
   });
 });
 
