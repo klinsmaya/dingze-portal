@@ -1,4 +1,4 @@
-import { ArrowRight, Plus, Search, Ticket, UserPlus } from "lucide-react";
+import { ArrowRight, Plus, Search, Ticket } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import { samplePath } from "@/lib/dingze/sample";
 import { useOwnEnterprise, useSelfProjectEnterprise } from "@/lib/dingze/self-project";
 import { OwnProjectDialog } from "@/pages/ops/components/projects-tab";
 
+import { AddProjectMembers } from "./components/add-members";
 import { ProjectManageMenu } from "./components/project-manage";
 
 const SCENE_LABELS = { camp: "训练营", inhouse: "企业内训" } as const;
@@ -95,7 +96,7 @@ export default function ProjectsPage() {
             选一个项目继续。不知道怎么填，先看<Link to={samplePath()} className="text-primary hover:underline">示例项目</Link>。
           </p>
         </div>
-        {/* 企业管理员的常用入口：加人、发邀请码、审核申请都在「成员管理」里，这里放一步到位的口子。 */}
+        {/* 企业管理员的常用入口：把已有员工加进项目（不是开通账号）；发邀请码、审核申请在「成员管理」里。 */}
         {ownEnterprise ? (
           <div className="flex flex-wrap items-center gap-2">
             {ownEnterprise.pendingRegistrations ? (
@@ -103,9 +104,7 @@ export default function ProjectsPage() {
                 待审核 <Badge>{ownEnterprise.pendingRegistrations}</Badge>
               </Button>
             ) : null}
-            <Button variant="outline" nativeButton={false} render={<Link to="/enterprise/members?open=create" />}>
-              <UserPlus /> 添加成员
-            </Button>
+            <AddProjectMembers projects={projects ? active : undefined} />
             <Button variant="outline" nativeButton={false} render={<Link to="/enterprise/invites" />}>
               <Ticket /> 邀请成员
             </Button>
