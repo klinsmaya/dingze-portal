@@ -18,7 +18,7 @@ import { errorMessage } from "@/lib/dingze/errors";
 import type { Enterprise } from "@/lib/dingze/ops-api";
 import { useEnterpriseDetail } from "@/lib/dingze/ops-queries";
 import { nextActionPath } from "@/lib/dingze/progress";
-import { PROJECT_PAGE_SIZE, filterProjects, pageOf, projectRoleLabel, projectYears, splitArchived } from "@/lib/dingze/project-list";
+import { PROJECT_PAGE_SIZE, filterProjects, onlyProjectToEnter, pageOf, projectRoleLabel, projectYears, splitArchived } from "@/lib/dingze/project-list";
 import { useMyProjects } from "@/lib/dingze/queries";
 import { samplePath } from "@/lib/dingze/sample";
 import { useOwnEnterprise, useSelfProjectEnterprise } from "@/lib/dingze/self-project";
@@ -55,10 +55,10 @@ export default function ProjectsPage() {
   const { data: projects, isLoading, error } = useMyProjects();
   const selfEnterprise = useSelfProjectEnterprise();
   const ownEnterprise = useOwnEnterprise();
-  // 只有一个项目就直接进去（绝大多数企业用户），列表留给多项目的人。从项目里点「全部项目」「新建项目」
-  // 过来的（?all=1 / ?new=1）留在列表，否则只有一个项目的企业管理员没有地方新建项目。
+  // 登录后落在 /projects：只有一个项目就直接进去（绝大多数企业用户）。从「自驱战略」、侧栏「我的项目」「全部项目」
+  // 「新建项目」过来的（?all=1 / ?new=1）停在列表，查询、分页、归档切换只改自己的参数，all 一直带着。
   const [params, setParams] = useSearchParams();
-  const stay = params.has("all") || params.has("new");
+  const enter = onlyProjectToEnter(projects, params);
 
   // 查询条件和页码记在地址里：进项目再退回来，还停在原来那一页。界面读本地状态（中文输入法
   // 拼写中不能被地址更新打断），地址只是跟着记。
@@ -84,7 +84,7 @@ export default function ProjectsPage() {
   // 一页放得下就不出查询条和分页，绝大多数企业用户看到的还是原来的样子。
   const searchable = listed.length > PROJECT_PAGE_SIZE;
 
-  if (projects?.length === 1 && !stay) return <Navigate to={`/projects/${projects[0].id}/overview`} replace />;
+  if (enter) return <Navigate to={`/projects/${enter.id}/overview`} replace />;
 
   return (
     <div className="flex flex-col gap-6">

@@ -3,6 +3,8 @@ import { Navigate, Outlet } from "react-router";
 
 import { defineAppRoutes } from "@nocobase/portal-sdk/routing";
 
+import { PROJECTS_LIST_PATH } from "@/lib/dingze/project-list";
+
 // The bundled Registry routes are examples; the strategy consulting platform defines
 // its own navigation below. Providers, adapters and /dev showcases stay available.
 export const registryRoutesEnabled = false;
@@ -20,6 +22,8 @@ export const appRoutes = defineAppRoutes([
         label: "我的项目",
         priority: 1,
         icon: <FolderKanban />,
+        // 侧栏点「我的项目」是要看列表，只有一个项目也停在列表；登录后的默认落点仍是上面的 path。
+        menuTo: PROJECTS_LIST_PATH,
       },
     },
   },

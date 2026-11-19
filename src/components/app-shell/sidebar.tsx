@@ -238,7 +238,7 @@ function SidebarDropdownItem({
     <DropdownMenuItem
       render={
         <Link
-          to={item.route || ""}
+          to={menuLinkOf(item) ?? ""}
           className={cn("flex w-full items-center gap-2", {
             "bg-accent text-accent-foreground": isSelected,
           })}
@@ -303,6 +303,15 @@ function isTreeItemSelected(item: TreeMenuItem, selectedKey?: string) {
   );
 }
 
+/**
+ * 菜单点击的去处：资源可以用 meta.menuTo 单独指定（例如「我的项目」带 ?all=1 停在列表），
+ * 不影响路由本身和登录后的默认落点。
+ */
+function menuLinkOf(item: TreeMenuItem): string | undefined {
+  const menuTo = item.meta?.menuTo;
+  return typeof menuTo === "string" ? menuTo : item.route;
+}
+
 type IconProps = {
   icon: React.ReactNode;
   isSelected?: boolean;
@@ -340,6 +349,7 @@ function SidebarButton({
 }: SidebarButtonProps) {
   const Link = useLink();
   const displayName = useMenuItemLabel(item);
+  const to = menuLinkOf(item);
 
   const buttonContent = (
     <>
@@ -363,9 +373,9 @@ function SidebarButton({
   return (
     <Button
       render={
-        asLink && item.route ? (
+        asLink && to ? (
           <Link
-            to={item.route}
+            to={to}
             className={cn("flex w-full items-center gap-2")}
           />
         ) : undefined

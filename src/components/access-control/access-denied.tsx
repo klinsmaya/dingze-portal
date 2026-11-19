@@ -2,6 +2,7 @@ import { FolderKanban, ShieldX } from "lucide-react";
 import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
+import { PROJECTS_LIST_PATH } from "@/lib/dingze/project-list";
 import { cn } from "@/lib/utils";
 
 export function AccessDenied({
@@ -27,7 +28,7 @@ export function AccessDenied({
       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
         {description}
       </p>
-      <Button className="mt-5" nativeButton={false} render={<Link to="/projects" />}>
+      <Button className="mt-5" nativeButton={false} render={<Link to={PROJECTS_LIST_PATH} />}>
         <FolderKanban /> 回我的项目
       </Button>
     </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { portalEmployees } from "@/lib/dingze/coach";
-import { filterProjects, pageOf, projectYears } from "@/lib/dingze/project-list";
+import { PROJECTS_LIST_PATH, filterProjects, onlyProjectToEnter, pageOf, projectYears } from "@/lib/dingze/project-list";
 
 const project = (name: string, year: number, enterprise: string, shortName = enterprise) => ({ name, year, enterprise: { id: 1, name: enterprise, shortName } });
 
@@ -36,6 +36,27 @@ describe("我的项目：查询与分页", () => {
     expect(pageOf(items, 9, 12)).toMatchObject({ page: 3, pages: 3 });
     expect(pageOf(items, Number.NaN, 12).page).toBe(1);
     expect(pageOf([], 2, 12)).toEqual({ items: [], page: 1, pages: 1 });
+  });
+});
+
+describe("我的项目：只有一个项目时进不进项目", () => {
+  const one = [{ id: 7 }];
+  const at = (url: string) => new URL(url, "https://portal.test").searchParams;
+
+  it("enters the only project from the bare login landing", () => {
+    expect(onlyProjectToEnter(one, at("/projects"))).toEqual({ id: 7 });
+  });
+
+  it("stays on the list when opened from an explicit list entry, even with query, year, page and archive kept", () => {
+    expect(onlyProjectToEnter(one, at(PROJECTS_LIST_PATH))).toBeNull();
+    expect(onlyProjectToEnter(one, at(`${PROJECTS_LIST_PATH}&q=瀚川&year=2026&page=2&archived=1`))).toBeNull();
+    expect(onlyProjectToEnter(one, at("/projects?new=1"))).toBeNull();
+  });
+
+  it("stays on the list with none, several or not-yet-loaded projects", () => {
+    expect(onlyProjectToEnter([], at("/projects"))).toBeNull();
+    expect(onlyProjectToEnter([{ id: 7 }, { id: 8 }], at("/projects"))).toBeNull();
+    expect(onlyProjectToEnter(undefined, at("/projects"))).toBeNull();
   });
 });
 
