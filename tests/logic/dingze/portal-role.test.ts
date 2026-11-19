@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ROLE_GUIDES, faqFor } from "@/lib/dingze/guide";
-import { brandHome, portalRoleFromSystem, portalRoleIn, portalRoleOf } from "@/lib/dingze/portal-role";
+import { portalRoleFromSystem, portalRoleIn, portalRoleOf } from "@/lib/dingze/portal-role";
 
 describe("三类角色", () => {
   it("folds project roles into employee / lead / consultant", () => {
@@ -26,13 +26,6 @@ describe("三类角色", () => {
     expect(portalRoleIn("member", false, ["dz_ops"])).toBe("employee");
     expect(portalRoleIn("ent_lead", false, [])).toBe("lead");
     expect(portalRoleIn(null, true, [])).toBe("consultant");
-  });
-  it("左上角品牌：企业管理员去我的项目，普通员工回本项目总览，和项目数量无关", () => {
-    // 免费注册的账号和运营开通的企业管理员是同一个系统角色，去处一样。
-    expect(brandHome(["dz_ent_admin"], 7)).toEqual({ to: "/projects?all=1", label: "我的项目" });
-    expect(brandHome(["dz_ent_member"], 7)).toEqual({ to: "/projects/7/overview", label: "总览" });
-    expect(brandHome([], 7).to).toBe("/projects/7/overview");
-    for (const role of ["dz_consultant", "dz_consult_admin", "dz_ops", "root"]) expect(brandHome([role], 7).to).toBe("/projects?all=1");
   });
   it("keeps every guide within eight lines", () => {
     for (const items of Object.values(ROLE_GUIDES)) {

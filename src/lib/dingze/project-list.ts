@@ -7,6 +7,21 @@ import type { ProjectSummary } from "./api";
 
 export const PROJECT_PAGE_SIZE = 12;
 
+/**
+ * 显式回「我的项目」的入口（项目里左上角「自驱战略」、侧栏「我的项目」、「全部项目」「回我的项目」）都用它：
+ * 带 all，只有一个项目也停在列表（HUPO-36）。不带参数的 /projects 留给登录后的落点。
+ */
+export const PROJECTS_LIST_PATH = "/projects?all=1";
+
+/**
+ * 打开 /projects 时直接进哪个项目：只有一个项目、又不是从显式入口（?all=1）或「新建项目」（?new=1）
+ * 过来的，才进去；其余停在列表。
+ */
+export function onlyProjectToEnter<T>(projects: T[] | undefined, params: URLSearchParams): T | null {
+  if (params.has("all") || params.has("new")) return null;
+  return projects?.length === 1 ? projects[0] : null;
+}
+
 export type ProjectQuery = { q: string; year: number | null };
 
 type Listed = Pick<ProjectSummary, "name" | "year" | "enterprise">;
