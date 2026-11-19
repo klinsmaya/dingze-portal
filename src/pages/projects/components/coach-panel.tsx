@@ -781,9 +781,10 @@ export function CoachPanel({
   const { project, overview } = useProjectContext();
   const session = useEditSession();
   // 资料库只有企业管理员和咨询师能传；在填表页，📎 变成“上传附件填这张表”（任何能填表的人都可以）。
-  const library = canManageLibrary({ projectRole: overview.projectRole, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin });
+  const rolesQuery = useSystemRoles();
+  const library = !rolesQuery.isLoading && canManageLibrary({ projectRole: overview.projectRole, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin });
   const fill = !!session && !session.readOnly;
-  const systemRoles = useSystemRoles().roles;
+  const systemRoles = rolesQuery.roles;
   const role = portalRoleIn(overview.projectRole, overview.isConsultAdmin, systemRoles);
   const employee = COACH_BY_STAGE[stage];
   const available = useMemo(

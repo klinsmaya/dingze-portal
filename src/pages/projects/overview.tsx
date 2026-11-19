@@ -2,7 +2,7 @@ import { ArrowRight, Check, CircleCheck, CircleDashed, CircleDot, Import, Lock, 
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
-import { STAGES, nextAction, isEmployee } from "@dingze/shared";
+import { STAGES, nextAction, canAccessMaterialsPage, canManageLibrary } from "@dingze/shared";
 
 import { LockedStepBadge, StatusBadge, StatusDot } from "@/components/dingze/status-badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { ArtifactOverview } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
 import { STEP_ARTIFACTS, nextActionPath, progressOf, stageBlockers, stageEntryCode, stageProgress, workspacePath } from "@/lib/dingze/progress";
 import { type StartupItem, startupChecklist } from "@/lib/dingze/project-startup";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { cn } from "@/lib/utils";
 
 import { FirstRunGuide, useFirstRunGuide } from "./components/first-run-guide";
@@ -25,6 +26,10 @@ export default function ProjectOverviewPage() {
   const artifacts = overview.artifacts;
   const byCode = new Map(artifacts.map((a) => [a.code, a]));
   const role = overview.projectRole;
+  const systemRoles = useSystemRoles();
+  const actor = { projectRole: role, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin };
+  const manager = !systemRoles.isLoading && canManageLibrary(actor);
+  const access = !systemRoles.isLoading && canAccessMaterialsPage({ ...actor, isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)) });
   const steps = progressOf(artifacts);
   const service = (overview.project.service ?? project.service) === "self" ? "self" : "guided";
   const next = nextAction(steps, role, service);
@@ -38,8 +43,8 @@ export default function ProjectOverviewPage() {
     started: artifacts.some((a) => a.status !== "not_started"),
   });
   // 普通员工：没有资料页，总览第一张卡就是“现在填哪张表”；邀请、上传、项目启动都不显示。
-  const employee = isEmployee(role) && !overview.isConsultAdmin;
-  const materialsFirst = !materials.isLoading && !profile.isLoading && flow[0].state === "current" && role === "ent_lead";
+  const employee = !systemRoles.isLoading && !access && (role === "member" || role === "readonly");
+  const materialsFirst = manager && !materials.isLoading && !profile.isLoading && flow[0].state === "current" && (!!overview.isEntAdmin || role === "ent_lead");
   // 能管项目成员的企业侧的人（企业管理员、企业项目负责人）：成员还没到位时第一张卡是“添加项目成员”，
   // 然后才是“上传资料”；两张卡到位后自动退后。点开是项目成员弹窗（以前链到企业管理员才进得去的邀请页）。
   const manageMembers = !!overview.memberTier;
@@ -55,10 +60,10 @@ export default function ProjectOverviewPage() {
   const freshProject = !artifacts.some((a) => a.status !== "not_started");
   useEffect(() => {
     // 普通员工多半是中途加入的，项目不新也给看一次三步指引。
-    if (!guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
+    if (!systemRoles.isLoading && !guideSeen && !consulting && (freshProject || employee) && !materials.isLoading && !profile.isLoading) setGuideOpen(true);
     // 只在首次加载完判断一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materials.isLoading, profile.isLoading]);
+  }, [materials.isLoading, profile.isLoading, systemRoles.isLoading]);
   const closeGuide = () => {
     setGuideOpen(false);
     setGuideSeen(true);
@@ -79,7 +84,7 @@ export default function ProjectOverviewPage() {
     <div className="mx-auto flex w-full max-w-[1360px] flex-col gap-5 px-4 py-6 md:px-7">
       {canImport ? <ImportDialog project={project} open={importOpen} onOpenChange={closeImport} /> : null}
       {manageMembers ? <ProjectMembersDialog projectId={membersOpen ? project.id : null} onClose={() => setMembersOpen(false)} /> : null}
-      <FirstRunGuide open={guideOpen} onClose={closeGuide} startHref={employee ? nextActionPath(project.id, next) : `/projects/${project.id}/materials`} variant={employee ? "employee" : "lead"} />
+      <FirstRunGuide open={!systemRoles.isLoading && guideOpen} onClose={closeGuide} startHref={access ? `/projects/${project.id}/materials` : nextActionPath(project.id, next)} variant={employee ? "employee" : "lead"} />
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="min-w-0 flex-1 font-heading text-2xl font-bold text-brand">总览</h1>
         <Button variant="ghost" size="sm" onClick={() => setGuideOpen(true)}>
@@ -127,7 +132,7 @@ export default function ProjectOverviewPage() {
         </Link>
       </section>
 
-      {employee ? null : <StartupCard projectId={project.id} />}
+      {access ? <StartupCard projectId={project.id} /> : null}
 
       <section aria-label="三阶段进度" className="grid gap-4 lg:grid-cols-3">
         {stages.map((stage) => (

@@ -10,6 +10,7 @@ import { ATTACHMENT_ACCEPT, prepareAttachment } from "@/lib/dingze/attachments";
 import { errorMessage } from "@/lib/dingze/errors";
 import { type MaterialSummary, downloadOriginal, uploadOriginal, useAddMaterial, useAttachments, useDeleteMaterial, useSetMaterialLibrary } from "@/lib/dingze/materials-api";
 import { formatTime } from "@/lib/dingze/records";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { ConfirmAction } from "@/pages/ops/components/confirm-action";
 
 import { useProjectContext } from "../project-context";
@@ -57,7 +58,8 @@ export function Attachments({ code, canUpload }: { code: string; canUpload: bool
   const fill = useAttachmentFill(project, code);
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const manager = canManageLibrary({ projectRole: overview.projectRole, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin });
+  const systemRoles = useSystemRoles();
+  const manager = !systemRoles.isLoading && canManageLibrary({ projectRole: overview.projectRole, isConsultAdmin: overview.isConsultAdmin, isEntAdmin: !!overview.isEntAdmin });
   const items = list.data ?? [];
   if (!canUpload && !items.length) return null;
   const table = getArtifactDef(code).plain;

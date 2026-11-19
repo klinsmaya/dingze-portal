@@ -1,6 +1,6 @@
 import { Check, ChevronDown, Lock, Plus } from "lucide-react";
 import { useState } from "react";
-import { Link, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
 
 import { UserDropdown } from "@/components/app-shell/header";
 import { NotificationBell } from "@/components/dingze/notification-bell";
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, isArchivedProject, type ProjectRole, type StageKey } from "@dingze/shared";
+import { ARTIFACTS, PROJECT_ROLE_LABELS, STAGES, canAccessMaterialsPage, isArchivedProject, type ProjectRole, type StageKey } from "@dingze/shared";
 import type { ArtifactOverview, ProjectSummary } from "@/lib/dingze/api";
 import { setGateHint } from "@/lib/dingze/gate-hint";
 import { brandHome } from "@/lib/dingze/portal-role";
@@ -57,13 +57,13 @@ function flowNav(artifacts: ArtifactOverview[], library: boolean): NavItem[] {
     { key: "results", to: "results", label: "成果", no: STAGES.length + 2, title: "成果：每张表的状态与版本，下载计划书和各表" },
   ];
 }
-const ENTERPRISE_ROLES = ["ent_lead", "member"];
 
 type TeamMember = { userId: number; nickname: string; projectRole: string };
 
 /** 项目切换：标题即下拉，列出当前账号能进的项目；切换后停在同一入口（参考稿顶栏）。 */
 function ProjectSwitcher({ projectId, projects, section }: { projectId: number; projects: ProjectSummary[]; section: string }) {
   const navigate = useNavigate();
+  const systemRoles = useSystemRoles();
   const project = projects.find((p) => p.id === projectId);
   const label = project ? `${project.enterprise?.shortName ?? project.enterprise?.name ?? ""} · ${project.name}` : "加载项目…";
   const title = <span className="truncate font-heading text-[15px] font-bold tracking-wide">{label}</span>;
@@ -83,7 +83,16 @@ function ProjectSwitcher({ projectId, projects, section }: { projectId: number; 
           {projects.filter((p) => p.id === projectId || !isArchivedProject(p)).map((p) => (
             <DropdownMenuItem
               key={p.id}
-              onClick={() => navigate(`/projects/${p.id}/${p.id === projectId || section !== "expert" ? section : "overview"}`)}
+              onClick={() => {
+                const targetAccess = !systemRoles.isLoading && canAccessMaterialsPage({
+                  projectRole: p.projectRole,
+                  isEntAdmin: systemRoles.roles.includes("dz_ent_admin"),
+                  isConsultAdmin: systemRoles.roles.some((r) => ["root", "dz_consult_admin"].includes(r)),
+                  isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)),
+                });
+                const targetSection = section === "materials" && !targetAccess || section === "expert" && p.id !== projectId ? "overview" : section;
+                navigate(`/projects/${p.id}/${targetSection}`);
+              }}
               className="gap-2"
             >
               <span className="min-w-0 flex-1">
@@ -126,12 +135,17 @@ function ProjectTopbar({
 }) {
   const parts = useLocation().pathname.split("/");
   const section = parts[3] || "overview";
-  const consulting = !(projectRole && ENTERPRISE_ROLES.includes(projectRole) && !isConsultAdmin);
-  const nav = flowNav(artifacts, consulting || projectRole === "ent_lead");
+  const systemRoles = useSystemRoles();
+  const nav = flowNav(artifacts, !systemRoles.isLoading && canAccessMaterialsPage({
+    projectRole,
+    isConsultAdmin,
+    isEntAdmin: systemRoles.roles.includes("dz_ent_admin"),
+    isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)),
+  }));
   // 在填写页时，亮起当前这张表所在的阶段。
   const code = section === "workspace" && parts[4] ? decodeURIComponent(parts[4]) : null;
   const activeKey = code ? ARTIFACTS.find((a) => a.code === code)?.stage ?? null : section;
-  const home = brandHome(useSystemRoles().roles, projectId);
+  const home = brandHome(systemRoles.roles, projectId);
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-gold px-3 text-band-foreground md:px-4" style={{ background: "var(--band)" }}>
       <Link to={home.to} aria-label={`返回${home.label}`} title={home.label} className="flex shrink-0 items-center gap-2 rounded-lg pr-1 hover:bg-white/10">
@@ -210,6 +224,7 @@ export default function ProjectLayout() {
   const projectId = Number(useParams().projectId);
   const { project, data: projects, isLoading, error, notFound } = useProject(projectId);
   const overview = useProjectOverview(project);
+  const systemRoles = useSystemRoles();
   // The workspace fills the screen; its panel toggle goes into the top bar's action slot.
   const inWorkspace = !!useMatch("/projects/:projectId/workspace/*");
   // 资料页和填写页一样：左边内容自己滚动，右边对话的输入框固定在底部（大屏）。
@@ -281,12 +296,19 @@ export default function ProjectLayout() {
               </AlertDescription>
             </Alert>
           </div>
-        ) : isLoading || !project || !overview.data ? (
+        ) : isLoading || !project || !overview.data || fillScreen && systemRoles.isLoading ? (
           <div className="grid gap-4 p-6 md:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-48 rounded-xl" />
             ))}
           </div>
+        ) : fillScreen && !canAccessMaterialsPage({
+          projectRole: overview.data.projectRole,
+          isConsultAdmin: overview.data.isConsultAdmin,
+          isEntAdmin: !!overview.data.isEntAdmin,
+          isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)),
+        }) ? (
+          <Navigate to={`/projects/${project.id}/overview`} replace />
         ) : (
           <Outlet context={{ project, overview: overview.data } satisfies ProjectContextValue} />
         )}

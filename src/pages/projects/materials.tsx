@@ -3,7 +3,7 @@ import { ArrowRight, Building2, CheckCheck, ClipboardPaste, Download, Eye, FileC
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetIdentity } from "@refinedev/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import {
@@ -11,6 +11,7 @@ import {
   PROFILE_STATUS_LABELS,
   type ProfileCategory,
   type ProfileItem,
+  canAccessMaterialsPage,
   canManageLibrary,
   canSetProfileStatus,
   getArtifactDef,
@@ -40,6 +41,7 @@ import { type MaterialSummary, downloadOriginal, useAddMaterial, useAttachments,
 import { opsApi } from "@/lib/dingze/ops-api";
 import { formatTime } from "@/lib/dingze/records";
 import { stageEntryCode, workspacePath } from "@/lib/dingze/progress";
+import { useSystemRoles } from "@/lib/dingze/system-roles";
 import { cn } from "@/lib/utils";
 import { ConfirmAction } from "@/pages/ops/components/confirm-action";
 
@@ -382,7 +384,10 @@ export default function MaterialsPage() {
   const save = useSaveProfile(project);
   const role = overview.projectRole;
   const isAdmin = overview.isConsultAdmin;
-  const canEdit = isAdmin || (!!role && role !== "readonly");
+  const systemRoles = useSystemRoles();
+  const actor = { projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin };
+  const canAccess = canAccessMaterialsPage({ ...actor, isOps: systemRoles.roles.some((r) => ["root", "dz_ops", "dz_consult_admin"].includes(r)) });
+  const canEdit = !systemRoles.isLoading && canManageLibrary(actor);
   const identity = useGetIdentity<{ id: number }>();
 
   const [items, setItems] = useState<ProfileItem[]>([]);
@@ -409,8 +414,8 @@ export default function MaterialsPage() {
 
   // The digital consultant reads materials and proposes profile items through the same
   // path-based proposal tool as the workspace; nothing is written until the user approves.
-  // 组织是企业级的：企业管理员不是项目负责人也能改；运营（运营管理员、咨询管理员）也在这里改。
-  const canEditOrg = isAdmin || overview.memberTier === "ops" || !!overview.isEntAdmin || role === "ent_lead" || role === "consultant";
+  // 本页组织编辑入口与资料管理一致；组织服务的独立授权不变。
+  const canEditOrg = canEdit;
   const client = useQueryClient();
   const latest = useRef({ items, baseRev, canEdit, canEditOrg, enterpriseId: project.enterprise?.id ?? 0 });
   latest.current = { items, baseRev, canEdit, canEditOrg, enterpriseId: project.enterprise?.id ?? 0 };
@@ -495,6 +500,9 @@ export default function MaterialsPage() {
   const materialList = materials.data ?? [];
   const lockedCount = overview.artifacts.filter((a) => a.status === "locked" && getArtifactDef(a.code).priority !== "method").length;
   const sourceTitle = (source: string) => materialList.find((m) => String(m.id) === source)?.title;
+
+  if (systemRoles.isLoading) return null;
+  if (!canAccess) return <Navigate to={`/projects/${project.id}/overview`} replace />;
 
   return (
     <AIPageContextScope context={page.context}>
@@ -622,12 +630,12 @@ export default function MaterialsPage() {
                               <Badge variant={item.status === "draft" ? "outline" : "default"} className={cn("w-fit", STATUS_TONE[item.status])}>{PROFILE_STATUS_LABELS[item.status]}</Badge>
                             </div>
                             <div className="flex flex-wrap items-start gap-1">
-                              {canEdit && item.status === "draft" && canSetProfileStatus("reviewed", { projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? (
+                              {canEdit && item.status === "draft" && canSetProfileStatus("reviewed", actor) ? (
                                 <Button variant="outline" size="sm" onClick={() => patch(item.id, { status: "reviewed" })}>
                                   <ShieldCheck /> 复核
                                 </Button>
                               ) : null}
-                              {canEdit && item.status !== "confirmed" && canSetProfileStatus("confirmed", { projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? (
+                              {canEdit && item.status !== "confirmed" && canSetProfileStatus("confirmed", actor) ? (
                                 <Button variant="outline" size="sm" onClick={() => patch(item.id, { status: "confirmed" })}>
                                   <CheckCheck /> 确认
                                 </Button>
@@ -656,8 +664,8 @@ export default function MaterialsPage() {
               <Skeleton className="h-32" />
             ) : (
               <>
-                <MaterialLibrary materials={materialList} canEdit={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} canShare={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} canDeleteAny={canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin })} currentUserId={identity.data?.id ?? null} />
-                {canManageLibrary({ projectRole: role, isConsultAdmin: isAdmin, isEntAdmin: !!overview.isEntAdmin }) ? <MemberUploads /> : null}
+                <MaterialLibrary materials={materialList} canEdit={canEdit} canShare={canEdit} canDeleteAny={canEdit} currentUserId={identity.data?.id ?? null} />
+                {canEdit ? <MemberUploads /> : null}
               </>
             )
           ) : null}
